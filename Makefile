@@ -26,12 +26,12 @@ evm2near-macos-x86: bin/evm2near/Cargo.toml $(wildcard bin/evm2near/src/*.rs) Ma
 	ln -sf target/x86_64-apple-darwin/release/evm2near $@
 
 evm2near-windows-arm.exe: bin/evm2near/Cargo.toml $(wildcard bin/evm2near/src/*.rs) Makefile evmlib.wasi
-	#$(CARGO) build --package=evm2near --release --frozen --target=aarch64-pc-windows-msvc
+	#$(CARGO) build --package=evm2near --release --target=aarch64-pc-windows-msvc
 	#ln -sf target/aarch64-pc-windows-msvc/release/evm2near.exe $@
 
 evm2near-windows-x86.exe: bin/evm2near/Cargo.toml $(wildcard bin/evm2near/src/*.rs) Makefile evmlib.wasi
-	#$(CARGO) build --package=evm2near --release --frozen --target=x86_64-pc-windows-gnu
-	#ln -sf target/x86_64-pc-windows-gnu/release/evm2near.exe $@
+	$(CARGO) build --package=evm2near --release --target=x86_64-pc-windows-gnu
+	ln -sf target/x86_64-pc-windows-gnu/release/evm2near.exe $@
 
 evm2near-linux-arm: bin/evm2near/Cargo.toml $(wildcard bin/evm2near/src/*.rs) Makefile evmlib.wasi
 	$(CARGO) build --package=evm2near --release --frozen --target=aarch64-unknown-linux-musl
