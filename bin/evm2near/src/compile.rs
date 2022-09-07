@@ -64,7 +64,7 @@ impl Compiler {
         let compiler = Compiler {
             op_table: make_op_table(&runtime_library),
             jump_table: HashMap::new(),
-            init_function: find_runtime_function(&runtime_library, "_init").unwrap(),
+            init_function: find_runtime_function(&runtime_library, "_init_evm").unwrap(),
             jumpi_function: find_runtime_function(&runtime_library, "jumpi").unwrap(),
             pop_function: find_runtime_function(&runtime_library, "_pop_u32").unwrap(),
             function_import_count: runtime_library.import_count(ImportCountType::Function),
@@ -326,7 +326,7 @@ fn make_op_table(module: &Module) -> HashMap<Opcode, FunctionIndex> {
     for export in module.export_section().unwrap().entries() {
         match export.internal() {
             &Internal::Function(op_idx) => match export.field() {
-                "_init" | "_start" | "_pop_u32" => {}
+                "_init_evm" | "_start" | "_pop_u32" => {}
                 export_sym => match parse_opcode(&export_sym.to_ascii_uppercase()) {
                     None => unreachable!(),
                     Some(op) => _ = result.insert(op, op_idx),
