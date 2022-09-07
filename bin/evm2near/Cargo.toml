@@ -1,0 +1,23 @@
+[package]
+name = "evm2near"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.63"
+description = "TODO"
+publish = false
+
+[features]
+default = []
+
+[dependencies]
+atty = "0.2.14"
+clap = { version = "3.2.17", features = ["color", "derive", "unicode"] }
+ethnum = "1.2.2"
+evm_rs = "0.3.2"
+hex = "0.4.3"
+parity-wasm = "0.45.0"
+wild = "2.1.0"
+
+[[bin]]
+name = "evm2near"
+path = "src/main.rs"

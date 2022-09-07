@@ -1,0 +1,13 @@
+[workspace]
+members = [
+  "bin/evm2near",
+  "lib/evmlib",
+]
+
+# Enable basic optimizations only, to aid debugging:
+[profile.release.package.evmlib]
+opt-level = 1
+
+# Enable advanced optimizations for our dependencies:
+[profile.release.package."*"]
+opt-level = 3

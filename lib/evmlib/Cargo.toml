@@ -1,0 +1,18 @@
+[package]
+name = "evmlib"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.63"
+description = "TODO"
+publish = false
+
+[features]
+default = []
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ethnum = "1.2.2"
+hex = "0.4.3"
+ux = "0.1.5"

@@ -1,0 +1,3 @@
+# Program libraries
+evmlib.wasi
+evmlib.wasm
