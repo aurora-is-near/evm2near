@@ -211,5 +211,6 @@ impl Machine {
         self.memory.clear();
         self.storage.clear();
         self.call_data.clear();
+        self.code.clear();
     }
 }

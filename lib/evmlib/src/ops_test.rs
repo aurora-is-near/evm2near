@@ -243,7 +243,30 @@ mod tests {
     fn test_codesize() {}
 
     #[test]
-    fn test_codecopy() {}
+    fn test_codecopy() {
+        // test cases from https://www.evm.codes/
+        unsafe {
+            EVM.reset();
+            EVM.code =
+                hex::decode("7DFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7F")
+                    .unwrap();
+            push1(0x20);
+            push1(0x00);
+            push1(0x00);
+            codecopy();
+            assert_eq!(&EVM.memory.bytes, &EVM.code);
+
+            push1(0x08);
+            push1(0x1F);
+            push1(0x00);
+            codecopy();
+            assert_eq!(
+                EVM.memory.bytes,
+                hex::decode("7F00000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF7F")
+                    .unwrap()
+            );
+        }
+    }
 
     #[test]
     fn test_gasprice() {}

@@ -345,42 +345,7 @@ pub unsafe fn calldatacopy() {
     EVM.gas_used += 3;
     let (dest_offset, offset, size) = EVM.stack.pop3();
 
-    // Cannot copy more than `usize::MAX` within any gas limit
-    let size = as_usize_or_oog(size);
-
-    // Nothing to copy; we're done
-    if size == 0 {
-        return;
-    }
-
-    // Cannot allocate more than `usize::MAX` bytes of memory within any gas limit
-    let dest_offset = as_usize_or_oog(dest_offset);
-
-    // See note in calldataload about usize cast of calldata offset.
-    let offset = offset.as_usize();
-
-    // TODO: gas cost for memory resize
-
-    let call_data_len = EVM.call_data.len();
-    // Bytes that are within the call_data range
-    let on_data_bytes = if offset > call_data_len {
-        &[]
-    } else if size > call_data_len - offset {
-        &EVM.call_data[offset..]
-    } else {
-        &EVM.call_data[offset..(offset + size)]
-    };
-    if !on_data_bytes.is_empty() {
-        EVM.memory.store_slice(dest_offset, on_data_bytes);
-    }
-
-    // Bytes outside the calldata are implicitly 0
-    let on_data_size = on_data_bytes.len();
-    let remaining_size = size - on_data_size;
-    let dest_offset = dest_offset + on_data_size;
-    if remaining_size > 0 {
-        EVM.memory.store_zeros(dest_offset, remaining_size);
-    }
+    data_copy(dest_offset, offset, size, &EVM.call_data);
 }
 
 #[no_mangle]
@@ -392,7 +357,9 @@ pub unsafe fn codesize() {
 #[no_mangle]
 pub unsafe fn codecopy() {
     EVM.gas_used += 3;
-    todo!("CODECOPY") // TODO!
+    let (dest_offset, offset, size) = EVM.stack.pop3();
+
+    data_copy(dest_offset, offset, size, &EVM.code);
 }
 
 #[no_mangle]
@@ -1106,5 +1073,44 @@ fn as_usize_or_oog(word: Word) -> usize {
         panic!("out of gas")
     } else {
         word.as_usize()
+    }
+}
+
+unsafe fn data_copy(dest_offset: Word, offset: Word, size: Word, source: &[u8]) {
+    // Cannot copy more than `usize::MAX` within any gas limit
+    let size = as_usize_or_oog(size);
+
+    // Nothing to copy; we're done
+    if size == 0 {
+        return;
+    }
+
+    // Cannot allocate more than `usize::MAX` bytes of memory within any gas limit
+    let dest_offset = as_usize_or_oog(dest_offset);
+
+    // See note in calldataload about usize cast of calldata offset.
+    let offset = offset.as_usize();
+
+    // TODO: gas cost for memory resize
+
+    let data_len = source.len();
+    // Bytes that are within the call_data range
+    let on_data_bytes = if offset > data_len {
+        &[]
+    } else if size > data_len - offset {
+        &source[offset..]
+    } else {
+        &source[offset..(offset + size)]
+    };
+    if !on_data_bytes.is_empty() {
+        EVM.memory.store_slice(dest_offset, on_data_bytes);
+    }
+
+    // Bytes outside the calldata are implicitly 0
+    let on_data_size = on_data_bytes.len();
+    let remaining_size = size - on_data_size;
+    let dest_offset = dest_offset + on_data_size;
+    if remaining_size > 0 {
+        EVM.memory.store_zeros(dest_offset, remaining_size);
     }
 }
