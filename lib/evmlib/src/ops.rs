@@ -316,7 +316,22 @@ pub unsafe fn callvalue() {
 #[no_mangle]
 pub unsafe fn calldataload() {
     EVM.gas_used += 3;
-    todo!("CALLDATALOAD") // TODO!
+    // Note: if the value on the stack is larger than usize::MAX then
+    // `as_usize` will return `usize::MAX`, and this is ok because that
+    // is the largest possible calldata size.
+    let index = EVM.stack.pop().as_usize();
+    let call_data_len = EVM.call_data.len();
+    let result = if index < call_data_len {
+        // Result is at most 32 bytes
+        let slice_size = (call_data_len - index).min(32);
+        let mut slice_bytes = [0u8; 32];
+        slice_bytes[0..slice_size].copy_from_slice(&EVM.call_data[index..(index + slice_size)]);
+        Word::from_be_bytes(slice_bytes)
+    } else {
+        ZERO
+    };
+
+    EVM.stack.push(result);
 }
 
 #[no_mangle]
@@ -328,7 +343,44 @@ pub unsafe fn calldatasize() {
 #[no_mangle]
 pub unsafe fn calldatacopy() {
     EVM.gas_used += 3;
-    todo!("CALLDATACOPY") // TODO!
+    let (dest_offset, offset, size) = EVM.stack.pop3();
+
+    // Cannot copy more than `usize::MAX` within any gas limit
+    let size = as_usize_or_oog(size);
+
+    // Nothing to copy; we're done
+    if size == 0 {
+        return;
+    }
+
+    // Cannot allocate more than `usize::MAX` bytes of memory within any gas limit
+    let dest_offset = as_usize_or_oog(dest_offset);
+
+    // See note in calldataload about usize cast of calldata offset.
+    let offset = offset.as_usize();
+
+    // TODO: gas cost for memory resize
+
+    let call_data_len = EVM.call_data.len();
+    // Bytes that are within the call_data range
+    let on_data_bytes = if offset > call_data_len {
+        &[]
+    } else if size > call_data_len - offset {
+        &EVM.call_data[offset..]
+    } else {
+        &EVM.call_data[offset..(offset + size)]
+    };
+    if !on_data_bytes.is_empty() {
+        EVM.memory.store_slice(dest_offset, on_data_bytes);
+    }
+
+    // Bytes outside the calldata are implicitly 0
+    let on_data_size = on_data_bytes.len();
+    let remaining_size = size - on_data_size;
+    let dest_offset = dest_offset + on_data_size;
+    if remaining_size > 0 {
+        EVM.memory.store_zeros(dest_offset, remaining_size);
+    }
 }
 
 #[no_mangle]
@@ -443,6 +495,7 @@ pub unsafe fn pop() {
 pub unsafe fn mload() {
     EVM.gas_used += 3;
     let offset = EVM.stack.pop();
+    // TODO: gas cost for memory resize (reads resize the memory too)
     let value = EVM.memory.load_word(offset.try_into().unwrap());
     EVM.stack.push(value);
 }
@@ -450,6 +503,7 @@ pub unsafe fn mload() {
 #[no_mangle]
 pub unsafe fn mstore() {
     EVM.gas_used += 3;
+    // TODO: gas cost for memory resize
     let (offset, value) = EVM.stack.pop2();
     EVM.memory.store_word(offset.try_into().unwrap(), value);
 }
@@ -458,6 +512,7 @@ pub unsafe fn mstore() {
 pub unsafe fn mstore8() {
     EVM.gas_used += 3;
     let (offset, value) = (EVM.stack.pop(), EVM.stack.pop() & 0xFF);
+    // TODO: gas cost for memory resize
     EVM.memory
         .store_byte(offset.try_into().unwrap(), value.try_into().unwrap());
 }
@@ -1044,4 +1099,12 @@ pub unsafe fn invalid() {
 pub unsafe fn selfdestruct() {
     EVM.gas_used += 5000;
     todo!("SELFDESTRUCT") // TODO: state reset
+}
+
+fn as_usize_or_oog(word: Word) -> usize {
+    if word > Word::new(usize::MAX as u128) {
+        panic!("out of gas")
+    } else {
+        word.as_usize()
+    }
 }

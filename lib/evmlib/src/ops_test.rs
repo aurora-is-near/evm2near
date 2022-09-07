@@ -191,13 +191,53 @@ mod tests {
     fn test_callvalue() {}
 
     #[test]
-    fn test_calldataload() {}
+    fn test_calldataload() {
+        // test cases from https://www.evm.codes/
+        unsafe {
+            EVM.reset();
+            EVM.call_data = vec![255u8; 32];
+            push1(0x00);
+            calldataload();
+            assert_eq!(EVM.stack.peek(), Word::MAX,);
+        }
+        unsafe {
+            EVM.reset();
+            EVM.call_data = vec![255u8; 32];
+            push1(0x1F);
+            calldataload();
+            assert_eq!(
+                EVM.stack.peek(),
+                "0xFF00000000000000000000000000000000000000000000000000000000000000".hex_int(),
+            );
+        }
+    }
 
     #[test]
     fn test_calldatasize() {}
 
     #[test]
-    fn test_calldatacopy() {}
+    fn test_calldatacopy() {
+        // test cases from https://www.evm.codes/
+        unsafe {
+            EVM.reset();
+            EVM.call_data = vec![255u8; 32];
+            push1(0x20);
+            push1(0x00);
+            push1(0x00);
+            calldatacopy();
+            assert_eq!(&EVM.memory.bytes, &[255u8; 32]);
+
+            push1(0x08);
+            push1(0x1F);
+            push1(0x00);
+            calldatacopy();
+            assert_eq!(
+                EVM.memory.bytes,
+                hex::decode("FF00000000000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+                    .unwrap()
+            );
+        }
+    }
 
     #[test]
     fn test_codesize() {}

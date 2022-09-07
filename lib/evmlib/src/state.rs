@@ -123,20 +123,41 @@ impl Memory {
 
     pub fn store_byte(&mut self, offset: usize, value: u8) {
         let end_offset = offset + 1;
-        if end_offset > self.size() {
-            self.bytes
-                .resize(end_offset + (WORD_SIZE - (end_offset % WORD_SIZE)), 0);
-        }
+        self.resize(end_offset);
         self.bytes[offset] = value;
     }
 
     pub fn store_word(&mut self, offset: usize, value: Word) {
-        let end_offset = offset + mem::size_of::<Word>();
-        if end_offset > self.size() {
-            self.bytes
-                .resize(end_offset + (WORD_SIZE - (end_offset % WORD_SIZE)), 0);
-        }
+        let end_offset = offset + WORD_SIZE;
+        self.resize(end_offset);
         self.bytes[offset..end_offset].copy_from_slice(&value.to_le_bytes());
+    }
+
+    pub fn store_slice(&mut self, offset: usize, data: &[u8]) {
+        // TODO: checked arithmetic
+        let end_offset = offset + data.len();
+        self.resize(end_offset);
+        self.bytes[offset..end_offset].copy_from_slice(data);
+    }
+
+    pub fn store_zeros(&mut self, offset: usize, len: usize) {
+        let end_offset = offset + len;
+        self.resize(end_offset);
+        self.bytes[offset..end_offset].fill(0);
+    }
+
+    fn resize(&mut self, end_offset: usize) {
+        // resize in increments of the `WORD_SIZE`
+        let offset_remainder = end_offset % WORD_SIZE;
+        let end_offset = if offset_remainder == 0 {
+            end_offset
+        } else {
+            end_offset + (WORD_SIZE - offset_remainder)
+        };
+
+        if end_offset > self.size() {
+            self.bytes.resize(end_offset, 0);
+        }
     }
 
     pub fn load_word(&self, offset: usize) -> Word {
@@ -189,5 +210,6 @@ impl Machine {
         self.stack.clear();
         self.memory.clear();
         self.storage.clear();
+        self.call_data.clear();
     }
 }
