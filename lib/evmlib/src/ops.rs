@@ -122,13 +122,19 @@ pub unsafe fn smod() {
 #[no_mangle]
 pub unsafe fn addmod() {
     EVM.gas_used += 8;
-    todo!("ADDMOD") // TODO
+    // TODO: need to use 512-bit arithmetic here to prevent overflow before taking the modulus
+    let (a, b, n) = EVM.stack.pop3();
+    let result = if n == ZERO { ZERO } else { (a + b) % n };
+    EVM.stack.push(result);
 }
 
 #[no_mangle]
 pub unsafe fn mulmod() {
     EVM.gas_used += 8;
-    todo!("MULMOD") // TODO
+    // TODO: need to use 512-bit arithmetic here to prevent overflow before taking the modulus
+    let (a, b, n) = EVM.stack.pop3();
+    let result = if n == ZERO { ZERO } else { (a * b) % n };
+    EVM.stack.push(result);
 }
 
 #[no_mangle]
@@ -141,7 +147,26 @@ pub unsafe fn exp() {
 #[no_mangle]
 pub unsafe fn signextend() {
     EVM.gas_used += 5;
-    todo!("SIGNEXTEND") // TODO
+    let (op1, op2) = EVM.stack.pop2();
+    let result = if op1 < ethnum::U256::new(32) {
+        // `as_u32` works since op1 < 32
+        let bit_index = (8 * op1.as_u32() + 7) as usize;
+        let word = if bit_index < 128 {
+            op2.low()
+        } else {
+            op2.high()
+        };
+        let bit = word & (1 << (bit_index % 128)) != 0;
+        let mask = (ONE << bit_index) - ONE;
+        if bit {
+            op2 | !mask
+        } else {
+            op2 & mask
+        }
+    } else {
+        op2
+    };
+    EVM.stack.push(result);
 }
 
 #[no_mangle]

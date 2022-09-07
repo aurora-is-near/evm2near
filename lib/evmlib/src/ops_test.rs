@@ -63,10 +63,28 @@ mod tests {
     fn test_smod() {}
 
     #[test]
-    fn test_addmod() {}
+    fn test_addmod() {
+        unsafe {
+            EVM.reset();
+            push1(25);
+            push1(37);
+            push1(11);
+            addmod();
+            assert_eq!(EVM.stack.peek(), 23);
+        }
+    }
 
     #[test]
-    fn test_mulmod() {}
+    fn test_mulmod() {
+        unsafe {
+            EVM.reset();
+            push1(5);
+            push1(6);
+            push1(7);
+            mulmod();
+            assert_eq!(EVM.stack.peek(), 2);
+        }
+    }
 
     #[test]
     fn test_exp() {
@@ -80,7 +98,37 @@ mod tests {
     }
 
     #[test]
-    fn test_signextend() {}
+    fn test_signextend() {
+        // Test cases from https://www.evm.codes/
+        unsafe {
+            EVM.reset();
+            push1(0xFF);
+            push1(0x00);
+            signextend();
+            assert_eq!(EVM.stack.peek(), Word::MAX);
+        }
+        unsafe {
+            EVM.reset();
+            push1(0x7F);
+            push1(0x00);
+            signextend();
+            assert_eq!(EVM.stack.peek(), 0x7F);
+        }
+
+        // Additional test case
+        unsafe {
+            EVM.reset();
+            EVM.stack.push(
+                "0x1886E5F0ABB04994B1D20310DCBE15760932963A40621B97C2AEC12652C7480".hex_int(),
+            );
+            push1(0x10);
+            signextend();
+            assert_eq!(
+                EVM.stack.peek(),
+                "0x5760932963A40621B97C2AEC12652C7480".hex_int()
+            );
+        }
+    }
 
     #[test]
     fn test_lt() {}
@@ -714,4 +762,15 @@ mod tests {
 
     #[test]
     fn test_selfdestruct() {}
+
+    /// Helper trait to allow writing `.hex_int()` on hex strings in tests to convert
+    /// them into 256-bit integers.
+    trait HexInt {
+        fn hex_int(self) -> Word;
+    }
+    impl<'a> HexInt for &'a str {
+        fn hex_int(self) -> Word {
+            Word::from_str_hex(self).unwrap()
+        }
+    }
 }
