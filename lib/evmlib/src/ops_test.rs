@@ -2,6 +2,8 @@
 
 #[cfg(test)]
 mod tests {
+    use std::convert::TryInto;
+
     use crate::ops::*;
     use crate::state::*;
     use ux::*;
@@ -173,7 +175,34 @@ mod tests {
     fn test_sar() {}
 
     #[test]
-    fn test_sha3() {}
+    fn test_sha3() {
+        use ::sha3::{Digest, Keccak256};
+
+        // Test hash of empty input
+        unsafe {
+            EVM.reset();
+            push1(0x00);
+            push1(0x00);
+            sha3();
+            assert_eq!(
+                EVM.stack.peek(),
+                Word::from_be_bytes(Keccak256::digest([]).try_into().unwrap()),
+            );
+        }
+
+        // Test case from https://www.evm.codes/
+        unsafe {
+            EVM.reset();
+            EVM.memory.store_slice(0x00, &[0xFFu8; 4]);
+            push1(0x04);
+            push1(0x00);
+            sha3();
+            assert_eq!(
+                EVM.stack.peek(),
+                "0x29045A592007D0C246EF02C2223570DA9522D0CF0F73282C79A1BC8F0BB2C238".hex_int(),
+            );
+        }
+    }
 
     #[test]
     fn test_address() {}

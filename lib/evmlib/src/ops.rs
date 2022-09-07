@@ -1,10 +1,19 @@
 // This is free and unencumbered software released into the public domain.
 
 use ethnum::I256;
-use std::ops::{Not, Shl, Shr};
+use sha3::{Digest, Keccak256};
+use std::{
+    convert::TryInto,
+    ops::{Not, Shl, Shr},
+};
 use ux::*;
 
 use crate::state::{Machine, Memory, Stack, Storage, Word, MAX_STACK_DEPTH, ONE, ZERO};
+
+const KECCAK_EMPTY: Word = Word::from_words(
+    0xc5d2460186f7233c927e7db2dcc703c0,
+    0xe500b653ca82273b7bfad8045d85a470,
+);
 
 pub(crate) static mut EVM: Machine = Machine {
     gas_limit: 10_000_000,
@@ -280,7 +289,20 @@ pub unsafe fn sar() {
 #[no_mangle]
 pub unsafe fn sha3() {
     EVM.gas_used += 30;
-    todo!("SHA3") // TODO
+    let (offset, size) = EVM.stack.pop2();
+    let size = as_usize_or_oog(size);
+    let result = if size == 0 {
+        KECCAK_EMPTY
+    } else {
+        let offset = as_usize_or_oog(offset);
+        EVM.memory.resize(offset + size);
+        let slice = EVM.memory.slice(offset, size);
+        // TODO: use NEAR host function instead if compiling to NEAR
+        let hash = Keccak256::digest(slice);
+        // unwrap is safe because hash function is 256-bit.
+        Word::from_be_bytes(hash.try_into().unwrap())
+    };
+    EVM.stack.push(result);
 }
 
 #[no_mangle]

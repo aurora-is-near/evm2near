@@ -146,7 +146,7 @@ impl Memory {
         self.bytes[offset..end_offset].fill(0);
     }
 
-    fn resize(&mut self, end_offset: usize) {
+    pub fn resize(&mut self, end_offset: usize) {
         // resize in increments of the `WORD_SIZE`
         let offset_remainder = end_offset % WORD_SIZE;
         let end_offset = if offset_remainder == 0 {

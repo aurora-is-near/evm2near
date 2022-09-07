@@ -15,4 +15,5 @@ crate-type = ["cdylib"]
 [dependencies]
 ethnum = "1.2.2"
 hex = "0.4.3"
+sha3 = "0.10"
 ux = "0.1.5"
