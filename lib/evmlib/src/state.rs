@@ -169,7 +169,7 @@ impl Storage {
     }
 
     pub fn store_word(&mut self, key: Word, val: Word) {
-        if self.entries == None {
+        if self.entries.is_none() {
             self.entries = Some(HashMap::new());
         }
         self.entries.as_mut().map(|m| m.insert(key, val));

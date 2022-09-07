@@ -61,7 +61,7 @@ struct Compiler {
 impl Compiler {
     /// Instantiates a new compiler state.
     fn new(runtime_library: Module) -> Compiler {
-        let compiler = Compiler {
+        Compiler {
             op_table: make_op_table(&runtime_library),
             jump_table: HashMap::new(),
             init_function: find_runtime_function(&runtime_library, "_init_evm").unwrap(),
@@ -69,8 +69,7 @@ impl Compiler {
             pop_function: find_runtime_function(&runtime_library, "_pop_u32").unwrap(),
             function_import_count: runtime_library.import_count(ImportCountType::Function),
             builder: parity_wasm::builder::from_module(runtime_library),
-        };
-        compiler
+        }
     }
 
     /// Compiles the program's control-flow graph.

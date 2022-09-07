@@ -75,7 +75,7 @@ mod tests {
 
     #[test]
     fn push2() {
-        let op = Opcode::PUSHn(2, u256::from(0x0123 as u16), vec![0x01, 0x23]);
+        let op = Opcode::PUSHn(2, u256::from(0x0123_u16), vec![0x01, 0x23]);
         let insns = encode_operands(&op);
         assert_eq!(insns.len(), 1);
         match insns[0] {
@@ -86,11 +86,7 @@ mod tests {
 
     #[test]
     fn push4() {
-        let op = Opcode::PUSHn(
-            4,
-            u256::from(0x01234567 as u32),
-            vec![0x01, 0x23, 0x45, 0x67],
-        );
+        let op = Opcode::PUSHn(4, u256::from(0x01234567_u32), vec![0x01, 0x23, 0x45, 0x67]);
         let insns = encode_operands(&op);
         assert_eq!(insns.len(), 1);
         match insns[0] {
@@ -103,7 +99,7 @@ mod tests {
     fn push8() {
         let op = Opcode::PUSHn(
             8,
-            u256::from(0x0123456789ABCDEF as u64),
+            u256::from(0x0123456789ABCDEF_u64),
             vec![0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF],
         );
         let insns = encode_operands(&op);
@@ -118,7 +114,7 @@ mod tests {
     fn push16() {
         let op = Opcode::PUSHn(
             16,
-            u256::from(0x0123456789ABCDEFFEDCBA9876543210 as u128),
+            u256::from(0x0123456789ABCDEFFEDCBA9876543210_u128),
             vec![
                 0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54,
                 0x32, 0x10,
@@ -143,11 +139,7 @@ mod tests {
             0x32, 0x10, 0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB,
             0xCC, 0xDD, 0xEE, 0xFF,
         ];
-        let op = Opcode::PUSHn(
-            32,
-            u256::from_be_bytes(bs.clone().try_into().unwrap()),
-            bs.clone(),
-        );
+        let op = Opcode::PUSHn(32, u256::from_be_bytes(bs.clone().try_into().unwrap()), bs);
         let insns = encode_operands(&op);
         assert_eq!(insns.len(), 4);
         match insns[0] {

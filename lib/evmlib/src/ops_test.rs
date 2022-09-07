@@ -320,7 +320,7 @@ mod tests {
     fn test_push4() {
         unsafe {
             EVM.reset();
-            push4(u32::try_from(0x12345678u32).unwrap());
+            push4(0x12345678_u32);
             assert_eq!(EVM.stack.depth, 1);
             assert_eq!(EVM.stack.slots[0], Word::from(0x12345678u32));
         }
@@ -360,7 +360,7 @@ mod tests {
     fn test_push8() {
         unsafe {
             EVM.reset();
-            push8(u64::try_from(0x123456789ABCDEF0u64).unwrap());
+            push8(0x123456789ABCDEF0_u64);
             assert_eq!(EVM.stack.depth, 1);
             assert_eq!(EVM.stack.slots[0], Word::from(0x123456789ABCDEF0u64));
         }
@@ -370,7 +370,7 @@ mod tests {
     fn test_push9() {
         unsafe {
             EVM.reset();
-            push9(u128::try_from(0x123456789ABCDEF011u128).unwrap());
+            push9(0x123456789ABCDEF011_u128);
             assert_eq!(EVM.stack.depth, 1);
             assert_eq!(EVM.stack.slots[0], Word::from(0x123456789ABCDEF011u128));
         }
@@ -380,7 +380,7 @@ mod tests {
     fn test_push10() {
         unsafe {
             EVM.reset();
-            push10(u128::try_from(0x123456789ABCDEF01122u128).unwrap());
+            push10(0x123456789ABCDEF01122_u128);
             assert_eq!(EVM.stack.depth, 1);
             assert_eq!(EVM.stack.slots[0], Word::from(0x123456789ABCDEF01122u128));
         }
@@ -390,7 +390,7 @@ mod tests {
     fn test_push11() {
         unsafe {
             EVM.reset();
-            push11(u128::try_from(0x123456789ABCDEF0112233u128).unwrap());
+            push11(0x123456789ABCDEF0112233_u128);
             assert_eq!(EVM.stack.depth, 1);
             assert_eq!(EVM.stack.slots[0], Word::from(0x123456789ABCDEF0112233u128));
         }
@@ -400,7 +400,7 @@ mod tests {
     fn test_push12() {
         unsafe {
             EVM.reset();
-            push12(u128::try_from(0x123456789ABCDEF011223344u128).unwrap());
+            push12(0x123456789ABCDEF011223344_u128);
             assert_eq!(EVM.stack.depth, 1);
             assert_eq!(
                 EVM.stack.slots[0],
@@ -413,7 +413,7 @@ mod tests {
     fn test_push13() {
         unsafe {
             EVM.reset();
-            push13(u128::try_from(0x123456789ABCDEF01122334455u128).unwrap());
+            push13(0x123456789ABCDEF01122334455_u128);
             assert_eq!(EVM.stack.depth, 1);
             assert_eq!(
                 EVM.stack.slots[0],
@@ -426,7 +426,7 @@ mod tests {
     fn test_push14() {
         unsafe {
             EVM.reset();
-            push14(u128::try_from(0x123456789ABCDEF0112233445566u128).unwrap());
+            push14(0x123456789ABCDEF0112233445566_u128);
             assert_eq!(EVM.stack.depth, 1);
             assert_eq!(
                 EVM.stack.slots[0],
@@ -439,7 +439,7 @@ mod tests {
     fn test_push15() {
         unsafe {
             EVM.reset();
-            push15(u128::try_from(0x123456789ABCDEF011223344556677u128).unwrap());
+            push15(0x123456789ABCDEF011223344556677_u128);
             assert_eq!(EVM.stack.depth, 1);
             assert_eq!(
                 EVM.stack.slots[0],
@@ -452,7 +452,7 @@ mod tests {
     fn test_push16() {
         unsafe {
             EVM.reset();
-            push16(u128::try_from(0x123456789ABCDEF01122334455667788u128).unwrap());
+            push16(0x123456789ABCDEF01122334455667788_u128);
             assert_eq!(EVM.stack.depth, 1);
             assert_eq!(
                 EVM.stack.slots[0],
