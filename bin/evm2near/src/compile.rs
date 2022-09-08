@@ -13,12 +13,17 @@ use parity_wasm::{
 
 use crate::{
     analyze::{analyze_cfg, Block, CFGProgram, Edge, Label},
+    config::CompilerConfig,
     encode::encode_operands,
 };
 
 const TABLE_OFFSET: i32 = 0x1000;
 
-pub fn compile(input_program: &Program, runtime_library: Module) -> Module {
+pub fn compile(
+    input_program: &Program,
+    runtime_library: Module,
+    _config: &CompilerConfig,
+) -> Module {
     let input_cfg = analyze_cfg(input_program);
 
     let mut compiler = Compiler::new(runtime_library);
@@ -107,7 +112,7 @@ impl Compiler {
                     None,
                     vec![
                         Instruction::I32Const(TABLE_OFFSET),
-                        Instruction::Call(self.init_function),
+                        Instruction::Call(self.init_function), // TODO: parameterize with --chain-id
                     ],
                 );
             }
