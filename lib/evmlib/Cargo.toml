@@ -7,9 +7,10 @@ description = "TODO"
 publish = false
 
 [features]
-default = ["gas", "pc"]
+default = ["gas", "pc", "near"]
 gas = []
 pc = []
+near = []
 
 [lib]
 crate-type = ["cdylib"]

@@ -205,16 +205,70 @@ mod tests {
     }
 
     #[test]
-    fn test_address() {}
+    fn test_address() {
+        let mock_address = [0xABu8; 20];
+        unsafe {
+            ENV.address = mock_address;
+            EVM.reset();
+            address();
+            assert_eq!(
+                EVM.stack.peek(),
+                "0xABABABABABABABABABABABABABABABABABABABAB".hex_int()
+            );
+        }
+    }
 
     #[test]
-    fn test_balance() {}
+    fn test_balance() {
+        let mock_address = hex::decode("2fAD5818188D71A1d6A4868d352E69f239AFdee9")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let mock_balance = 132456;
+        unsafe {
+            ENV.address = mock_address;
+            EVM.reset();
+            EVM.self_balance = Word::from(mock_balance);
+            EVM.stack
+                .push("0x2fAD5818188D71A1d6A4868d352E69f239AFdee9".hex_int());
+            balance();
+            assert_eq!(EVM.stack.peek(), mock_balance);
+
+            // Balances other than self are zero
+            EVM.stack
+                .push("0x0000000000000DEADBEEF0000000000000000000".hex_int());
+            balance();
+            assert_eq!(EVM.stack.peek(), ZERO);
+        }
+    }
 
     #[test]
-    fn test_origin() {}
+    fn test_origin() {
+        let mock_address = [0xEFu8; 20];
+        unsafe {
+            ENV.origin = mock_address;
+            EVM.reset();
+            origin();
+            assert_eq!(
+                EVM.stack.peek(),
+                "0xEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEFEF".hex_int()
+            );
+        }
+    }
 
     #[test]
-    fn test_caller() {}
+    fn test_caller() {
+        let mock_address = [0xCDu8; 20];
+        unsafe {
+            ENV.caller = mock_address;
+            EVM.reset();
+            caller();
+            assert_eq!(
+                EVM.stack.peek(),
+                "0xCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCDCD".hex_int()
+            );
+        }
+    }
 
     #[test]
     fn test_callvalue() {}
@@ -322,10 +376,26 @@ mod tests {
     fn test_coinbase() {}
 
     #[test]
-    fn test_timestamp() {}
+    fn test_timestamp() {
+        let mock_timestamp = 1662652905;
+        unsafe {
+            ENV.timestamp = mock_timestamp;
+            EVM.reset();
+            timestamp();
+            assert_eq!(EVM.stack.peek(), mock_timestamp as u128);
+        }
+    }
 
     #[test]
-    fn test_number() {}
+    fn test_number() {
+        let block_height = 2718;
+        unsafe {
+            ENV.block_height = block_height;
+            EVM.reset();
+            number();
+            assert_eq!(EVM.stack.peek(), block_height as u128);
+        }
+    }
 
     #[test]
     fn test_difficulty() {}

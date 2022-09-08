@@ -1,14 +1,17 @@
 // This is free and unencumbered software released into the public domain.
 
 use ethnum::I256;
-use sha3::{Digest, Keccak256};
 use std::{
     convert::TryInto,
     ops::{Not, Shl, Shr},
 };
 use ux::*;
 
-use crate::state::{Machine, Memory, Stack, Storage, Word, MAX_STACK_DEPTH, ONE, ZERO};
+use crate::{
+    env::Env,
+    hash_provider::HashProvider,
+    state::{Machine, Memory, Stack, Storage, Word, MAX_STACK_DEPTH, ONE, ZERO},
+};
 
 const KECCAK_EMPTY: Word = Word::from_words(
     0xc5d2460186f7233c927e7db2dcc703c0,
@@ -30,6 +33,18 @@ pub(crate) static mut EVM: Machine = Machine {
     code: Vec::new(),
     chain_id: ZERO,
     self_balance: ZERO,
+};
+
+#[cfg(all(feature = "near", not(test)))]
+pub(crate) static mut ENV: crate::near_runtime::NearRuntime = crate::near_runtime::NearRuntime;
+
+#[cfg(test)]
+pub(crate) static mut ENV: crate::env::mock::MockEnv = crate::env::mock::MockEnv {
+    address: [0u8; 20],
+    origin: [0u8; 20],
+    caller: [0u8; 20],
+    block_height: 0,
+    timestamp: 0,
 };
 
 #[no_mangle]
@@ -301,10 +316,14 @@ pub unsafe fn sha3() {
         let offset = as_usize_or_oog(offset);
         EVM.memory.resize(offset + size);
         let slice = EVM.memory.slice(offset, size);
-        // TODO: use NEAR host function instead if compiling to NEAR
-        let hash = Keccak256::digest(slice);
-        // unwrap is safe because hash function is 256-bit.
-        Word::from_be_bytes(hash.try_into().unwrap())
+
+        #[cfg(all(feature = "near", not(test)))]
+        let hash = crate::near_runtime::NearRuntime::keccak256(slice);
+
+        #[cfg(any(not(feature = "near"), test))]
+        let hash = crate::hash_provider::Native::keccak256(slice);
+
+        Word::from_be_bytes(hash)
     };
     EVM.stack.push(result);
 }
@@ -312,25 +331,40 @@ pub unsafe fn sha3() {
 #[no_mangle]
 pub unsafe fn address() {
     EVM.burn_gas(2);
-    todo!("ADDRESS") // TODO: NEAR SDK, --address
+    let address = ENV.address();
+    EVM.stack.push(address_to_u256(&address));
 }
 
 #[no_mangle]
 pub unsafe fn balance() {
     EVM.burn_gas(100);
-    todo!("BALANCE") // TODO: NEAR SDK
+    let address_u256 = EVM.stack.pop();
+    let address = {
+        let mut buf = [0u8; 20];
+        buf[4..20].copy_from_slice(&address_u256.low().to_be_bytes());
+        buf[0..4].copy_from_slice(&address_u256.high().to_be_bytes()[12..16]);
+        buf
+    };
+    let result = if address == ENV.address() {
+        EVM.self_balance
+    } else {
+        ZERO
+    };
+    EVM.stack.push(result);
 }
 
 #[no_mangle]
 pub unsafe fn origin() {
     EVM.burn_gas(2);
-    todo!("ORIGIN") // TODO: NEAR SDK, --origin
+    let address = ENV.origin();
+    EVM.stack.push(address_to_u256(&address));
 }
 
 #[no_mangle]
 pub unsafe fn caller() {
     EVM.burn_gas(2);
-    todo!("CALLER") // TODO: NEAR SDK, --caller
+    let address = ENV.caller();
+    EVM.stack.push(address_to_u256(&address));
 }
 
 #[no_mangle]
@@ -439,13 +473,15 @@ pub unsafe fn coinbase() {
 #[no_mangle]
 pub unsafe fn timestamp() {
     EVM.burn_gas(2);
-    EVM.stack.push(ZERO) // TODO: NEAR SDK
+    let number = ENV.timestamp();
+    EVM.stack.push(Word::from(number));
 }
 
 #[no_mangle]
 pub unsafe fn number() {
     EVM.burn_gas(2);
-    EVM.stack.push(ZERO) // TODO: NEAR SDK
+    let number = ENV.block_height();
+    EVM.stack.push(Word::from(number));
 }
 
 #[no_mangle]
@@ -1103,6 +1139,12 @@ fn as_usize_or_oog(word: Word) -> usize {
     } else {
         word.as_usize()
     }
+}
+
+fn address_to_u256(address: &crate::env::Address) -> Word {
+    let mut buf = [0u8; 32];
+    buf[12..32].copy_from_slice(address);
+    Word::from_be_bytes(buf)
 }
 
 unsafe fn data_copy(dest_offset: Word, offset: Word, size: Word, source: &[u8]) {
