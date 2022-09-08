@@ -19,14 +19,10 @@ use crate::{
 
 const TABLE_OFFSET: i32 = 0x1000;
 
-pub fn compile(
-    input_program: &Program,
-    runtime_library: Module,
-    _config: &CompilerConfig,
-) -> Module {
+pub fn compile(input_program: &Program, runtime_library: Module, config: CompilerConfig) -> Module {
     let input_cfg = analyze_cfg(input_program);
 
-    let mut compiler = Compiler::new(runtime_library);
+    let mut compiler = Compiler::new(runtime_library, config);
     compiler.compile_cfg(&input_cfg, input_program);
 
     let mut output_module = compiler.builder.build();
@@ -54,6 +50,7 @@ pub fn compile(
 type FunctionIndex = u32;
 
 struct Compiler {
+    config: CompilerConfig,
     op_table: HashMap<Opcode, FunctionIndex>,
     jump_table: HashMap<Label, FunctionIndex>,
     init_function: FunctionIndex,
@@ -65,8 +62,9 @@ struct Compiler {
 
 impl Compiler {
     /// Instantiates a new compiler state.
-    fn new(runtime_library: Module) -> Compiler {
+    fn new(runtime_library: Module, config: CompilerConfig) -> Compiler {
         Compiler {
+            config,
             op_table: make_op_table(&runtime_library),
             jump_table: HashMap::new(),
             init_function: find_runtime_function(&runtime_library, "_init_evm").unwrap(),
@@ -112,7 +110,8 @@ impl Compiler {
                     None,
                     vec![
                         Instruction::I32Const(TABLE_OFFSET),
-                        Instruction::Call(self.init_function), // TODO: parameterize with --chain-id
+                        Instruction::I64Const(self.config.chain_id.try_into().unwrap()), // --chain-id
+                        Instruction::Call(self.init_function),
                     ],
                 );
             }

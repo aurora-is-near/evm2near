@@ -118,7 +118,7 @@ fn main() -> impl std::process::Termination {
     let output_program = compile(
         &input_program,
         runtime_library,
-        &CompilerConfig {
+        CompilerConfig {
             gas_accounting: !options.no_gas_accounting,
             program_counter: !options.no_program_counter,
             chain_id: match options.chain_id.as_str() {

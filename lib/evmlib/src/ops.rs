@@ -31,7 +31,7 @@ pub(crate) static mut EVM: Machine = Machine {
 };
 
 #[no_mangle]
-pub unsafe fn _init_evm(_table_offset: u32) {
+pub unsafe fn _init_evm(_table_offset: u32, _chain_id: u64) {
     #[cfg(target_os = "wasi")]
     {
         let mut args = std::env::args();
