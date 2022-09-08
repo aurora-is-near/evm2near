@@ -213,4 +213,10 @@ impl Machine {
         self.call_data.clear();
         self.code.clear();
     }
+
+    #[inline]
+    pub fn burn_gas(&mut self, gas_used: u64) {
+        #[cfg(feature = "gas")]
+        self.gas_used += gas_used
+    }
 }

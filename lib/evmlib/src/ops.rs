@@ -58,7 +58,7 @@ pub unsafe fn _pop_u32() -> u32 {
 
 #[no_mangle]
 pub unsafe fn stop() {
-    EVM.gas_used += 0;
+    EVM.burn_gas(0);
     EVM.stack.clear();
     #[cfg(target_os = "wasi")]
     {
@@ -71,35 +71,35 @@ pub unsafe fn stop() {
 
 #[no_mangle]
 pub unsafe fn add() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(a + b);
 }
 
 #[no_mangle]
 pub unsafe fn mul() {
-    EVM.gas_used += 5;
+    EVM.burn_gas(5);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(a * b);
 }
 
 #[no_mangle]
 pub unsafe fn sub() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(a - b);
 }
 
 #[no_mangle]
 pub unsafe fn div() {
-    EVM.gas_used += 5;
+    EVM.burn_gas(5);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(if b == ZERO { ZERO } else { a / b });
 }
 
 #[no_mangle]
 pub unsafe fn sdiv() {
-    EVM.gas_used += 5;
+    EVM.burn_gas(5);
     let a = EVM.stack.pop().as_i256();
     let b = EVM.stack.pop().as_i256();
     EVM.stack.push(if b == I256::ZERO {
@@ -111,14 +111,14 @@ pub unsafe fn sdiv() {
 
 #[no_mangle]
 pub unsafe fn r#mod() {
-    EVM.gas_used += 5;
+    EVM.burn_gas(5);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(if b == ZERO { ZERO } else { a % b });
 }
 
 #[no_mangle]
 pub unsafe fn smod() {
-    EVM.gas_used += 5;
+    EVM.burn_gas(5);
     let a = EVM.stack.pop().as_i256();
     let b = EVM.stack.pop().as_i256();
     EVM.stack.push(if b == I256::ZERO {
@@ -130,7 +130,7 @@ pub unsafe fn smod() {
 
 #[no_mangle]
 pub unsafe fn addmod() {
-    EVM.gas_used += 8;
+    EVM.burn_gas(8);
     // TODO: need to use 512-bit arithmetic here to prevent overflow before taking the modulus
     let (a, b, n) = EVM.stack.pop3();
     let result = if n == ZERO { ZERO } else { (a + b) % n };
@@ -139,7 +139,7 @@ pub unsafe fn addmod() {
 
 #[no_mangle]
 pub unsafe fn mulmod() {
-    EVM.gas_used += 8;
+    EVM.burn_gas(8);
     // TODO: need to use 512-bit arithmetic here to prevent overflow before taking the modulus
     let (a, b, n) = EVM.stack.pop3();
     let result = if n == ZERO { ZERO } else { (a * b) % n };
@@ -148,14 +148,14 @@ pub unsafe fn mulmod() {
 
 #[no_mangle]
 pub unsafe fn exp() {
-    EVM.gas_used += 10;
+    EVM.burn_gas(10);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(a.pow(b.try_into().unwrap()));
 }
 
 #[no_mangle]
 pub unsafe fn signextend() {
-    EVM.gas_used += 5;
+    EVM.burn_gas(5);
     let (op1, op2) = EVM.stack.pop2();
     let result = if op1 < ethnum::U256::new(32) {
         // `as_u32` works since op1 < 32
@@ -180,21 +180,21 @@ pub unsafe fn signextend() {
 
 #[no_mangle]
 pub unsafe fn lt() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(if a < b { ONE } else { ZERO });
 }
 
 #[no_mangle]
 pub unsafe fn gt() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(if a > b { ONE } else { ZERO });
 }
 
 #[no_mangle]
 pub unsafe fn slt() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let a = EVM.stack.pop().as_i256();
     let b = EVM.stack.pop().as_i256();
     EVM.stack.push(if a < b { ONE } else { ZERO });
@@ -202,7 +202,7 @@ pub unsafe fn slt() {
 
 #[no_mangle]
 pub unsafe fn sgt() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let a = EVM.stack.pop().as_i256();
     let b = EVM.stack.pop().as_i256();
     EVM.stack.push(if a > b { ONE } else { ZERO });
@@ -210,55 +210,55 @@ pub unsafe fn sgt() {
 
 #[no_mangle]
 pub unsafe fn eq() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(if a == b { ONE } else { ZERO });
 }
 
 #[no_mangle]
 pub unsafe fn iszero() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let a = EVM.stack.pop();
     EVM.stack.push(if a == ZERO { ONE } else { ZERO });
 }
 
 #[no_mangle]
 pub unsafe fn and() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(a & b);
 }
 
 #[no_mangle]
 pub unsafe fn or() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(a | b);
 }
 
 #[no_mangle]
 pub unsafe fn xor() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(a ^ b);
 }
 
 #[no_mangle]
 pub unsafe fn not() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let a = EVM.stack.pop();
     EVM.stack.push(a.not());
 }
 
 #[no_mangle]
 pub unsafe fn byte() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     todo!("BYTE") // TODO
 }
 
 #[no_mangle]
 pub unsafe fn shl() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let (shift, value) = EVM.stack.pop2();
     let result = if value == ZERO || shift > Word::from(255u8) {
         ZERO
@@ -270,7 +270,7 @@ pub unsafe fn shl() {
 
 #[no_mangle]
 pub unsafe fn shr() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let (shift, value) = EVM.stack.pop2();
     let result = if value == ZERO || shift > Word::from(255u8) {
         ZERO
@@ -282,13 +282,13 @@ pub unsafe fn shr() {
 
 #[no_mangle]
 pub unsafe fn sar() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     todo!("SAR") // TODO
 }
 
 #[no_mangle]
 pub unsafe fn sha3() {
-    EVM.gas_used += 30;
+    EVM.burn_gas(30);
     let (offset, size) = EVM.stack.pop2();
     let size = as_usize_or_oog(size);
     let result = if size == 0 {
@@ -307,37 +307,37 @@ pub unsafe fn sha3() {
 
 #[no_mangle]
 pub unsafe fn address() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     todo!("ADDRESS") // TODO: NEAR SDK, --address
 }
 
 #[no_mangle]
 pub unsafe fn balance() {
-    EVM.gas_used += 100;
+    EVM.burn_gas(100);
     todo!("BALANCE") // TODO: NEAR SDK
 }
 
 #[no_mangle]
 pub unsafe fn origin() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     todo!("ORIGIN") // TODO: NEAR SDK, --origin
 }
 
 #[no_mangle]
 pub unsafe fn caller() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     todo!("CALLER") // TODO: NEAR SDK, --caller
 }
 
 #[no_mangle]
 pub unsafe fn callvalue() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     EVM.stack.push(EVM.call_value);
 }
 
 #[no_mangle]
 pub unsafe fn calldataload() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     // Note: if the value on the stack is larger than usize::MAX then
     // `as_usize` will return `usize::MAX`, and this is ok because that
     // is the largest possible calldata size.
@@ -358,13 +358,13 @@ pub unsafe fn calldataload() {
 
 #[no_mangle]
 pub unsafe fn calldatasize() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     EVM.stack.push(Word::from(EVM.call_data.len() as u32));
 }
 
 #[no_mangle]
 pub unsafe fn calldatacopy() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let (dest_offset, offset, size) = EVM.stack.pop3();
 
     data_copy(dest_offset, offset, size, &EVM.call_data);
@@ -372,13 +372,13 @@ pub unsafe fn calldatacopy() {
 
 #[no_mangle]
 pub unsafe fn codesize() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     EVM.stack.push(Word::from(EVM.code.len() as u32));
 }
 
 #[no_mangle]
 pub unsafe fn codecopy() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let (dest_offset, offset, size) = EVM.stack.pop3();
 
     data_copy(dest_offset, offset, size, &EVM.code);
@@ -386,103 +386,103 @@ pub unsafe fn codecopy() {
 
 #[no_mangle]
 pub unsafe fn gasprice() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     EVM.stack.push(Word::from(EVM.gas_price));
 }
 
 #[no_mangle]
 pub unsafe fn extcodesize() {
-    EVM.gas_used += 100;
+    EVM.burn_gas(100);
     todo!("EXTCODESIZE") // TODO: NEAR SDK
 }
 
 #[no_mangle]
 pub unsafe fn extcodecopy() {
-    EVM.gas_used += 100;
+    EVM.burn_gas(100);
     todo!("EXTCODECOPY") // TODO: NEAR SDK
 }
 
 #[no_mangle]
 pub unsafe fn returndatasize() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     todo!("RETURNDATASIZE") // TODO
 }
 
 #[no_mangle]
 pub unsafe fn returndatacopy() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     todo!("RETURNDATACOPY") // TODO
 }
 
 #[no_mangle]
 pub unsafe fn extcodehash() {
-    EVM.gas_used += 100;
+    EVM.burn_gas(100);
     todo!("EXTCODEHASH") // TODO: NEAR SDK
 }
 
 #[no_mangle]
 pub unsafe fn blockhash() {
-    EVM.gas_used += 20;
+    EVM.burn_gas(20);
     EVM.stack.push(ZERO) // TODO: NEAR SDK
 }
 
 #[no_mangle]
 pub unsafe fn coinbase() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     EVM.stack.push(ZERO) // TODO: NEAR SDK
 }
 
 #[no_mangle]
 pub unsafe fn timestamp() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     EVM.stack.push(ZERO) // TODO: NEAR SDK
 }
 
 #[no_mangle]
 pub unsafe fn number() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     EVM.stack.push(ZERO) // TODO: NEAR SDK
 }
 
 #[no_mangle]
 pub unsafe fn difficulty() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     EVM.stack.push(ZERO)
 }
 
 #[no_mangle]
 pub unsafe fn gaslimit() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     EVM.stack.push(Word::from(EVM.gas_limit))
 }
 
 #[no_mangle]
 pub unsafe fn chainid() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     EVM.stack.push(ZERO) // TODO: --chain-id=mainnet
 }
 
 #[no_mangle]
 pub unsafe fn selfbalance() {
-    EVM.gas_used += 5;
+    EVM.burn_gas(5);
     EVM.stack.push(ZERO) // TODO: NEAR SDK
 }
 
 #[no_mangle]
 pub unsafe fn basefee() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     EVM.stack.push(ZERO)
 }
 
 #[no_mangle]
 pub unsafe fn pop() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     let _ = EVM.stack.pop();
 }
 
 #[no_mangle]
 pub unsafe fn mload() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let offset = EVM.stack.pop();
     // TODO: gas cost for memory resize (reads resize the memory too)
     let value = EVM.memory.load_word(offset.try_into().unwrap());
@@ -491,7 +491,7 @@ pub unsafe fn mload() {
 
 #[no_mangle]
 pub unsafe fn mstore() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     // TODO: gas cost for memory resize
     let (offset, value) = EVM.stack.pop2();
     EVM.memory.store_word(offset.try_into().unwrap(), value);
@@ -499,7 +499,7 @@ pub unsafe fn mstore() {
 
 #[no_mangle]
 pub unsafe fn mstore8() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let (offset, value) = (EVM.stack.pop(), EVM.stack.pop() & 0xFF);
     // TODO: gas cost for memory resize
     EVM.memory
@@ -508,7 +508,7 @@ pub unsafe fn mstore8() {
 
 #[no_mangle]
 pub unsafe fn sload() {
-    EVM.gas_used += 100;
+    EVM.burn_gas(100);
     let key = EVM.stack.pop();
     let value = EVM.storage.load_word(key);
     EVM.stack.push(value);
@@ -516,20 +516,20 @@ pub unsafe fn sload() {
 
 #[no_mangle]
 pub unsafe fn sstore() {
-    EVM.gas_used += 100;
+    EVM.burn_gas(100);
     let (key, value) = EVM.stack.pop2();
     EVM.storage.store_word(key, value);
 }
 
 #[no_mangle]
 pub unsafe fn jump() {
-    EVM.gas_used += 8;
+    EVM.burn_gas(8);
     todo!("JUMP") // TODO
 }
 
 #[no_mangle]
 pub unsafe fn jumpi() -> u32 {
-    EVM.gas_used += 10;
+    EVM.burn_gas(10);
     //let pc = EVM.stack.pop(); // never pushed on the stack for static jumps
     let cond = EVM.stack.pop();
     if cond != Word::ZERO {
@@ -541,19 +541,22 @@ pub unsafe fn jumpi() -> u32 {
 
 #[no_mangle]
 pub unsafe fn pc() {
-    EVM.gas_used += 2;
-    EVM.stack.push(ZERO) // TODO: --fno-program-counter
+    EVM.burn_gas(2);
+    #[cfg(feature = "pc")]
+    EVM.stack.push(ZERO); // TODO: instrument generated code in the compiler
+    #[cfg(not(feature = "pc"))]
+    EVM.stack.push(ZERO) // --fno-program-counter
 }
 
 #[no_mangle]
 pub unsafe fn msize() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     EVM.stack.push(Word::from(EVM.memory.size() as u64));
 }
 
 #[no_mangle]
 pub unsafe fn gas() {
-    EVM.gas_used += 2;
+    EVM.burn_gas(2);
     EVM.stack.push(Word::from(EVM.gas_limit - EVM.gas_used)) // TODO: --fno-gas-accounting
 }
 
@@ -564,7 +567,7 @@ pub unsafe fn jumpdest() {
 
 #[no_mangle]
 pub unsafe fn push1(word: u8) {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     EVM.stack.push(Word::from(word));
 }
 
@@ -580,7 +583,7 @@ pub unsafe fn push3(word: u24) {
 
 #[no_mangle]
 pub unsafe fn push4(word: u32) {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     EVM.stack.push(Word::from(word));
 }
 
@@ -601,7 +604,7 @@ pub unsafe fn push7(word: u56) {
 
 #[no_mangle]
 pub unsafe fn push8(word: u64) {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     EVM.stack.push(Word::from(word));
 }
 
@@ -642,7 +645,7 @@ pub unsafe fn push15(word: /*u120*/ u128) {
 
 #[no_mangle]
 pub unsafe fn push16(word: u128) {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     EVM.stack.push(Word::from_words(0, word));
 }
 
@@ -723,7 +726,7 @@ pub unsafe fn push31(word_0: u64, word_1: u64, word_2: u64, word_3: u56) {
 
 #[no_mangle]
 pub unsafe fn push32(word_0: u64, word_1: u64, word_2: u64, word_3: u64) {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     let mut bytes: [u8; 32] = [0; 32];
     bytes[0..8].copy_from_slice(&word_0.to_le_bytes());
     bytes[8..16].copy_from_slice(&word_1.to_le_bytes());
@@ -734,7 +737,7 @@ pub unsafe fn push32(word_0: u64, word_1: u64, word_2: u64, word_3: u64) {
 
 #[no_mangle]
 pub unsafe fn dup1() {
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     EVM.stack.push(EVM.stack.peek());
 }
 
@@ -815,7 +818,7 @@ pub unsafe fn dup16() {
 
 unsafe fn dup(n: u8) {
     assert!((1..=16).contains(&n));
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     EVM.stack.push(EVM.stack.peek_n(n as usize - 1));
 }
 
@@ -901,13 +904,13 @@ pub unsafe fn swap16() {
 
 unsafe fn swap(n: u8) {
     assert!((1..=16).contains(&n));
-    EVM.gas_used += 3;
+    EVM.burn_gas(3);
     EVM.stack.swap(n.into())
 }
 
 #[no_mangle]
 pub unsafe fn log0() {
-    EVM.gas_used += 375;
+    EVM.burn_gas(375);
     let (offset, size) = EVM.stack.pop2();
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
     #[cfg(target_os = "wasi")]
@@ -918,7 +921,7 @@ pub unsafe fn log0() {
 
 #[no_mangle]
 pub unsafe fn log1() {
-    EVM.gas_used += 750;
+    EVM.burn_gas(750);
     let (offset, size) = EVM.stack.pop2();
     let topic = EVM.stack.pop();
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
@@ -938,7 +941,7 @@ pub unsafe fn log1() {
 
 #[no_mangle]
 pub unsafe fn log2() {
-    EVM.gas_used += 1125;
+    EVM.burn_gas(1125);
     let (offset, size) = EVM.stack.pop2();
     let (topic1, topic2) = EVM.stack.pop2();
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
@@ -960,7 +963,7 @@ pub unsafe fn log2() {
 
 #[no_mangle]
 pub unsafe fn log3() {
-    EVM.gas_used += 1500;
+    EVM.burn_gas(1500);
     let (offset, size) = EVM.stack.pop2();
     let (topic1, topic2, topic3) = EVM.stack.pop3();
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
@@ -984,7 +987,7 @@ pub unsafe fn log3() {
 
 #[no_mangle]
 pub unsafe fn log4() {
-    EVM.gas_used += 1875;
+    EVM.burn_gas(1875);
     let (offset, size) = EVM.stack.pop2();
     let (topic1, topic2, topic3, topic4) = EVM.stack.pop4();
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
@@ -1010,25 +1013,25 @@ pub unsafe fn log4() {
 
 #[no_mangle]
 pub unsafe fn create() {
-    EVM.gas_used += 32000;
+    EVM.burn_gas(32000);
     todo!("CREATE") // TODO
 }
 
 #[no_mangle]
 pub unsafe fn call() {
-    EVM.gas_used += 100;
+    EVM.burn_gas(100);
     todo!("CALL") // TODO
 }
 
 #[no_mangle]
 pub unsafe fn callcode() {
-    EVM.gas_used += 100;
+    EVM.burn_gas(100);
     todo!("CALLCODE") // TODO
 }
 
 #[no_mangle]
 pub unsafe fn r#return() {
-    EVM.gas_used += 0;
+    EVM.burn_gas(0);
     let (offset, size) = EVM.stack.pop2();
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
     #[cfg(target_os = "wasi")]
@@ -1042,25 +1045,25 @@ pub unsafe fn r#return() {
 
 #[no_mangle]
 pub unsafe fn delegatecall() {
-    EVM.gas_used += 100;
+    EVM.burn_gas(100);
     todo!("DELEGATECALL") // TODO
 }
 
 #[no_mangle]
 pub unsafe fn create2() {
-    EVM.gas_used += 32000;
+    EVM.burn_gas(32000);
     todo!("CREATE2") // TODO
 }
 
 #[no_mangle]
 pub unsafe fn staticcall() {
-    EVM.gas_used += 100;
+    EVM.burn_gas(100);
     todo!("STATICCALL") // TODO
 }
 
 #[no_mangle]
 pub unsafe fn revert() {
-    EVM.gas_used += 0;
+    EVM.burn_gas(0);
     let (offset, size) = EVM.stack.pop2();
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
     #[cfg(target_os = "wasi")]
@@ -1074,7 +1077,7 @@ pub unsafe fn revert() {
 
 #[no_mangle]
 pub unsafe fn invalid() {
-    EVM.gas_used += 0;
+    EVM.burn_gas(0);
     #[cfg(target_os = "wasi")]
     {
         eprintln!("INVALID");
@@ -1086,7 +1089,7 @@ pub unsafe fn invalid() {
 
 #[no_mangle]
 pub unsafe fn selfdestruct() {
-    EVM.gas_used += 5000;
+    EVM.burn_gas(5000);
     todo!("SELFDESTRUCT") // TODO: state reset
 }
 
