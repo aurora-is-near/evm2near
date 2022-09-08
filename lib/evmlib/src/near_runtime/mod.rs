@@ -3,6 +3,10 @@
 
 use crate::env::{Address, Env};
 use crate::hash_provider::HashProvider;
+use crate::state::Word;
+use std::collections::HashMap;
+
+mod storage;
 
 const KECCAK_REGISTER_ID: u64 = 1;
 // This register can be safely used for all Env functions that get account_ids from the host
@@ -11,10 +15,12 @@ const KECCAK_REGISTER_ID: u64 = 1;
 const ACCOUNT_REGISTER_ID: u64 = 2;
 // The input must have its own register because we only set it once (as an optimization).
 const INPUT_REGISTER_ID: u64 = 3;
+const STORAGE_REGISTER_ID: u64 = 4;
 
 pub struct NearRuntime {
     /// Cache for input from NEAR to prevent reading from the register multiple times.
     pub call_data: Option<Vec<u8>>,
+    pub storage_cache: Option<HashMap<Word, Word>>,
 }
 
 impl HashProvider for NearRuntime {
@@ -94,6 +100,46 @@ impl Env for NearRuntime {
         let ns = unsafe { block_timestamp() };
         ns / 1_000_000_000
     }
+
+    fn storage_read(&mut self, key: Word) -> Word {
+        if self.storage_cache.is_none() {
+            self.storage_cache = Some(HashMap::new());
+        }
+        let storage_cache = self.storage_cache.as_mut().unwrap();
+
+        if let Some(value) = storage_cache.get(&key) {
+            return *value;
+        }
+
+        let storage_key = storage::StorageKey::from_word(key);
+        let host_result = Self::inner_storage_read(storage_key.as_slice());
+        let value = host_result
+            .map(|bytes| Word::from_be_bytes(bytes.try_into().unwrap()))
+            .unwrap_or(Word::ZERO);
+        storage_cache.insert(key, value);
+        value
+    }
+
+    fn storage_write(&mut self, key: Word, value: Word) {
+        if self.storage_cache.is_none() {
+            self.storage_cache = Some(HashMap::new());
+        }
+        // Unwrap is safe because we ensure it is Some(..) in the check above
+        let previous_value = self.storage_cache.as_mut().unwrap().insert(key, value);
+        // Storage needs to be updated if we have never seen this key/value pair before,
+        // or if the value is different what from what it used to be.
+        let need_to_update_storage = match previous_value {
+            None => true,
+            Some(x) if x != value => true,
+            _ => false,
+        };
+
+        if need_to_update_storage {
+            let storage_key = storage::StorageKey::from_word(key);
+            let storage_value = value.to_be_bytes();
+            Self::inner_storage_write(storage_key.as_slice(), &storage_value);
+        }
+    }
 }
 
 impl NearRuntime {
@@ -121,6 +167,29 @@ impl NearRuntime {
     fn read_register_to_buffer(register_id: u64, buffer: &mut [u8]) {
         unsafe {
             read_register(register_id, buffer.as_ptr() as u64);
+        }
+    }
+
+    fn inner_storage_read(key: &[u8]) -> Option<Vec<u8>> {
+        let host_result =
+            unsafe { storage_read(key.len() as u64, key.as_ptr() as u64, STORAGE_REGISTER_ID) };
+
+        if host_result == 1 {
+            Some(Self::read_register(STORAGE_REGISTER_ID))
+        } else {
+            None
+        }
+    }
+
+    fn inner_storage_write(key: &[u8], value: &[u8]) {
+        unsafe {
+            storage_write(
+                key.len() as u64,
+                key.as_ptr() as u64,
+                value.len() as u64,
+                value.as_ptr() as u64,
+                STORAGE_REGISTER_ID,
+            );
         }
     }
 
@@ -152,4 +221,13 @@ extern "C" {
     fn block_timestamp() -> u64;
     fn input(register_id: u64);
     fn keccak256(value_len: u64, value_ptr: u64, register_id: u64);
+
+    fn storage_write(
+        key_len: u64,
+        key_ptr: u64,
+        value_len: u64,
+        value_ptr: u64,
+        register_id: u64,
+    ) -> u64;
+    fn storage_read(key_len: u64, key_ptr: u64, register_id: u64) -> u64;
 }

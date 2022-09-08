@@ -1,7 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 
 use ethnum::u256;
-use std::{collections::HashMap, mem};
+use std::mem;
 
 pub(crate) type Word = u256;
 
@@ -20,17 +20,12 @@ pub(crate) struct Memory {
     pub(crate) bytes: Vec<u8>,
 }
 
-pub(crate) struct Storage {
-    pub(crate) entries: Option<HashMap<Word, Word>>,
-}
-
 pub(crate) struct Machine {
     pub(crate) gas_used: u64,
     pub(crate) gas_limit: u64,
     pub(crate) gas_price: u64,
     pub(crate) stack: Stack,
     pub(crate) memory: Memory,
-    pub(crate) storage: Storage,
     pub(crate) call_value: Word,
     pub(crate) code: Vec<u8>,
     pub(crate) chain_id: Word,
@@ -186,35 +181,11 @@ impl Memory {
     }
 }
 
-impl Storage {
-    #[allow(dead_code)]
-    pub fn clear(&mut self) {
-        if let Some(m) = self.entries.as_mut() {
-            m.clear()
-        }
-    }
-
-    pub fn store_word(&mut self, key: Word, val: Word) {
-        if self.entries.is_none() {
-            self.entries = Some(HashMap::new());
-        }
-        self.entries.as_mut().map(|m| m.insert(key, val));
-    }
-
-    pub fn load_word(&self, key: Word) -> Word {
-        return self
-            .entries
-            .as_ref()
-            .map_or(ZERO, |m| *m.get(&key).unwrap_or(&ZERO));
-    }
-}
-
 impl Machine {
     #[allow(dead_code)]
     pub fn reset(&mut self) {
         self.stack.clear();
         self.memory.clear();
-        self.storage.clear();
         self.code.clear();
     }
 

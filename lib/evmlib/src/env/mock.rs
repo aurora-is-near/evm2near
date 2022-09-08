@@ -1,4 +1,6 @@
 use crate::env::{Address, Env};
+use crate::state::Word;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MockEnv {
@@ -8,6 +10,7 @@ pub struct MockEnv {
     pub caller: Address,
     pub block_height: u64,
     pub timestamp: u64,
+    pub storage: Option<HashMap<Word, Word>>,
 }
 
 impl Env for MockEnv {
@@ -37,5 +40,26 @@ impl Env for MockEnv {
 
     fn timestamp(&self) -> u64 {
         self.timestamp
+    }
+
+    fn storage_read(&mut self, key: Word) -> Word {
+        if self.storage.is_none() {
+            self.storage = Some(HashMap::new());
+        }
+
+        self.storage
+            .as_ref()
+            .unwrap()
+            .get(&key)
+            .copied()
+            .unwrap_or(crate::state::ZERO)
+    }
+
+    fn storage_write(&mut self, key: Word, value: Word) {
+        if self.storage.is_none() {
+            self.storage = Some(HashMap::new());
+        }
+
+        self.storage.as_mut().unwrap().insert(key, value);
     }
 }

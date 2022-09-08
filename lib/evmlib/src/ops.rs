@@ -10,7 +10,7 @@ use ux::*;
 use crate::{
     env::Env,
     hash_provider::HashProvider,
-    state::{Machine, Memory, Stack, Storage, Word, MAX_STACK_DEPTH, ONE, ZERO},
+    state::{Machine, Memory, Stack, Word, MAX_STACK_DEPTH, ONE, ZERO},
 };
 
 const KECCAK_EMPTY: Word = Word::from_words(
@@ -27,7 +27,6 @@ pub(crate) static mut EVM: Machine = Machine {
         slots: [ZERO; MAX_STACK_DEPTH],
     },
     memory: Memory { bytes: Vec::new() },
-    storage: Storage { entries: None },
     call_value: Word::ZERO,
     code: Vec::new(),
     chain_id: ZERO,
@@ -35,8 +34,10 @@ pub(crate) static mut EVM: Machine = Machine {
 };
 
 #[cfg(all(feature = "near", not(test)))]
-pub(crate) static mut ENV: crate::near_runtime::NearRuntime =
-    crate::near_runtime::NearRuntime { call_data: None };
+pub(crate) static mut ENV: crate::near_runtime::NearRuntime = crate::near_runtime::NearRuntime {
+    call_data: None,
+    storage_cache: None,
+};
 
 #[cfg(any(not(feature = "near"), test))]
 pub(crate) static mut ENV: crate::env::mock::MockEnv = crate::env::mock::MockEnv {
@@ -46,6 +47,7 @@ pub(crate) static mut ENV: crate::env::mock::MockEnv = crate::env::mock::MockEnv
     caller: [0u8; 20],
     block_height: 0,
     timestamp: 0,
+    storage: None,
 };
 
 #[no_mangle]
@@ -551,16 +553,18 @@ pub unsafe fn mstore8() {
 #[no_mangle]
 pub unsafe fn sload() {
     EVM.burn_gas(100);
+    // TODO: dynamic hot/cold gas cost
     let key = EVM.stack.pop();
-    let value = EVM.storage.load_word(key);
+    let value = ENV.storage_read(key);
     EVM.stack.push(value);
 }
 
 #[no_mangle]
 pub unsafe fn sstore() {
     EVM.burn_gas(100);
+    // TODO: dynamic hot/cold gas cost
     let (key, value) = EVM.stack.pop2();
-    EVM.storage.store_word(key, value);
+    ENV.storage_write(key, value);
 }
 
 #[no_mangle]
