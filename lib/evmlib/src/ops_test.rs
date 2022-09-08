@@ -896,19 +896,143 @@ mod tests {
     fn test_swap16() {}
 
     #[test]
-    fn test_log0() {}
+    fn test_log0() {
+        let test_data = b"hello_world_0";
+        let test_address = [0x12; 20];
+        unsafe {
+            EVM.reset();
+            ENV.address = test_address;
+            EVM.memory.bytes = test_data.to_vec();
+            push1(test_data.len() as u8);
+            push1(0);
+            log0();
+            let log = ENV.logs.first().unwrap();
+            assert_eq!(
+                log,
+                &crate::env::mock::OwnedEvmLog {
+                    address: test_address,
+                    topics: Vec::new(),
+                    data: test_data.to_vec()
+                }
+            )
+        }
+    }
 
     #[test]
-    fn test_log1() {}
+    fn test_log1() {
+        let test_data = b"hello_world_1";
+        let test_address = [0x34; 20];
+        let topic = "0xdeadbeef".hex_int();
+        unsafe {
+            EVM.reset();
+            ENV.reset();
+            ENV.address = test_address;
+            EVM.memory.bytes = test_data.to_vec();
+            EVM.stack.push(topic);
+            push1(test_data.len() as u8);
+            push1(0);
+            log1();
+            let log = ENV.logs.first().unwrap();
+            assert_eq!(
+                log,
+                &crate::env::mock::OwnedEvmLog {
+                    address: test_address,
+                    topics: vec![topic],
+                    data: test_data.to_vec()
+                }
+            )
+        }
+    }
 
     #[test]
-    fn test_log2() {}
+    fn test_log2() {
+        let test_data = b"hello_world_2";
+        let test_address = [0x56; 20];
+        let topic1 = "0xdeadbeef".hex_int();
+        let topic2 = "0x13246798".hex_int();
+        unsafe {
+            EVM.reset();
+            ENV.reset();
+            ENV.address = test_address;
+            EVM.memory.bytes = test_data.to_vec();
+            EVM.stack.push(topic2);
+            EVM.stack.push(topic1);
+            push1(test_data.len() as u8);
+            push1(0);
+            log2();
+            let log = ENV.logs.first().unwrap();
+            assert_eq!(
+                log,
+                &crate::env::mock::OwnedEvmLog {
+                    address: test_address,
+                    topics: vec![topic1, topic2],
+                    data: test_data.to_vec()
+                }
+            )
+        }
+    }
 
     #[test]
-    fn test_log3() {}
+    fn test_log3() {
+        let test_data = b"hello_world_3";
+        let test_address = [0x78; 20];
+        let topic1 = "0xdeadbeef".hex_int();
+        let topic2 = "0x13246798".hex_int();
+        let topic3 = "0xabcdef01".hex_int();
+        unsafe {
+            EVM.reset();
+            ENV.reset();
+            ENV.address = test_address;
+            EVM.memory.bytes = test_data.to_vec();
+            EVM.stack.push(topic3);
+            EVM.stack.push(topic2);
+            EVM.stack.push(topic1);
+            push1(test_data.len() as u8);
+            push1(0);
+            log3();
+            let log = ENV.logs.first().unwrap();
+            assert_eq!(
+                log,
+                &crate::env::mock::OwnedEvmLog {
+                    address: test_address,
+                    topics: vec![topic1, topic2, topic3],
+                    data: test_data.to_vec()
+                }
+            )
+        }
+    }
 
     #[test]
-    fn test_log4() {}
+    fn test_log4() {
+        let test_data = b"hello_world_4";
+        let test_address = [0x78; 20];
+        let topic1 = "0xdeadbeef".hex_int();
+        let topic2 = "0x13246798".hex_int();
+        let topic3 = "0xabcdef01".hex_int();
+        let topic4 = "0xabed".hex_int();
+        unsafe {
+            EVM.reset();
+            ENV.reset();
+            ENV.address = test_address;
+            EVM.memory.bytes = test_data.to_vec();
+            EVM.stack.push(topic4);
+            EVM.stack.push(topic3);
+            EVM.stack.push(topic2);
+            EVM.stack.push(topic1);
+            push1(test_data.len() as u8);
+            push1(0);
+            log4();
+            let log = ENV.logs.first().unwrap();
+            assert_eq!(
+                log,
+                &crate::env::mock::OwnedEvmLog {
+                    address: test_address,
+                    topics: vec![topic1, topic2, topic3, topic4],
+                    data: test_data.to_vec()
+                }
+            )
+        }
+    }
 
     #[test]
     fn test_create() {}

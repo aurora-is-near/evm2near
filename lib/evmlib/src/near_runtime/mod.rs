@@ -21,6 +21,9 @@ pub struct NearRuntime {
     /// Cache for input from NEAR to prevent reading from the register multiple times.
     pub call_data: Option<Vec<u8>>,
     pub storage_cache: Option<HashMap<Word, Word>>,
+    pub address_cache: Option<Address>,
+    pub origin_cache: Option<Address>,
+    pub caller_cache: Option<Address>,
 }
 
 impl HashProvider for NearRuntime {
@@ -70,25 +73,46 @@ impl Env for NearRuntime {
         usize::try_from(host_result).unwrap_or(usize::MAX)
     }
 
-    fn address(&self) -> Address {
-        unsafe {
+    fn address(&mut self) -> Address {
+        if let Some(address) = self.address_cache {
+            return address;
+        }
+
+        let address = unsafe {
             current_account_id(ACCOUNT_REGISTER_ID);
             Self::account_id_to_address()
-        }
+        };
+
+        self.address_cache = Some(address);
+        address
     }
 
-    fn origin(&self) -> Address {
-        unsafe {
+    fn origin(&mut self) -> Address {
+        if let Some(address) = self.origin_cache {
+            return address;
+        }
+
+        let address = unsafe {
             signer_account_id(ACCOUNT_REGISTER_ID);
             Self::account_id_to_address()
-        }
+        };
+
+        self.origin_cache = Some(address);
+        address
     }
 
-    fn caller(&self) -> Address {
-        unsafe {
+    fn caller(&mut self) -> Address {
+        if let Some(address) = self.caller_cache {
+            return address;
+        }
+
+        let address = unsafe {
             predecessor_account_id(ACCOUNT_REGISTER_ID);
             Self::account_id_to_address()
-        }
+        };
+
+        self.caller_cache = Some(address);
+        address
     }
 
     fn block_height(&self) -> u64 {
@@ -138,6 +162,13 @@ impl Env for NearRuntime {
             let storage_key = storage::StorageKey::from_word(key);
             let storage_value = value.to_be_bytes();
             Self::inner_storage_write(storage_key.as_slice(), &storage_value);
+        }
+    }
+
+    fn log(&mut self, entry: crate::env::EvmLog) {
+        let message = format!("LOG {}", entry.to_json_string());
+        unsafe {
+            log_utf8(message.len() as u64, message.as_ptr() as u64);
         }
     }
 }
@@ -230,4 +261,6 @@ extern "C" {
         register_id: u64,
     ) -> u64;
     fn storage_read(key_len: u64, key_ptr: u64, register_id: u64) -> u64;
+
+    fn log_utf8(len: u64, ptr: u64);
 }

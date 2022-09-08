@@ -8,7 +8,7 @@ use std::{
 use ux::*;
 
 use crate::{
-    env::Env,
+    env::{Env, EvmLog},
     hash_provider::HashProvider,
     state::{Machine, Memory, Stack, Word, MAX_STACK_DEPTH, ONE, ZERO},
 };
@@ -37,6 +37,9 @@ pub(crate) static mut EVM: Machine = Machine {
 pub(crate) static mut ENV: crate::near_runtime::NearRuntime = crate::near_runtime::NearRuntime {
     call_data: None,
     storage_cache: None,
+    address_cache: None,
+    origin_cache: None,
+    caller_cache: None,
 };
 
 #[cfg(any(not(feature = "near"), test))]
@@ -48,6 +51,7 @@ pub(crate) static mut ENV: crate::env::mock::MockEnv = crate::env::mock::MockEnv
     block_height: 0,
     timestamp: 0,
     storage: None,
+    logs: Vec::new(),
 };
 
 #[no_mangle]
@@ -82,13 +86,11 @@ pub unsafe fn _pop_u32() -> u32 {
 pub unsafe fn stop() {
     EVM.burn_gas(0);
     EVM.stack.clear();
-    #[cfg(target_os = "wasi")]
+    #[cfg(not(feature = "near"))]
     {
         eprintln!("STOP");
         std::process::exit(0) // EX_OK
     }
-    #[cfg(not(target_os = "wasi"))]
-    todo!("STOP") // TODO
 }
 
 #[no_mangle]
@@ -959,10 +961,12 @@ pub unsafe fn log0() {
     EVM.burn_gas(375);
     let (offset, size) = EVM.stack.pop2();
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
-    #[cfg(target_os = "wasi")]
-    eprintln!("LOG0 0x{}", hex::encode(data));
-    #[cfg(not(target_os = "wasi"))]
-    todo!("LOG0 0x{}", hex::encode(data)) // TODO: NEAR SDK
+    let log = EvmLog {
+        address: ENV.address(),
+        topics: &[],
+        data,
+    };
+    ENV.log(log);
 }
 
 #[no_mangle]
@@ -971,18 +975,12 @@ pub unsafe fn log1() {
     let (offset, size) = EVM.stack.pop2();
     let topic = EVM.stack.pop();
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
-    #[cfg(target_os = "wasi")]
-    eprintln!(
-        "LOG1 0x{} 0x{}",
-        hex::encode(data),
-        hex::encode(topic.to_be_bytes())
-    );
-    #[cfg(not(target_os = "wasi"))]
-    todo!(
-        "LOG1 0x{} 0x{}",
-        hex::encode(data),
-        hex::encode(topic.to_be_bytes())
-    ) // TODO: NEAR SDK
+    let log = EvmLog {
+        address: ENV.address(),
+        topics: &[topic],
+        data,
+    };
+    ENV.log(log);
 }
 
 #[no_mangle]
@@ -991,20 +989,12 @@ pub unsafe fn log2() {
     let (offset, size) = EVM.stack.pop2();
     let (topic1, topic2) = EVM.stack.pop2();
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
-    #[cfg(target_os = "wasi")]
-    eprintln!(
-        "LOG2 0x{} 0x{} 0x{}",
-        hex::encode(data),
-        hex::encode(topic1.to_be_bytes()),
-        hex::encode(topic2.to_be_bytes())
-    );
-    #[cfg(not(target_os = "wasi"))]
-    todo!(
-        "LOG2 0x{} 0x{} 0x{}",
-        hex::encode(data),
-        hex::encode(topic1.to_be_bytes()),
-        hex::encode(topic2.to_be_bytes())
-    ) // TODO: NEAR SDK
+    let log = EvmLog {
+        address: ENV.address(),
+        topics: &[topic1, topic2],
+        data,
+    };
+    ENV.log(log);
 }
 
 #[no_mangle]
@@ -1013,22 +1003,12 @@ pub unsafe fn log3() {
     let (offset, size) = EVM.stack.pop2();
     let (topic1, topic2, topic3) = EVM.stack.pop3();
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
-    #[cfg(target_os = "wasi")]
-    eprintln!(
-        "LOG3 0x{} 0x{} 0x{} 0x{}",
-        hex::encode(data),
-        hex::encode(topic1.to_be_bytes()),
-        hex::encode(topic2.to_be_bytes()),
-        hex::encode(topic3.to_be_bytes())
-    );
-    #[cfg(not(target_os = "wasi"))]
-    todo!(
-        "LOG3 0x{} 0x{} 0x{} 0x{}",
-        hex::encode(data),
-        hex::encode(topic1.to_be_bytes()),
-        hex::encode(topic2.to_be_bytes()),
-        hex::encode(topic3.to_be_bytes())
-    ) // TODO: NEAR SDK
+    let log = EvmLog {
+        address: ENV.address(),
+        topics: &[topic1, topic2, topic3],
+        data,
+    };
+    ENV.log(log);
 }
 
 #[no_mangle]
@@ -1037,24 +1017,12 @@ pub unsafe fn log4() {
     let (offset, size) = EVM.stack.pop2();
     let (topic1, topic2, topic3, topic4) = EVM.stack.pop4();
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
-    #[cfg(target_os = "wasi")]
-    eprintln!(
-        "LOG4 0x{} 0x{} 0x{} 0x{} 0x{}",
-        hex::encode(data),
-        hex::encode(topic1.to_be_bytes()),
-        hex::encode(topic2.to_be_bytes()),
-        hex::encode(topic3.to_be_bytes()),
-        hex::encode(topic4.to_be_bytes())
-    );
-    #[cfg(not(target_os = "wasi"))]
-    todo!(
-        "LOG4 0x{} 0x{} 0x{} 0x{} 0x{}",
-        hex::encode(data),
-        hex::encode(topic1.to_be_bytes()),
-        hex::encode(topic2.to_be_bytes()),
-        hex::encode(topic3.to_be_bytes()),
-        hex::encode(topic4.to_be_bytes())
-    ) // TODO: NEAR SDK
+    let log = EvmLog {
+        address: ENV.address(),
+        topics: &[topic1, topic2, topic3, topic4],
+        data,
+    };
+    ENV.log(log);
 }
 
 #[no_mangle]

@@ -1,4 +1,4 @@
-use crate::env::{Address, Env};
+use crate::env::{Address, Env, EvmLog};
 use crate::state::Word;
 use std::collections::HashMap;
 
@@ -11,6 +11,21 @@ pub struct MockEnv {
     pub block_height: u64,
     pub timestamp: u64,
     pub storage: Option<HashMap<Word, Word>>,
+    pub logs: Vec<OwnedEvmLog>,
+}
+
+impl MockEnv {
+    #[cfg(test)]
+    pub fn reset(&mut self) {
+        self.call_data.clear();
+        self.address = [0u8; 20];
+        self.origin = [0u8; 20];
+        self.caller = [0u8; 20];
+        self.block_height = 0;
+        self.timestamp = 0;
+        self.storage = None;
+        self.logs.clear();
+    }
 }
 
 impl Env for MockEnv {
@@ -22,15 +37,15 @@ impl Env for MockEnv {
         self.call_data.len()
     }
 
-    fn address(&self) -> Address {
+    fn address(&mut self) -> Address {
         self.address
     }
 
-    fn origin(&self) -> Address {
+    fn origin(&mut self) -> Address {
         self.origin
     }
 
-    fn caller(&self) -> Address {
+    fn caller(&mut self) -> Address {
         self.caller
     }
 
@@ -61,5 +76,28 @@ impl Env for MockEnv {
         }
 
         self.storage.as_mut().unwrap().insert(key, value);
+    }
+
+    fn log(&mut self, entry: EvmLog) {
+        self.logs.push(entry.into());
+
+        eprintln!("LOG {}", entry.to_json_string());
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnedEvmLog {
+    pub address: Address,
+    pub topics: Vec<Word>,
+    pub data: Vec<u8>,
+}
+
+impl<'a> From<EvmLog<'a>> for OwnedEvmLog {
+    fn from(log: EvmLog<'a>) -> Self {
+        Self {
+            address: log.address,
+            topics: log.topics.to_vec(),
+            data: log.data.to_vec(),
+        }
     }
 }
