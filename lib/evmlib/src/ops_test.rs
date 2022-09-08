@@ -345,7 +345,15 @@ mod tests {
     }
 
     #[test]
-    fn test_selfbalance() {}
+    fn test_selfbalance() {
+        let balance = 3141592653589793238;
+        unsafe {
+            EVM.reset();
+            EVM.self_balance = Word::from(balance);
+            selfbalance();
+            assert_eq!(EVM.stack.peek(), balance);
+        }
+    }
 
     #[test]
     fn test_basefee() {}

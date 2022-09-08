@@ -35,6 +35,11 @@ pub(crate) struct Machine {
     pub(crate) call_data: Vec<u8>,
     pub(crate) code: Vec<u8>,
     pub(crate) chain_id: Word,
+    // TODO: balance should be determined from context, but it is
+    // unclear how this should work from a design perspective.
+    // Should the "balance" mean the native platform token (NEAR in this case)?
+    // Or should it really mean ETH (which would require some interaction with Aurora)?
+    pub(crate) self_balance: Word,
 }
 
 impl Stack {

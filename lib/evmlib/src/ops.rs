@@ -29,10 +29,11 @@ pub(crate) static mut EVM: Machine = Machine {
     call_data: Vec::new(),
     code: Vec::new(),
     chain_id: ZERO,
+    self_balance: ZERO,
 };
 
 #[no_mangle]
-pub unsafe fn _init_evm(_table_offset: u32, chain_id: u64) {
+pub unsafe fn _init_evm(_table_offset: u32, chain_id: u64, balance: u64) {
     #[cfg(target_os = "wasi")]
     {
         let mut args = std::env::args();
@@ -51,6 +52,7 @@ pub unsafe fn _init_evm(_table_offset: u32, chain_id: u64) {
         //eprintln!("EVM.call_data={:?} EVM.call_value={:?}", EVM.call_data, EVM.call_value);
     }
     EVM.chain_id = Word::from(chain_id);
+    EVM.self_balance = Word::from(balance);
 }
 
 #[no_mangle]
@@ -467,7 +469,7 @@ pub unsafe fn chainid() {
 #[no_mangle]
 pub unsafe fn selfbalance() {
     EVM.burn_gas(5);
-    EVM.stack.push(ZERO) // TODO: NEAR SDK
+    EVM.stack.push(EVM.self_balance)
 }
 
 #[no_mangle]
