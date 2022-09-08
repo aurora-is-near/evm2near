@@ -34,6 +34,7 @@ pub(crate) struct Machine {
     pub(crate) call_value: Word,
     pub(crate) call_data: Vec<u8>,
     pub(crate) code: Vec<u8>,
+    pub(crate) chain_id: Word,
 }
 
 impl Stack {

@@ -334,7 +334,15 @@ mod tests {
     fn test_gaslimit() {}
 
     #[test]
-    fn test_chainid() {}
+    fn test_chainid() {
+        let aurora_mainnet = 1313161554;
+        unsafe {
+            EVM.reset();
+            EVM.chain_id = Word::from(aurora_mainnet);
+            chainid();
+            assert_eq!(EVM.stack.peek(), aurora_mainnet);
+        }
+    }
 
     #[test]
     fn test_selfbalance() {}
