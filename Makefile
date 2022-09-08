@@ -2,7 +2,9 @@ CARGO = cargo
 LIPO = lipo
 WASM_STRIP = wasm-strip
 
-all:                       \
+all: evm2near
+
+release:                   \
   evm2near-macos-arm       \
   evm2near-macos-x86       \
   evm2near-windows-arm.exe \

@@ -37,7 +37,7 @@ apt install wabt
 
 ```console
 rustup target add wasm32-wasi
-make evm2near
+make
 ./evm2near --help
 ```
 
@@ -73,5 +73,5 @@ rustup target add aarch64-pc-windows-msvc
 rustup target add x86_64-pc-windows-gnu
 rustup target add aarch64-unknown-linux-musl
 rustup target add x86_64-unknown-linux-musl
-make clean all
+make clean release
 ```
