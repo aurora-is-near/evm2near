@@ -13,7 +13,7 @@ release:                   \
   evm2near-linux-x86
 
 evm2near: bin/evm2near/Cargo.toml $(wildcard bin/evm2near/src/*.rs) Makefile evmlib.wasi
-	$(CARGO) build
+	$(CARGO) build --package=evm2near
 	ln -sf target/debug/evm2near evm2near
 
 evm2near-macos: evm2near-macos-arm evm2near-macos-x86
