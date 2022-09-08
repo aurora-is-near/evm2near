@@ -192,6 +192,8 @@ impl Machine {
     #[inline]
     pub fn burn_gas(&mut self, gas_used: u64) {
         #[cfg(feature = "gas")]
-        self.gas_used += gas_used
+        {
+            self.gas_used += gas_used;
+        }
     }
 }
