@@ -2,6 +2,7 @@
 
 mod analyze;
 mod compile;
+mod config;
 mod decode;
 mod encode;
 
@@ -13,7 +14,7 @@ use std::{
     path::PathBuf,
 };
 
-use crate::{compile::compile, decode::decode_bytecode};
+use crate::{compile::compile, config::CompilerConfig, decode::decode_bytecode};
 
 #[derive(Parser, Debug)]
 /// EVM to NEAR compiler
@@ -112,9 +113,25 @@ fn main() -> impl std::process::Termination {
         },
     };
 
-    let runtime_library = parity_wasm::deserialize_file("../evmlib/evmlib.wasi").unwrap();
+    let runtime_library = parity_wasm::deserialize_file("../evmlib/evmlib.wasi").unwrap(); // FIXME
 
-    let output_program = compile(&input_program, runtime_library);
+    let output_program = compile(
+        &input_program,
+        runtime_library,
+        &CompilerConfig {
+            gas_accounting: !options.no_gas_accounting,
+            program_counter: !options.no_program_counter,
+            chain_id: match options.chain_id.as_str() {
+                "mainnet" => 1313161554,
+                "testnet" => 1313161555,
+                "betanet" => 1313161556,
+                s => match s.parse::<u64>() {
+                    Ok(n) => n,
+                    Err(err) => abort!("Could not parse `{}': {}", s, err),
+                },
+            },
+        },
+    );
     if options.debug {
         eprintln!("{:?}", output_program); // TODO
     }

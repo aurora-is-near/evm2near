@@ -1,4 +1,4 @@
-# EVM→NEAR
+# EVM → NEAR
 
 ## Usage
 
@@ -11,9 +11,27 @@ evm2near < input.bin > output.wasm
 
 ### Prerequisites
 
-- Rust toolchain (nightly 2022-09-07; macOS: `brew install rustup`)
-- Solidity compiler `solc` (macOS: `brew install solidity`)
-- `wasm-strip` (macOS: `brew install wabt`)
+- Rust toolchain (nightly 2022-09-07)
+- Solidity compiler `solc` (0.8.16+)
+- `wasm-strip` from WABT
+
+#### Prerequisites on macOS
+
+```console
+brew install rustup solidity wabt
+```
+
+#### Prerequisites on Ubuntu
+
+```console
+curl -sSf https://sh.rustup.rs | sh
+
+apt-add-repository ppa:ethereum/ethereum
+apt update
+apt install solc
+
+apt install wabt
+```
 
 ### Development Builds
 
@@ -24,6 +42,26 @@ make evm2near
 ```
 
 ## Release
+
+### Prerequisites
+
+- Rust toolchain (nightly 2022-09-07)
+- MinGW-w64 (10.0.0+)
+- `wasm-strip` from WABT
+
+#### Prerequisites on macOS
+
+```console
+brew install rustup mingw-w64 wabt
+```
+
+#### Prerequisites on Ubuntu
+
+```console
+curl -sSf https://sh.rustup.rs | sh
+
+apt install mingw-w64 wabt
+```
 
 ### Release Builds
 
