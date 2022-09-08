@@ -7,6 +7,9 @@ pub mod mock;
 
 pub type Address = [u8; 20];
 pub trait Env {
+    /// Signature is &mut to allow for caching the result internally
+    fn call_data(&mut self) -> &[u8];
+    fn call_data_len(&self) -> usize;
     fn address(&self) -> Address;
     fn origin(&self) -> Address;
     fn caller(&self) -> Address;

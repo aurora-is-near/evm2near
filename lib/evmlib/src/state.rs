@@ -32,7 +32,6 @@ pub(crate) struct Machine {
     pub(crate) memory: Memory,
     pub(crate) storage: Storage,
     pub(crate) call_value: Word,
-    pub(crate) call_data: Vec<u8>,
     pub(crate) code: Vec<u8>,
     pub(crate) chain_id: Word,
     // TODO: balance should be determined from context, but it is
@@ -216,7 +215,6 @@ impl Machine {
         self.stack.clear();
         self.memory.clear();
         self.storage.clear();
-        self.call_data.clear();
         self.code.clear();
     }
 

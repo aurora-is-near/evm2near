@@ -278,14 +278,14 @@ mod tests {
         // test cases from https://www.evm.codes/
         unsafe {
             EVM.reset();
-            EVM.call_data = vec![255u8; 32];
+            ENV.call_data = vec![255u8; 32];
             push1(0x00);
             calldataload();
             assert_eq!(EVM.stack.peek(), Word::MAX,);
         }
         unsafe {
             EVM.reset();
-            EVM.call_data = vec![255u8; 32];
+            ENV.call_data = vec![255u8; 32];
             push1(0x1F);
             calldataload();
             assert_eq!(
@@ -303,7 +303,7 @@ mod tests {
         // test cases from https://www.evm.codes/
         unsafe {
             EVM.reset();
-            EVM.call_data = vec![255u8; 32];
+            ENV.call_data = vec![255u8; 32];
             push1(0x20);
             push1(0x00);
             push1(0x00);

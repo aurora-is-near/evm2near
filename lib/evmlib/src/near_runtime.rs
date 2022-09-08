@@ -9,8 +9,13 @@ const KECCAK_REGISTER_ID: u64 = 1;
 // because we always use the data before returning from the function, so it does not
 // matter if it gets trashed later.
 const ACCOUNT_REGISTER_ID: u64 = 2;
+// The input must have its own register because we only set it once (as an optimization).
+const INPUT_REGISTER_ID: u64 = 3;
 
-pub struct NearRuntime;
+pub struct NearRuntime {
+    /// Cache for input from NEAR to prevent reading from the register multiple times.
+    pub call_data: Option<Vec<u8>>,
+}
 
 impl HashProvider for NearRuntime {
     fn keccak256(input: &[u8]) -> [u8; 32] {
@@ -28,6 +33,37 @@ impl HashProvider for NearRuntime {
 }
 
 impl Env for NearRuntime {
+    fn call_data(&mut self) -> &[u8] {
+        if self.call_data.is_none() {
+            unsafe { input(INPUT_REGISTER_ID) };
+            let host_result = Self::read_register(INPUT_REGISTER_ID);
+            self.call_data = Some(host_result);
+        }
+
+        // Unwrap is clearly safe since we just set value to Some(..)
+        self.call_data.as_ref().unwrap()
+    }
+
+    fn call_data_len(&self) -> usize {
+        if let Some(call_data) = self.call_data.as_ref() {
+            return call_data.len();
+        }
+
+        let mut host_result = unsafe { register_len(INPUT_REGISTER_ID) };
+
+        // u64::MAX indicates the register is unused, therefore we need to load in input first.
+        if host_result == u64::MAX {
+            unsafe {
+                input(INPUT_REGISTER_ID);
+                host_result = register_len(INPUT_REGISTER_ID);
+            }
+        }
+
+        // It should not be possible for the input to contain more than usize::MAX
+        // bytes of data, but if it does then we'll take as much as we can.
+        usize::try_from(host_result).unwrap_or(usize::MAX)
+    }
+
     fn address(&self) -> Address {
         unsafe {
             current_account_id(ACCOUNT_REGISTER_ID);
@@ -61,7 +97,7 @@ impl Env for NearRuntime {
 }
 
 impl NearRuntime {
-    /*fn register_len(register_id: u64) -> usize {
+    fn register_len(register_id: u64) -> usize {
         let host_result = unsafe { register_len(register_id) };
 
         // By convention, an unused register will return a length of U64::MAX
@@ -80,7 +116,7 @@ impl NearRuntime {
         let mut buffer = Vec::with_capacity(data_size);
         Self::read_register_to_buffer(register_id, &mut buffer);
         buffer
-    }*/
+    }
 
     fn read_register_to_buffer(register_id: u64, buffer: &mut [u8]) {
         unsafe {
@@ -107,13 +143,13 @@ impl NearRuntime {
 
 extern "C" {
     fn read_register(register_id: u64, ptr: u64);
-    // fn register_len(register_id: u64) -> u64;
+    fn register_len(register_id: u64) -> u64;
 
     fn current_account_id(register_id: u64);
     fn signer_account_id(register_id: u64);
     fn predecessor_account_id(register_id: u64);
     fn block_index() -> u64;
     fn block_timestamp() -> u64;
-    // fn input(register_id: u64);
+    fn input(register_id: u64);
     fn keccak256(value_len: u64, value_ptr: u64, register_id: u64);
 }

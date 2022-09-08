@@ -2,6 +2,7 @@ use crate::env::{Address, Env};
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MockEnv {
+    pub call_data: Vec<u8>,
     pub address: Address,
     pub origin: Address,
     pub caller: Address,
@@ -10,6 +11,14 @@ pub struct MockEnv {
 }
 
 impl Env for MockEnv {
+    fn call_data(&mut self) -> &[u8] {
+        &self.call_data
+    }
+
+    fn call_data_len(&self) -> usize {
+        self.call_data.len()
+    }
+
     fn address(&self) -> Address {
         self.address
     }
