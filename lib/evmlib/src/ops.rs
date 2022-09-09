@@ -1,6 +1,6 @@
 // This is free and unencumbered software released into the public domain.
 
-use ethnum::I256;
+use ethnum::{AsU256, I256};
 use std::{
     convert::TryInto,
     ops::{Not, Shl, Shr},
@@ -319,7 +319,30 @@ pub unsafe fn shr() {
 #[no_mangle]
 pub unsafe fn sar() {
     EVM.burn_gas(3);
-    todo!("SAR") // TODO
+    let (shift, value) = EVM.stack.pop2();
+    let signed_value = value.as_i256();
+    let result = if signed_value == I256::ZERO || shift > Word::from(255u8) {
+        if signed_value.is_positive() {
+            ZERO
+        } else {
+            I256::from(-1).as_u256()
+        }
+    } else {
+        // Cast is safe since we checked if shift is less than 255
+        let shift = shift.as_u32();
+        if signed_value.is_positive() {
+            value.shr(shift).as_u256()
+        } else {
+            signed_value
+                .overflowing_sub(I256::ONE)
+                .0
+                .shr(shift)
+                .overflowing_add(I256::ONE)
+                .0
+                .as_u256()
+        }
+    };
+    EVM.stack.push(result);
 }
 
 #[no_mangle]

@@ -195,7 +195,40 @@ mod tests {
     fn test_shr() {}
 
     #[test]
-    fn test_sar() {}
+    fn test_sar() {
+        // Test case from https://www.evm.codes/
+        unsafe {
+            EVM.reset();
+            push1(0x02);
+            push1(0x01);
+            sar();
+            assert_eq!(EVM.stack.peek(), "0x01".hex_int(),);
+        }
+        unsafe {
+            EVM.reset();
+            EVM.stack.push(
+                "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0".hex_int(),
+            );
+            push1(0x04);
+            sar();
+            assert_eq!(
+                EVM.stack.peek(),
+                "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF".hex_int(),
+            );
+        }
+        unsafe {
+            EVM.reset();
+            EVM.stack.push(
+                "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF10".hex_int(),
+            );
+            push1(0x04);
+            sar();
+            assert_eq!(
+                EVM.stack.peek(),
+                "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF1".hex_int(),
+            );
+        }
+    }
 
     #[test]
     fn test_sha3() {
