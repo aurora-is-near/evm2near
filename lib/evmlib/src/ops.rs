@@ -89,11 +89,7 @@ pub unsafe fn _pop_u32() -> u32 {
 pub unsafe fn stop() {
     EVM.burn_gas(0);
     EVM.stack.clear();
-    #[cfg(not(feature = "near"))]
-    {
-        eprintln!("STOP");
-        std::process::exit(0) // EX_OK
-    }
+    ENV.value_return(&[]);
 }
 
 #[no_mangle]

@@ -8,7 +8,15 @@ mod tests {
     use ux::*;
 
     #[test]
-    fn test_stop() {}
+    fn test_stop() {
+        unsafe {
+            EVM.reset();
+            ENV.reset();
+            stop();
+            assert_eq!(ENV.exit_status, Some(ExitStatus::Success));
+            assert_eq!(&ENV.return_data, &[]);
+        }
+    }
 
     #[test]
     fn test_add() {
