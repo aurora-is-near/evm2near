@@ -1,5 +1,6 @@
-//! This module contains a trait for getting information about the execution
-//! environment (eg block height, current address, etc). The purpose of abstracting
+//! This module contains a trait for interacting with the execution environment.
+//! This includes getters (eg block height, current address, etc), as well as state (ie storage)
+//! access, logging, and exit functionality. The purpose of abstracting
 //! these calls into a trait is allowing us to provide mock values in tests, while
 //! getting the real values using the NEAR host functions on-chain.
 
@@ -20,6 +21,10 @@ pub trait Env {
     fn storage_read(&mut self, key: Word) -> Word;
     fn storage_write(&mut self, key: Word, value: Word);
     fn log(&mut self, entry: EvmLog);
+    fn value_return(&mut self, return_data: &[u8]);
+    fn revert(&mut self, return_data: &[u8]);
+    /// Exit due to out of gas
+    fn exit_oog(&mut self);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -53,4 +58,11 @@ impl<'a> EvmLog<'a> {
             hex::encode(self.data)
         )
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExitStatus {
+    Success,
+    Revert,
+    OutOfGas,
 }

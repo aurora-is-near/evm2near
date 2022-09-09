@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::env::Env;
+    use crate::env::{Env, ExitStatus};
     use crate::ops::*;
     use crate::state::*;
     use ux::*;
@@ -1044,7 +1044,19 @@ mod tests {
     fn test_callcode() {}
 
     #[test]
-    fn test_return() {}
+    fn test_return() {
+        let test_data = b"hello_return";
+        unsafe {
+            EVM.reset();
+            ENV.reset();
+            EVM.memory.bytes = test_data.to_vec();
+            push1(test_data.len() as u8);
+            push1(0);
+            r#return();
+            assert_eq!(ENV.exit_status, Some(ExitStatus::Success));
+            assert_eq!(&ENV.return_data, test_data);
+        }
+    }
 
     #[test]
     fn test_delegatecall() {}
@@ -1056,10 +1068,30 @@ mod tests {
     fn test_staticcall() {}
 
     #[test]
-    fn test_revert() {}
+    fn test_revert() {
+        let test_data = b"hello_revert";
+        unsafe {
+            EVM.reset();
+            ENV.reset();
+            EVM.memory.bytes = test_data.to_vec();
+            push1(test_data.len() as u8);
+            push1(0);
+            revert();
+            assert_eq!(ENV.exit_status, Some(ExitStatus::Revert));
+            assert_eq!(&ENV.return_data, test_data);
+        }
+    }
 
     #[test]
-    fn test_invalid() {}
+    fn test_invalid() {
+        unsafe {
+            EVM.reset();
+            ENV.reset();
+            invalid();
+            assert_eq!(ENV.exit_status, Some(ExitStatus::Revert));
+            assert_eq!(&ENV.return_data, &[]);
+        }
+    }
 
     #[test]
     fn test_selfdestruct() {}

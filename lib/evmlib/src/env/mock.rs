@@ -1,4 +1,4 @@
-use crate::env::{Address, Env, EvmLog};
+use crate::env::{Address, Env, EvmLog, ExitStatus};
 use crate::state::Word;
 use std::collections::HashMap;
 
@@ -12,6 +12,8 @@ pub struct MockEnv {
     pub timestamp: u64,
     pub storage: Option<HashMap<Word, Word>>,
     pub logs: Vec<OwnedEvmLog>,
+    pub return_data: Vec<u8>,
+    pub exit_status: Option<ExitStatus>,
 }
 
 impl MockEnv {
@@ -82,6 +84,38 @@ impl Env for MockEnv {
         self.logs.push(entry.into());
 
         eprintln!("LOG {}", entry.to_json_string());
+    }
+
+    fn value_return(&mut self, return_data: &[u8]) {
+        self.return_data = return_data.to_vec();
+        self.exit_status = Some(ExitStatus::Success);
+
+        #[cfg(not(test))]
+        {
+            eprintln!("RETURN 0x{}", hex::encode(return_data));
+            std::process::exit(0); // EX_OK
+        }
+    }
+
+    fn revert(&mut self, return_data: &[u8]) {
+        self.return_data = return_data.to_vec();
+        self.exit_status = Some(ExitStatus::Revert);
+
+        #[cfg(not(test))]
+        {
+            eprintln!("REVERT 0x{}", hex::encode(return_data));
+            std::process::exit(64); // EX_USAGE
+        }
+    }
+
+    fn exit_oog(&mut self) {
+        self.exit_status = Some(ExitStatus::OutOfGas);
+
+        #[cfg(not(test))]
+        {
+            eprintln!("OUT OF GAS");
+            std::process::exit(64); // EX_USAGE
+        }
     }
 }
 

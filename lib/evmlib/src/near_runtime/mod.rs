@@ -1,7 +1,7 @@
 //! This module contains implementations of the various traits (Env, HashProvider, etc) using the
 //! NEAR host functions.
 
-use crate::env::{Address, Env};
+use crate::env::{Address, Env, ExitStatus};
 use crate::hash_provider::HashProvider;
 use crate::state::Word;
 use std::collections::HashMap;
@@ -24,6 +24,7 @@ pub struct NearRuntime {
     pub address_cache: Option<Address>,
     pub origin_cache: Option<Address>,
     pub caller_cache: Option<Address>,
+    pub exit_status: Option<ExitStatus>,
 }
 
 impl HashProvider for NearRuntime {
@@ -171,6 +172,29 @@ impl Env for NearRuntime {
             log_utf8(message.len() as u64, message.as_ptr() as u64);
         }
     }
+
+    fn value_return(&mut self, return_data: &[u8]) {
+        self.exit_status = Some(ExitStatus::Success);
+        unsafe {
+            value_return(return_data.len() as u64, return_data.as_ptr() as u64);
+        }
+    }
+
+    fn revert(&mut self, return_data: &[u8]) {
+        self.exit_status = Some(ExitStatus::Revert);
+        let message = format!("REVERT 0x{}", hex::encode(return_data));
+        unsafe {
+            panic_utf8(message.len() as u64, message.as_ptr() as u64);
+        }
+    }
+
+    fn exit_oog(&mut self) {
+        self.exit_status = Some(ExitStatus::OutOfGas);
+        let message = "OUT OF GAS";
+        unsafe {
+            panic_utf8(message.len() as u64, message.as_ptr() as u64);
+        }
+    }
 }
 
 impl NearRuntime {
@@ -263,4 +287,7 @@ extern "C" {
     fn storage_read(key_len: u64, key_ptr: u64, register_id: u64) -> u64;
 
     fn log_utf8(len: u64, ptr: u64);
+
+    fn value_return(value_len: u64, value_ptr: u64);
+    fn panic_utf8(len: u64, ptr: u64);
 }

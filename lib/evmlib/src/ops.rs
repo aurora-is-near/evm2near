@@ -40,6 +40,7 @@ pub(crate) static mut ENV: crate::near_runtime::NearRuntime = crate::near_runtim
     address_cache: None,
     origin_cache: None,
     caller_cache: None,
+    exit_status: None,
 };
 
 #[cfg(any(not(feature = "near"), test))]
@@ -52,6 +53,8 @@ pub(crate) static mut ENV: crate::env::mock::MockEnv = crate::env::mock::MockEnv
     timestamp: 0,
     storage: None,
     logs: Vec::new(),
+    return_data: Vec::new(),
+    exit_status: None,
 };
 
 #[no_mangle]
@@ -1048,13 +1051,7 @@ pub unsafe fn r#return() {
     EVM.burn_gas(0);
     let (offset, size) = EVM.stack.pop2();
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
-    #[cfg(target_os = "wasi")]
-    {
-        eprintln!("RETURN 0x{}", hex::encode(data));
-        std::process::exit(0); // EX_OK
-    }
-    #[cfg(not(target_os = "wasi"))]
-    todo!("RETURN 0x{}", hex::encode(data)) // TODO: NEAR SDK
+    ENV.value_return(data);
 }
 
 #[no_mangle]
@@ -1080,25 +1077,15 @@ pub unsafe fn revert() {
     EVM.burn_gas(0);
     let (offset, size) = EVM.stack.pop2();
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
-    #[cfg(target_os = "wasi")]
-    {
-        eprintln!("REVERT 0x{}", hex::encode(data));
-        std::process::exit(64); // EX_USAGE
-    }
-    #[cfg(not(target_os = "wasi"))]
-    todo!("REVERT 0x{}", hex::encode(data)) // TODO: NEAR SDK
+    ENV.revert(data);
 }
 
 #[no_mangle]
 pub unsafe fn invalid() {
-    EVM.burn_gas(0);
-    #[cfg(target_os = "wasi")]
-    {
-        eprintln!("INVALID");
-        std::process::exit(70) // EX_SOFTWARE
-    }
-    #[cfg(not(target_os = "wasi"))]
-    todo!("INVALID") // TODO
+    // `INVALID` is "Equivalent to REVERT (since Byzantium fork) with 0,0 as stack
+    // parameters, except that all the gas given to the current context is consumed."
+    EVM.burn_gas(EVM.gas_limit);
+    ENV.revert(&[]);
 }
 
 #[no_mangle]
@@ -1109,7 +1096,10 @@ pub unsafe fn selfdestruct() {
 
 fn as_usize_or_oog(word: Word) -> usize {
     if word > Word::new(usize::MAX as u128) {
-        panic!("out of gas")
+        unsafe {
+            ENV.exit_oog();
+            unreachable!();
+        }
     } else {
         word.as_usize()
     }
