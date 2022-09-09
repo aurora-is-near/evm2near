@@ -158,7 +158,7 @@ fn main() -> impl std::process::Termination {
         },
     };
 
-    let runtime_library = parity_wasm::deserialize_file("../evmlib/evmlib.wasi").unwrap(); // FIXME
+    let runtime_library = parity_wasm::deserialize_file("evmlib.wasi").unwrap(); // FIXME
 
     let output_program = compile(
         &input_program,
