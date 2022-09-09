@@ -2,8 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use std::convert::TryInto;
-
+    use crate::env::Env;
     use crate::ops::*;
     use crate::state::*;
     use ux::*;
@@ -278,14 +277,14 @@ mod tests {
         // test cases from https://www.evm.codes/
         unsafe {
             EVM.reset();
-            EVM.call_data = vec![255u8; 32];
+            ENV.call_data = vec![255u8; 32];
             push1(0x00);
             calldataload();
             assert_eq!(EVM.stack.peek(), Word::MAX,);
         }
         unsafe {
             EVM.reset();
-            EVM.call_data = vec![255u8; 32];
+            ENV.call_data = vec![255u8; 32];
             push1(0x1F);
             calldataload();
             assert_eq!(
@@ -303,7 +302,7 @@ mod tests {
         // test cases from https://www.evm.codes/
         unsafe {
             EVM.reset();
-            EVM.call_data = vec![255u8; 32];
+            ENV.call_data = vec![255u8; 32];
             push1(0x20);
             push1(0x00);
             push1(0x00);
@@ -475,7 +474,7 @@ mod tests {
     fn test_sload() {
         unsafe {
             EVM.reset();
-            EVM.storage.store_word(Word::from(42u8), Word::from(123u8));
+            ENV.storage_write(Word::from(42u8), Word::from(123u8));
             push1(42);
             sload();
             assert_eq!(EVM.stack.peek(), 123);
@@ -490,7 +489,7 @@ mod tests {
             push1(7);
             sstore();
             assert_eq!(EVM.stack.depth, 0);
-            assert_eq!(EVM.storage.load_word(Word::from(7u8)), 6);
+            assert_eq!(ENV.storage_read(Word::from(7u8)), 6);
         }
     }
 

@@ -10,7 +10,7 @@ use ux::*;
 use crate::{
     env::Env,
     hash_provider::HashProvider,
-    state::{Machine, Memory, Stack, Storage, Word, MAX_STACK_DEPTH, ONE, ZERO},
+    state::{Machine, Memory, Stack, Word, MAX_STACK_DEPTH, ONE, ZERO},
 };
 
 const KECCAK_EMPTY: Word = Word::from_words(
@@ -27,33 +27,36 @@ pub(crate) static mut EVM: Machine = Machine {
         slots: [ZERO; MAX_STACK_DEPTH],
     },
     memory: Memory { bytes: Vec::new() },
-    storage: Storage { entries: None },
     call_value: Word::ZERO,
-    call_data: Vec::new(),
     code: Vec::new(),
     chain_id: ZERO,
     self_balance: ZERO,
 };
 
 #[cfg(all(feature = "near", not(test)))]
-pub(crate) static mut ENV: crate::near_runtime::NearRuntime = crate::near_runtime::NearRuntime;
+pub(crate) static mut ENV: crate::near_runtime::NearRuntime = crate::near_runtime::NearRuntime {
+    call_data: None,
+    storage_cache: None,
+};
 
-#[cfg(test)]
+#[cfg(any(not(feature = "near"), test))]
 pub(crate) static mut ENV: crate::env::mock::MockEnv = crate::env::mock::MockEnv {
+    call_data: Vec::new(),
     address: [0u8; 20],
     origin: [0u8; 20],
     caller: [0u8; 20],
     block_height: 0,
     timestamp: 0,
+    storage: None,
 };
 
 #[no_mangle]
 pub unsafe fn _init_evm(_table_offset: u32, chain_id: u64, balance: u64) {
-    #[cfg(target_os = "wasi")]
+    #[cfg(not(feature = "near"))]
     {
         let mut args = std::env::args();
         let _ = args.next(); // consume the program name
-        EVM.call_data = match args.next() {
+        ENV.call_data = match args.next() {
             None => Vec::new(),
             Some(hexbytes) => match hex::decode(hexbytes) {
                 Err(err) => panic!("{}", err),
@@ -380,12 +383,13 @@ pub unsafe fn calldataload() {
     // `as_usize` will return `usize::MAX`, and this is ok because that
     // is the largest possible calldata size.
     let index = EVM.stack.pop().as_usize();
-    let call_data_len = EVM.call_data.len();
+    let call_data = ENV.call_data();
+    let call_data_len = call_data.len();
     let result = if index < call_data_len {
         // Result is at most 32 bytes
         let slice_size = (call_data_len - index).min(32);
         let mut slice_bytes = [0u8; 32];
-        slice_bytes[0..slice_size].copy_from_slice(&EVM.call_data[index..(index + slice_size)]);
+        slice_bytes[0..slice_size].copy_from_slice(&call_data[index..(index + slice_size)]);
         Word::from_be_bytes(slice_bytes)
     } else {
         ZERO
@@ -397,7 +401,7 @@ pub unsafe fn calldataload() {
 #[no_mangle]
 pub unsafe fn calldatasize() {
     EVM.burn_gas(2);
-    EVM.stack.push(Word::from(EVM.call_data.len() as u32));
+    EVM.stack.push(Word::from(ENV.call_data_len() as u32));
 }
 
 #[no_mangle]
@@ -405,7 +409,7 @@ pub unsafe fn calldatacopy() {
     EVM.burn_gas(3);
     let (dest_offset, offset, size) = EVM.stack.pop3();
 
-    data_copy(dest_offset, offset, size, &EVM.call_data);
+    data_copy(dest_offset, offset, size, ENV.call_data());
 }
 
 #[no_mangle]
@@ -549,16 +553,18 @@ pub unsafe fn mstore8() {
 #[no_mangle]
 pub unsafe fn sload() {
     EVM.burn_gas(100);
+    // TODO: dynamic hot/cold gas cost
     let key = EVM.stack.pop();
-    let value = EVM.storage.load_word(key);
+    let value = ENV.storage_read(key);
     EVM.stack.push(value);
 }
 
 #[no_mangle]
 pub unsafe fn sstore() {
     EVM.burn_gas(100);
+    // TODO: dynamic hot/cold gas cost
     let (key, value) = EVM.stack.pop2();
-    EVM.storage.store_word(key, value);
+    ENV.storage_write(key, value);
 }
 
 #[no_mangle]
