@@ -8,7 +8,7 @@ use std::{
 use ux::*;
 
 use crate::{
-    env::{Env, EvmLog},
+    env::{Address, Env, EvmLog},
     hash_provider::HashProvider,
     state::{Machine, Memory, Stack, Word, MAX_STACK_DEPTH, ONE, ZERO},
 };
@@ -56,6 +56,12 @@ pub(crate) static mut ENV: crate::env::mock::MockEnv = crate::env::mock::MockEnv
     return_data: Vec::new(),
     exit_status: None,
 };
+
+#[cfg(all(feature = "near", not(test)))]
+pub(crate) type Hasher = crate::near_runtime::NearRuntime;
+
+#[cfg(any(not(feature = "near"), test))]
+pub(crate) type Hasher = crate::hash_provider::Native;
 
 #[no_mangle]
 pub unsafe fn _init_evm(_table_offset: u32, chain_id: u64, balance: u64) {
@@ -327,12 +333,7 @@ pub unsafe fn sha3() {
         let offset = as_usize_or_oog(offset);
         EVM.memory.resize(offset + size);
         let slice = EVM.memory.slice(offset, size);
-
-        #[cfg(all(feature = "near", not(test)))]
-        let hash = crate::near_runtime::NearRuntime::keccak256(slice);
-
-        #[cfg(any(not(feature = "near"), test))]
-        let hash = crate::hash_provider::Native::keccak256(slice);
+        let hash = Hasher::keccak256(slice);
 
         Word::from_be_bytes(hash)
     };
@@ -350,12 +351,7 @@ pub unsafe fn address() {
 pub unsafe fn balance() {
     EVM.burn_gas(100);
     let address_u256 = EVM.stack.pop();
-    let address = {
-        let mut buf = [0u8; 20];
-        buf[4..20].copy_from_slice(&address_u256.low().to_be_bytes());
-        buf[0..4].copy_from_slice(&address_u256.high().to_be_bytes()[12..16]);
-        buf
-    };
+    let address = u256_to_address(address_u256);
     let result = if address == ENV.address() {
         EVM.self_balance
     } else {
@@ -443,13 +439,29 @@ pub unsafe fn gasprice() {
 #[no_mangle]
 pub unsafe fn extcodesize() {
     EVM.burn_gas(100);
-    todo!("EXTCODESIZE") // TODO: NEAR SDK
+    let address_u256 = EVM.stack.pop();
+    let address = u256_to_address(address_u256);
+    // The only code we know about is our own.
+    // TODO: in a world with `CALL`, how would this opcode work?
+    let result = if address == ENV.address() {
+        Word::from(EVM.code.len() as u64)
+    } else {
+        ZERO
+    };
+    EVM.stack.push(result);
 }
 
 #[no_mangle]
 pub unsafe fn extcodecopy() {
     EVM.burn_gas(100);
-    todo!("EXTCODECOPY") // TODO: NEAR SDK
+    let (address_u256, dest_offset, offset, size) = EVM.stack.pop4();
+    let address = u256_to_address(address_u256);
+    // See note in `extcodesize` about why we only act on our own address
+    if address == ENV.address() {
+        data_copy(dest_offset, offset, size, &EVM.code);
+    } else {
+        data_copy(dest_offset, offset, size, &[]);
+    }
 }
 
 #[no_mangle]
@@ -467,7 +479,16 @@ pub unsafe fn returndatacopy() {
 #[no_mangle]
 pub unsafe fn extcodehash() {
     EVM.burn_gas(100);
-    todo!("EXTCODEHASH") // TODO: NEAR SDK
+    let address_u256 = EVM.stack.pop();
+    let address = u256_to_address(address_u256);
+    // See note in `extcodesize` about why we only act on our own address
+    let result = if address == ENV.address() {
+        let hash = Hasher::keccak256(&EVM.code);
+        Word::from_be_bytes(hash)
+    } else {
+        ZERO
+    };
+    EVM.stack.push(result);
 }
 
 #[no_mangle]
@@ -1108,10 +1129,17 @@ fn as_usize_or_oog(word: Word) -> usize {
     }
 }
 
-fn address_to_u256(address: &crate::env::Address) -> Word {
+fn address_to_u256(address: &Address) -> Word {
     let mut buf = [0u8; 32];
     buf[12..32].copy_from_slice(address);
     Word::from_be_bytes(buf)
+}
+
+fn u256_to_address(word: Word) -> Address {
+    let mut buf = [0u8; 20];
+    buf[4..20].copy_from_slice(&word.low().to_be_bytes());
+    buf[0..4].copy_from_slice(&word.high().to_be_bytes()[12..16]);
+    buf
 }
 
 unsafe fn data_copy(dest_offset: Word, offset: Word, size: Word, source: &[u8]) {
