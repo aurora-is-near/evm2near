@@ -467,13 +467,20 @@ pub unsafe fn extcodecopy() {
 #[no_mangle]
 pub unsafe fn returndatasize() {
     EVM.burn_gas(2);
-    todo!("RETURNDATASIZE") // TODO
+    // Without any implementation of `CALL` there can be no sub-context
+    // to have produced return data used in a larger execution.
+    // We could consider using NEAR's promise API as the previous return data,
+    // but that may not be what we want depending on the design of `CALL`.
+    // For now we will simply always return `ZERO`.
+    EVM.stack.push(ZERO);
 }
 
 #[no_mangle]
 pub unsafe fn returndatacopy() {
     EVM.burn_gas(3);
-    todo!("RETURNDATACOPY") // TODO
+    let (dest_offset, offset, size) = EVM.stack.pop3();
+    // See note in `returndatasize` about why we assume the return data is always empty.
+    data_copy(dest_offset, offset, size, &[]);
 }
 
 #[no_mangle]
