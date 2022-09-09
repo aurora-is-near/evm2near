@@ -10,7 +10,6 @@ publish = false
 default = []
 
 [dependencies]
-atty = "0.2.14"
 clap = { version = "3.2.17", features = ["color", "derive", "unicode"] }
 ethnum = "1.2.2"
 evm_rs = "0.3.2"

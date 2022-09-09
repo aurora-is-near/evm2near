@@ -5,27 +5,42 @@ mod compile;
 mod config;
 mod decode;
 mod encode;
+mod error;
+mod format;
+mod solidity;
 
 use clap::Parser;
 use parity_wasm::elements::Serialize;
 use std::{
+    ffi::OsStr,
     fs::{File, OpenOptions},
     io::{stdin, stdout, Read, Write},
     path::PathBuf,
 };
 
-use crate::{compile::compile, config::CompilerConfig, decode::decode_bytecode};
+use crate::{
+    compile::compile,
+    config::CompilerConfig,
+    decode::decode_bytecode,
+    format::{parse_input_extension, InputFormat, OutputFormat},
+    solidity::SOLC,
+};
 
 #[derive(Parser, Debug)]
 /// EVM to NEAR compiler
 #[clap(name = "evm2near", version, about)]
 struct Options {
-    /// Define the chain ID
+    /// The chain ID
     #[clap(value_name = "ID", long, value_parser, default_value = "mainnet")]
     chain_id: String,
 
+    /// Enable debugging
     #[clap(short = 'd', long, value_parser)]
     debug: bool,
+
+    /// The input format
+    #[clap(short = 'f', long, value_parser, default_value = "auto")]
+    from: InputFormat,
 
     /// Disable precise EVM gas accounting
     #[clap(long = "fno-gas-accounting", value_parser)]
@@ -35,9 +50,11 @@ struct Options {
     #[clap(long = "fno-program-counter", value_parser)]
     no_program_counter: bool,
 
+    /// The input file
     #[clap(value_name = "FILE", value_parser, default_value = "/dev/stdin")]
     input: PathBuf,
 
+    /// The output file
     #[clap(
         short = 'o',
         value_name = "FILE",
@@ -46,9 +63,15 @@ struct Options {
     )]
     output: PathBuf,
 
+    /// The output format
+    #[clap(short = 't', long, value_parser, default_value = "auto")]
+    to: OutputFormat,
+
+    /// Enable verbose output
     #[clap(short = 'v', long, value_parser)]
     verbose: bool,
 
+    /// Print the version and exit
     #[clap(short = 'V', long, value_parser)]
     version: bool,
 }
@@ -65,6 +88,16 @@ fn main() -> impl std::process::Termination {
     if options.debug {
         eprintln!("{:?}", options);
     }
+
+    let input_path = options.input.as_path();
+    let input_ext = input_path.extension().and_then(OsStr::to_str);
+    let input_format = match options.from {
+        InputFormat::Auto => match parse_input_extension(input_ext) {
+            Some(format) => format,
+            None => InputFormat::Bin, // the default
+        },
+        format => format,
+    };
 
     let mut input = match options.input.to_str() {
         Some("/dev/stdin") | Some("-") => Box::new(stdin()) as Box<dyn Read>,
@@ -88,9 +121,21 @@ fn main() -> impl std::process::Termination {
         ),
     };
 
-    let input_program = match decode_bytecode(&input_buffer) {
-        Err(err) => abort!("{}", err), // TODO
-        Ok(program) => program,
+    let input_program = match input_format {
+        InputFormat::Auto | InputFormat::Bin => {
+            match decode_bytecode(&input_buffer) {
+                Err(err) => abort!("{}", err), // TODO
+                Ok(program) => program,
+            }
+        }
+        InputFormat::Sol => match solidity::compile(input_path) {
+            Ok(program) => program,
+            Err(err) => abort!(
+                "Failed to compile {} code: {}",
+                "Solidity",
+                err.with_program(SOLC)
+            ),
+        },
     };
     if options.debug {
         eprintln!("{:?}", input_program.0);
