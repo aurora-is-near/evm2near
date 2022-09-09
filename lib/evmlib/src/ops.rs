@@ -276,7 +276,14 @@ pub unsafe fn not() {
 #[no_mangle]
 pub unsafe fn byte() {
     EVM.burn_gas(3);
-    todo!("BYTE") // TODO
+    let (index, word) = EVM.stack.pop2();
+    let result = if index > 31 {
+        ZERO
+    } else {
+        let bytes = word.to_be_bytes();
+        Word::from(bytes[index.as_usize()])
+    };
+    EVM.stack.push(result);
 }
 
 #[no_mangle]

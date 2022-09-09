@@ -170,7 +170,23 @@ mod tests {
     fn test_not() {}
 
     #[test]
-    fn test_byte() {}
+    fn test_byte() {
+        // Test case from https://www.evm.codes/
+        unsafe {
+            EVM.reset();
+            push1(0xFF);
+            push1(0x1F);
+            byte();
+            assert_eq!(EVM.stack.peek(), "0xFF".hex_int(),);
+        }
+        unsafe {
+            EVM.reset();
+            push2(0xFF00);
+            push1(0x1E);
+            byte();
+            assert_eq!(EVM.stack.peek(), "0xFF".hex_int(),);
+        }
+    }
 
     #[test]
     fn test_shl() {}
