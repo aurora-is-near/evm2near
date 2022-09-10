@@ -28,7 +28,8 @@ pub fn compile(input_program: &Program, runtime_library: Module, config: Compile
     let mut output_module = compiler.builder.build();
 
     let tables = output_module.table_section_mut().unwrap().entries_mut();
-    tables[0] = TableType::new(0, Some(0xFFFF));
+    //let table_size = tables.first().unwrap().limits().initial();
+    tables[0] = TableType::new(0xFFFF, Some(0xFFFF)); // grow the table to 65,535 elements
 
     let elements = output_module.elements_section_mut().unwrap().entries_mut();
     for (label, func_idx) in compiler.jump_table {
