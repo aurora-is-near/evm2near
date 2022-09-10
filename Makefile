@@ -44,12 +44,12 @@ evm2near-linux-x86: bin/evm2near/Cargo.toml $(wildcard bin/evm2near/src/*.rs) Ma
 	ln -sf target/x86_64-unknown-linux-musl/release/evm2near $@
 
 evmlib.wasm: lib/evmlib/Cargo.toml $(wildcard lib/evmlib/src/*.rs) Makefile
-	$(CARGO) build --package=evmlib --release --frozen --target=wasm32-unknown-unknown
+	$(CARGO) build --package=evmlib --release --frozen --target=wasm32-unknown-unknown --no-default-features --features=gas,pc,near
 	$(WASM_STRIP) target/wasm32-unknown-unknown/release/$@
 	ln -sf target/wasm32-unknown-unknown/release/evmlib.wasm $@
 
 evmlib.wasi: lib/evmlib/Cargo.toml $(wildcard lib/evmlib/src/*.rs) Makefile
-	$(CARGO) build --package=evmlib --release --frozen --target=wasm32-wasi
+	$(CARGO) build --package=evmlib --release --frozen --target=wasm32-wasi --no-default-features --features=gas,pc
 	$(WASM_STRIP) target/wasm32-wasi/release/evmlib.wasm
 	ln -sf target/wasm32-wasi/release/evmlib.wasm $@
 
