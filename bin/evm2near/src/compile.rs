@@ -111,6 +111,7 @@ impl Compiler {
                     vec![
                         Instruction::I32Const(TABLE_OFFSET),
                         Instruction::I64Const(self.config.chain_id.try_into().unwrap()), // --chain-id
+                        Instruction::I64Const(0), // TODO: --balance
                         Instruction::Call(self.init_function),
                     ],
                 );
