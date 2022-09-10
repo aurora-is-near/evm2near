@@ -22,7 +22,7 @@ use crate::{
     compile::compile,
     config::CompilerConfig,
     decode::decode_bytecode,
-    format::{parse_input_extension, InputFormat, OutputFormat},
+    format::{parse_input_extension, InputFormat, OutputABI, OutputFormat},
     solidity::SOLC,
 };
 
@@ -66,6 +66,10 @@ struct Options {
     /// The output format
     #[clap(short = 't', long, value_parser, default_value = "auto")]
     to: OutputFormat,
+
+    /// The output ABI
+    #[clap(short = 'b', long, value_parser, default_value = "near")]
+    abi: OutputABI,
 
     /// Enable verbose output
     #[clap(short = 'v', long, value_parser)]
@@ -158,7 +162,13 @@ fn main() -> impl std::process::Termination {
         },
     };
 
-    let runtime_library = parity_wasm::deserialize_file("evmlib.wasi").unwrap(); // FIXME
+    let runtime_wasm = include_bytes!("../../../evmlib.wasm");
+    let runtime_wasi = include_bytes!("../../../evmlib.wasi");
+    let runtime_library = parity_wasm::deserialize_buffer(match options.abi {
+        OutputABI::Near => runtime_wasm,
+        OutputABI::Wasi => runtime_wasi,
+    })
+    .unwrap();
 
     let output_program = compile(
         &input_program,

@@ -14,6 +14,12 @@ pub enum OutputFormat {
     Wat,
 }
 
+#[derive(clap::ValueEnum, Clone, Debug)]
+pub enum OutputABI {
+    Near,
+    Wasi,
+}
+
 #[allow(dead_code)]
 pub fn parse_input_format(format: &str) -> Option<InputFormat> {
     use InputFormat::*;
