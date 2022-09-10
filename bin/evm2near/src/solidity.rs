@@ -33,7 +33,7 @@ pub fn is_available() -> bool {
 
 pub fn execute(input_path: &Path, _: Option<&Path>) -> Result<Output, CompileError> {
     let subprocess = command()
-        .args(["--bin", "--metadata-hash", "none"])
+        .args(["--bin-runtime", "--optimize", "--metadata-hash", "none"])
         .arg(input_path.as_os_str())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -53,9 +53,11 @@ pub fn compile(input_path: &Path) -> Result<Program, CompileError> {
     match output.status.code() {
         Some(0) => {
             let output = String::from_utf8_lossy(&output.stdout);
-            match output.find("Binary:\n") {
+            //let marker = "Binary:\n";
+            let marker = "Binary of the runtime part:\n";
+            match output.find(marker) {
                 None => Err(CompileError::UnexpectedOutput),
-                Some(pos) => match decode_bytecode(&output[pos + 8..]) {
+                Some(pos) => match decode_bytecode(&output[pos + marker.len()..]) {
                     Err(err) => Err(CompileError::Decode(err)),
                     Ok(program) => Ok(program),
                 },
