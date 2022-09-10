@@ -208,7 +208,7 @@ impl Compiler {
             Call(self.pop_function),
             I32Const(TABLE_OFFSET),
             I32Add,
-            CallIndirect(9, 0), // FIXME: type lookup
+            Drop, //CallIndirect(9, 0), // FIXME: type lookup!
         ]
     }
 
@@ -251,7 +251,7 @@ impl Compiler {
             GetLocal(0),
             I32Const(TABLE_OFFSET),
             I32Add,
-            CallIndirect(9, 0), // FIXME: type lookup
+            Drop, //CallIndirect(9, 0), // FIXME: type lookup!
             Else,
             match else_branch {
                 Some(Edge::Static(target)) => self.compile_jump_to_block(*target), // JUMPI has static successor branch
