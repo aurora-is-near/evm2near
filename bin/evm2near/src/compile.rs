@@ -78,6 +78,16 @@ impl Compiler {
 
     /// Compiles the program's control-flow graph.
     fn compile_cfg(self: &mut Compiler, input_cfg: &CFGProgram, input_program: &Program) {
+        let start_func_idx = self.emit_function(
+            Some("_start".to_string()),
+            vec![
+                Instruction::I32Const(TABLE_OFFSET),
+                Instruction::I64Const(self.config.chain_id.try_into().unwrap()), // --chain-id
+                Instruction::I64Const(0),                                        // TODO: --balance
+                Instruction::Call(self.init_function),
+            ],
+        );
+
         self.jump_table = self.make_jump_table(input_cfg);
 
         for block in input_cfg.0.values() {
@@ -106,16 +116,7 @@ impl Compiler {
             };
 
             if block.label == 0 {
-                emit(
-                    block_pc,
-                    None,
-                    vec![
-                        Instruction::I32Const(TABLE_OFFSET),
-                        Instruction::I64Const(self.config.chain_id.try_into().unwrap()), // --chain-id
-                        Instruction::I64Const(0), // TODO: --balance
-                        Instruction::Call(self.init_function),
-                    ],
-                );
+                emit(block_pc, None, vec![Instruction::Call(start_func_idx)]);
             }
 
             let block_code = block.code(&input_program.0);
@@ -321,7 +322,7 @@ impl Compiler {
 
 fn make_block_id(block: &Block) -> String {
     match block.label {
-        0 => "_start".to_string(),
+        0 => "execute".to_string(), // FIXME
         pc => format!("_{:04x}", pc),
     }
 }
@@ -331,7 +332,7 @@ fn make_op_table(module: &Module) -> HashMap<Opcode, FunctionIndex> {
     for export in module.export_section().unwrap().entries() {
         match export.internal() {
             &Internal::Function(op_idx) => match export.field() {
-                "_init_evm" | "_start" | "_pop_u32" => {}
+                "_init_evm" | "_start" | "_pop_u32" | "execute" => {}
                 export_sym => match parse_opcode(&export_sym.to_ascii_uppercase()) {
                     None => unreachable!(),
                     Some(op) => _ = result.insert(op, op_idx),
