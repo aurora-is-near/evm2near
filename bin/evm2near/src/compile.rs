@@ -213,11 +213,11 @@ impl Compiler {
 
     /// Compiles a static conditional branch (`PUSH target; JUMPI`).
     fn compile_static_jumpi(&self, target: Label, succ: &BTreeSet<Edge>) -> Vec<Instruction> {
-        assert!(succ.iter().all(|e| matches!(e, Edge::Static(_))));
+        assert!(succ.iter().all(|e| matches!(e, Edge::Static(_) | Edge::Exit)));
 
         let else_branch = succ
             .iter()
-            .find(|e| matches!(e, Edge::Static(label) if *label != target));
+            .find(|e| matches!(e, Edge::Static(label) if *label != target) || matches!(e, Edge::Exit)); // FIXME
 
         use Instruction::*;
         vec![
@@ -225,10 +225,10 @@ impl Compiler {
             If(BlockType::NoResult),
             self.compile_jump_to_block(target),
             Else,
-            if let Edge::Static(target) = else_branch.expect("JUMPI has static successor branch") {
-                self.compile_jump_to_block(*target)
-            } else {
-                unreachable!("invalid preconditions");
+            match else_branch {
+                Some(Edge::Static(target)) => self.compile_jump_to_block(*target), // JUMPI has static successor branch
+                Some(Edge::Exit) => Instruction::Return,
+                _ => unreachable!("invalid preconditions"),
             },
             End,
         ]
@@ -236,10 +236,10 @@ impl Compiler {
 
     /// Compiles a dynamic conditional branch (`...; JUMPI`).
     fn compile_dynamic_jumpi(&self, succ: &BTreeSet<Edge>) -> Vec<Instruction> {
-        assert!(succ.iter().any(|e| matches!(e, Edge::Dynamic)));
-        assert!(succ.iter().any(|e| matches!(e, Edge::Static(_))));
+        assert!(succ.iter().any(|e| matches!(e, Edge::Dynamic))); // then branch
+        assert!(succ.iter().any(|e| matches!(e, Edge::Static(_) | Edge::Exit))); // else branch
 
-        let else_branch = succ.iter().find(|e| matches!(e, Edge::Static(_)));
+        let else_branch = succ.iter().find(|e| matches!(e, Edge::Static(_) | Edge::Exit));
 
         use Instruction::*;
         vec![
@@ -252,10 +252,10 @@ impl Compiler {
             I32Add,
             CallIndirect(9, 0), // FIXME: type lookup
             Else,
-            if let Edge::Static(target) = else_branch.expect("JUMPI has static successor branch") {
-                self.compile_jump_to_block(*target)
-            } else {
-                unreachable!("invalid preconditions");
+            match else_branch {
+                Some(Edge::Static(target)) => self.compile_jump_to_block(*target), // JUMPI has static successor branch
+                Some(Edge::Exit) => Instruction::Return,
+                _ => unreachable!("invalid preconditions"),
             },
             End,
         ]
@@ -263,7 +263,7 @@ impl Compiler {
 
     /// Compiles the transfer of control flow to another block.
     fn compile_jump_to_block(&self, target: Label) -> Instruction {
-        let jump_idx = self.jump_table.get(&target).unwrap();
+        let jump_idx = self.jump_table.get(&target).unwrap(); // FIXME
         Instruction::Call(*jump_idx)
     }
 

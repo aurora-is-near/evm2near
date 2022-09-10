@@ -67,6 +67,15 @@ impl Default for Block {
     }
 }
 
+impl CFGProgram {
+    #[allow(dead_code)]
+    pub fn dump(&self) {
+        for block in self.0.values() {
+            println!("{:?}", block) // DEBUG
+        }
+    }
+}
+
 pub fn analyze_cfg(program: &Program) -> CFGProgram {
     let mut blocks: BTreeMap<Label, Block> = BTreeMap::new();
 
