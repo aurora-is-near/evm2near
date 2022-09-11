@@ -2,11 +2,12 @@
 
 use evm_rs::Program;
 use std::{
+    ffi::OsStr,
     path::Path,
     process::{Command, Output, Stdio},
 };
 
-use crate::{decode::decode_bytecode, error::CompileError};
+use crate::{abi::Functions, decode::decode_bytecode, error::CompileError};
 
 pub const SOLC: &str = "solc";
 
@@ -31,9 +32,13 @@ pub fn is_available() -> bool {
     }
 }
 
-pub fn execute(input_path: &Path, _: Option<&Path>) -> Result<Output, CompileError> {
+pub fn execute<I, S>(input_path: &Path, args: I) -> Result<Output, CompileError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
     let subprocess = command()
-        .args(["--bin-runtime", "--optimize", "--metadata-hash", "none"])
+        .args(args)
         .arg(input_path.as_os_str())
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -49,7 +54,10 @@ pub fn execute(input_path: &Path, _: Option<&Path>) -> Result<Output, CompileErr
 }
 
 pub fn compile(input_path: &Path) -> Result<Program, CompileError> {
-    let output = execute(input_path, None)?;
+    let output = execute(
+        input_path,
+        ["--bin-runtime", "--optimize", "--metadata-hash", "none"],
+    )?;
     match output.status.code() {
         Some(0) => {
             let output = String::from_utf8_lossy(&output.stdout);
@@ -61,6 +69,23 @@ pub fn compile(input_path: &Path) -> Result<Program, CompileError> {
                     Err(err) => Err(CompileError::Decode(err)),
                     Ok(program) => Ok(program),
                 },
+            }
+        }
+        Some(code) => Err(CompileError::UnexpectedExit(code, output.stderr)),
+        None => Err(CompileError::UnexpectedSignal(output.stderr)),
+    }
+}
+
+pub fn compile_abi(input_path: &Path) -> Result<Functions, CompileError> {
+    let output = execute(input_path, ["--abi"])?;
+    match output.status.code() {
+        Some(0) => {
+            let output = String::from_utf8_lossy(&output.stdout);
+            let marker = "Contract JSON ABI\n";
+            match output.find(marker) {
+                None => Err(CompileError::UnexpectedOutput),
+                Some(pos) => crate::abi::parse_str(&output[pos + marker.len()..])
+                    .map_err(|_| CompileError::UnexpectedOutput),
             }
         }
         Some(code) => Err(CompileError::UnexpectedExit(code, output.stderr)),

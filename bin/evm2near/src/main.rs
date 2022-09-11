@@ -146,6 +146,18 @@ fn main() -> impl std::process::Termination {
         eprintln!("{:?}", input_program.0);
     }
 
+    let input_abi = match input_format {
+        InputFormat::Auto | InputFormat::Bin => None,
+        InputFormat::Sol => match solidity::compile_abi(input_path) {
+            Ok(abi) => Some(abi),
+            Err(err) => abort!(
+                "Failed to compile {} ABI: {}",
+                "Solidity",
+                err.with_program(SOLC)
+            ),
+        },
+    };
+
     let mut output = match options.output.to_str() {
         Some("/dev/stdout") | Some("-") => Box::new(stdout()) as Box<dyn Write>,
         _ => match OpenOptions::new()
@@ -173,6 +185,7 @@ fn main() -> impl std::process::Termination {
 
     let output_program = compile(
         &input_program,
+        input_abi,
         runtime_library,
         CompilerConfig {
             gas_accounting: !options.no_gas_accounting,

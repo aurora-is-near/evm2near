@@ -12,6 +12,7 @@ use parity_wasm::{
 };
 
 use crate::{
+    abi::Functions,
     analyze::{analyze_cfg, Block, CFGProgram, Edge, Label},
     config::CompilerConfig,
     encode::encode_operands,
@@ -19,7 +20,12 @@ use crate::{
 
 const TABLE_OFFSET: i32 = 0x1000;
 
-pub fn compile(input_program: &Program, runtime_library: Module, config: CompilerConfig) -> Module {
+pub fn compile(
+    input_program: &Program,
+    input_abi: Option<Functions>,
+    runtime_library: Module,
+    config: CompilerConfig,
+) -> Module {
     let input_cfg = analyze_cfg(input_program);
 
     let mut compiler = Compiler::new(runtime_library, config);
@@ -45,6 +51,9 @@ pub fn compile(input_program: &Program, runtime_library: Module, config: Compile
         ));
     }
 
+    for func in input_abi.unwrap_or_default() {
+        eprintln!("{:?}", func); // DEBUG
+    }
     output_module
 }
 
