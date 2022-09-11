@@ -1,5 +1,6 @@
 // This is free and unencumbered software released into the public domain.
 
+mod abi;
 mod analyze;
 mod compile;
 mod config;
