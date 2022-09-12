@@ -13,6 +13,13 @@ use crate::{
     state::{Machine, Memory, Stack, Word, MAX_STACK_DEPTH, ONE, ZERO},
 };
 
+macro_rules! trace {
+    ($($t:tt)*) => {{
+        #[cfg(target_os = "wasi")]
+        eprintln!($($t)*);
+    }};
+}
+
 const KECCAK_EMPTY: Word = Word::from_words(
     0xc5d2460186f7233c927e7db2dcc703c0,
     0xe500b653ca82273b7bfad8045d85a470,
@@ -65,6 +72,7 @@ pub(crate) type Hasher = crate::hash_provider::Native;
 
 #[no_mangle]
 pub unsafe fn stop() {
+    trace!("STOP");
     EVM.burn_gas(0);
     EVM.stack.clear();
     ENV.value_return(&[]);
@@ -72,6 +80,7 @@ pub unsafe fn stop() {
 
 #[no_mangle]
 pub unsafe fn add() {
+    trace!("ADD");
     EVM.burn_gas(3);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(a + b);
@@ -79,6 +88,7 @@ pub unsafe fn add() {
 
 #[no_mangle]
 pub unsafe fn mul() {
+    trace!("MUL");
     EVM.burn_gas(5);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(a * b);
@@ -86,6 +96,7 @@ pub unsafe fn mul() {
 
 #[no_mangle]
 pub unsafe fn sub() {
+    trace!("SUB");
     EVM.burn_gas(3);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(a - b);
@@ -93,6 +104,7 @@ pub unsafe fn sub() {
 
 #[no_mangle]
 pub unsafe fn div() {
+    trace!("DIV");
     EVM.burn_gas(5);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(if b == ZERO { ZERO } else { a / b });
@@ -100,6 +112,7 @@ pub unsafe fn div() {
 
 #[no_mangle]
 pub unsafe fn sdiv() {
+    trace!("SDIV");
     EVM.burn_gas(5);
     let a = EVM.stack.pop().as_i256();
     let b = EVM.stack.pop().as_i256();
@@ -112,6 +125,7 @@ pub unsafe fn sdiv() {
 
 #[no_mangle]
 pub unsafe fn r#mod() {
+    trace!("MOD");
     EVM.burn_gas(5);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(if b == ZERO { ZERO } else { a % b });
@@ -119,6 +133,7 @@ pub unsafe fn r#mod() {
 
 #[no_mangle]
 pub unsafe fn smod() {
+    trace!("SMOD");
     EVM.burn_gas(5);
     let a = EVM.stack.pop().as_i256();
     let b = EVM.stack.pop().as_i256();
@@ -131,6 +146,7 @@ pub unsafe fn smod() {
 
 #[no_mangle]
 pub unsafe fn addmod() {
+    trace!("ADDMOD");
     EVM.burn_gas(8);
     // TODO: need to use 512-bit arithmetic here to prevent overflow before taking the modulus
     let (a, b, n) = EVM.stack.pop3();
@@ -140,6 +156,7 @@ pub unsafe fn addmod() {
 
 #[no_mangle]
 pub unsafe fn mulmod() {
+    trace!("MULMOD");
     EVM.burn_gas(8);
     // TODO: need to use 512-bit arithmetic here to prevent overflow before taking the modulus
     let (a, b, n) = EVM.stack.pop3();
@@ -149,6 +166,7 @@ pub unsafe fn mulmod() {
 
 #[no_mangle]
 pub unsafe fn exp() {
+    trace!("EXP");
     EVM.burn_gas(10);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(a.pow(b.try_into().unwrap()));
@@ -156,6 +174,7 @@ pub unsafe fn exp() {
 
 #[no_mangle]
 pub unsafe fn signextend() {
+    trace!("SIGNEXTEND");
     EVM.burn_gas(5);
     let (op1, op2) = EVM.stack.pop2();
     let result = if op1 < ethnum::U256::new(32) {
@@ -181,6 +200,7 @@ pub unsafe fn signextend() {
 
 #[no_mangle]
 pub unsafe fn lt() {
+    trace!("LT");
     EVM.burn_gas(3);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(if a < b { ONE } else { ZERO });
@@ -188,6 +208,7 @@ pub unsafe fn lt() {
 
 #[no_mangle]
 pub unsafe fn gt() {
+    trace!("GT");
     EVM.burn_gas(3);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(if a > b { ONE } else { ZERO });
@@ -195,6 +216,7 @@ pub unsafe fn gt() {
 
 #[no_mangle]
 pub unsafe fn slt() {
+    trace!("SLT");
     EVM.burn_gas(3);
     let a = EVM.stack.pop().as_i256();
     let b = EVM.stack.pop().as_i256();
@@ -203,6 +225,7 @@ pub unsafe fn slt() {
 
 #[no_mangle]
 pub unsafe fn sgt() {
+    trace!("SGT");
     EVM.burn_gas(3);
     let a = EVM.stack.pop().as_i256();
     let b = EVM.stack.pop().as_i256();
@@ -211,6 +234,7 @@ pub unsafe fn sgt() {
 
 #[no_mangle]
 pub unsafe fn eq() {
+    trace!("EQ");
     EVM.burn_gas(3);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(if a == b { ONE } else { ZERO });
@@ -218,6 +242,7 @@ pub unsafe fn eq() {
 
 #[no_mangle]
 pub unsafe fn iszero() {
+    trace!("ISZERO");
     EVM.burn_gas(3);
     let a = EVM.stack.pop();
     EVM.stack.push(if a == ZERO { ONE } else { ZERO });
@@ -225,6 +250,7 @@ pub unsafe fn iszero() {
 
 #[no_mangle]
 pub unsafe fn and() {
+    trace!("AND");
     EVM.burn_gas(3);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(a & b);
@@ -232,6 +258,7 @@ pub unsafe fn and() {
 
 #[no_mangle]
 pub unsafe fn or() {
+    trace!("OR");
     EVM.burn_gas(3);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(a | b);
@@ -239,6 +266,7 @@ pub unsafe fn or() {
 
 #[no_mangle]
 pub unsafe fn xor() {
+    trace!("XOR");
     EVM.burn_gas(3);
     let (a, b) = EVM.stack.pop2();
     EVM.stack.push(a ^ b);
@@ -246,6 +274,7 @@ pub unsafe fn xor() {
 
 #[no_mangle]
 pub unsafe fn not() {
+    trace!("NOT");
     EVM.burn_gas(3);
     let a = EVM.stack.pop();
     EVM.stack.push(a.not());
@@ -253,6 +282,7 @@ pub unsafe fn not() {
 
 #[no_mangle]
 pub unsafe fn byte() {
+    trace!("BYTE");
     EVM.burn_gas(3);
     let (index, word) = EVM.stack.pop2();
     let result = if index > 31 {
@@ -266,6 +296,7 @@ pub unsafe fn byte() {
 
 #[no_mangle]
 pub unsafe fn shl() {
+    trace!("SHL");
     EVM.burn_gas(3);
     let (shift, value) = EVM.stack.pop2();
     let result = if value == ZERO || shift > Word::from(255u8) {
@@ -278,6 +309,7 @@ pub unsafe fn shl() {
 
 #[no_mangle]
 pub unsafe fn shr() {
+    trace!("SHR");
     EVM.burn_gas(3);
     let (shift, value) = EVM.stack.pop2();
     let result = if value == ZERO || shift > Word::from(255u8) {
@@ -290,6 +322,7 @@ pub unsafe fn shr() {
 
 #[no_mangle]
 pub unsafe fn sar() {
+    trace!("SAR");
     EVM.burn_gas(3);
     let (shift, value) = EVM.stack.pop2();
     let signed_value = value.as_i256();
@@ -319,6 +352,7 @@ pub unsafe fn sar() {
 
 #[no_mangle]
 pub unsafe fn sha3() {
+    trace!("SHA3");
     EVM.burn_gas(30);
     let (offset, size) = EVM.stack.pop2();
     let size = as_usize_or_oog(size);
@@ -337,6 +371,7 @@ pub unsafe fn sha3() {
 
 #[no_mangle]
 pub unsafe fn address() {
+    trace!("ADDRESS");
     EVM.burn_gas(2);
     let address = ENV.address();
     EVM.stack.push(address_to_u256(&address));
@@ -344,6 +379,7 @@ pub unsafe fn address() {
 
 #[no_mangle]
 pub unsafe fn balance() {
+    trace!("BALANCE");
     EVM.burn_gas(100);
     let address_u256 = EVM.stack.pop();
     let address = u256_to_address(address_u256);
@@ -357,6 +393,7 @@ pub unsafe fn balance() {
 
 #[no_mangle]
 pub unsafe fn origin() {
+    trace!("ORIGIN");
     EVM.burn_gas(2);
     let address = ENV.origin();
     EVM.stack.push(address_to_u256(&address));
@@ -364,6 +401,7 @@ pub unsafe fn origin() {
 
 #[no_mangle]
 pub unsafe fn caller() {
+    trace!("CALLER");
     EVM.burn_gas(2);
     let address = ENV.caller();
     EVM.stack.push(address_to_u256(&address));
@@ -371,12 +409,14 @@ pub unsafe fn caller() {
 
 #[no_mangle]
 pub unsafe fn callvalue() {
+    trace!("CALLVALUE");
     EVM.burn_gas(2);
     EVM.stack.push(EVM.call_value);
 }
 
 #[no_mangle]
 pub unsafe fn calldataload() {
+    trace!("CALLDATALOAD");
     EVM.burn_gas(3);
     // Note: if the value on the stack is larger than usize::MAX then
     // `as_usize` will return `usize::MAX`, and this is ok because that
@@ -399,12 +439,14 @@ pub unsafe fn calldataload() {
 
 #[no_mangle]
 pub unsafe fn calldatasize() {
+    trace!("CALLDATASIZE");
     EVM.burn_gas(2);
     EVM.stack.push(Word::from(ENV.call_data_len() as u32));
 }
 
 #[no_mangle]
 pub unsafe fn calldatacopy() {
+    trace!("CALLDATACOPY");
     EVM.burn_gas(3);
     let (dest_offset, offset, size) = EVM.stack.pop3();
 
@@ -413,12 +455,14 @@ pub unsafe fn calldatacopy() {
 
 #[no_mangle]
 pub unsafe fn codesize() {
+    trace!("CODESIZE");
     EVM.burn_gas(2);
     EVM.stack.push(Word::from(EVM.code.len() as u32));
 }
 
 #[no_mangle]
 pub unsafe fn codecopy() {
+    trace!("CODECOPY");
     EVM.burn_gas(3);
     let (dest_offset, offset, size) = EVM.stack.pop3();
 
@@ -427,12 +471,14 @@ pub unsafe fn codecopy() {
 
 #[no_mangle]
 pub unsafe fn gasprice() {
+    trace!("GASPRICE");
     EVM.burn_gas(2);
     EVM.stack.push(Word::from(EVM.gas_price));
 }
 
 #[no_mangle]
 pub unsafe fn extcodesize() {
+    trace!("EXTCODESIZE");
     EVM.burn_gas(100);
     let address_u256 = EVM.stack.pop();
     let address = u256_to_address(address_u256);
@@ -448,6 +494,7 @@ pub unsafe fn extcodesize() {
 
 #[no_mangle]
 pub unsafe fn extcodecopy() {
+    trace!("EXTCODECOPY");
     EVM.burn_gas(100);
     let (address_u256, dest_offset, offset, size) = EVM.stack.pop4();
     let address = u256_to_address(address_u256);
@@ -461,6 +508,7 @@ pub unsafe fn extcodecopy() {
 
 #[no_mangle]
 pub unsafe fn returndatasize() {
+    trace!("RETURNDATASIZE");
     EVM.burn_gas(2);
     // Without any implementation of `CALL` there can be no sub-context
     // to have produced return data used in a larger execution.
@@ -472,6 +520,7 @@ pub unsafe fn returndatasize() {
 
 #[no_mangle]
 pub unsafe fn returndatacopy() {
+    trace!("RETURNDATACOPY");
     EVM.burn_gas(3);
     let (dest_offset, offset, size) = EVM.stack.pop3();
     // See note in `returndatasize` about why we assume the return data is always empty.
@@ -480,6 +529,7 @@ pub unsafe fn returndatacopy() {
 
 #[no_mangle]
 pub unsafe fn extcodehash() {
+    trace!("EXTCODEHASH");
     EVM.burn_gas(100);
     let address_u256 = EVM.stack.pop();
     let address = u256_to_address(address_u256);
@@ -495,18 +545,21 @@ pub unsafe fn extcodehash() {
 
 #[no_mangle]
 pub unsafe fn blockhash() {
+    trace!("BLOCKHASH");
     EVM.burn_gas(20);
     EVM.stack.push(ZERO) // TODO: NEAR SDK
 }
 
 #[no_mangle]
 pub unsafe fn coinbase() {
+    trace!("COINBASE");
     EVM.burn_gas(2);
     EVM.stack.push(ZERO) // TODO: NEAR SDK
 }
 
 #[no_mangle]
 pub unsafe fn timestamp() {
+    trace!("TIMESTAMP");
     EVM.burn_gas(2);
     let number = ENV.timestamp();
     EVM.stack.push(Word::from(number));
@@ -514,6 +567,7 @@ pub unsafe fn timestamp() {
 
 #[no_mangle]
 pub unsafe fn number() {
+    trace!("NUMBER");
     EVM.burn_gas(2);
     let number = ENV.block_height();
     EVM.stack.push(Word::from(number));
@@ -521,42 +575,49 @@ pub unsafe fn number() {
 
 #[no_mangle]
 pub unsafe fn difficulty() {
+    trace!("DIFFICULTY");
     EVM.burn_gas(2);
     EVM.stack.push(ZERO)
 }
 
 #[no_mangle]
 pub unsafe fn gaslimit() {
+    trace!("GASLIMIT");
     EVM.burn_gas(2);
     EVM.stack.push(Word::from(EVM.gas_limit))
 }
 
 #[no_mangle]
 pub unsafe fn chainid() {
+    trace!("CHAINID");
     EVM.burn_gas(2);
     EVM.stack.push(EVM.chain_id)
 }
 
 #[no_mangle]
 pub unsafe fn selfbalance() {
+    trace!("SELFBALANCE");
     EVM.burn_gas(5);
     EVM.stack.push(EVM.self_balance)
 }
 
 #[no_mangle]
 pub unsafe fn basefee() {
+    trace!("BASEFEE");
     EVM.burn_gas(2);
     EVM.stack.push(ZERO)
 }
 
 #[no_mangle]
 pub unsafe fn pop() {
+    trace!("POP");
     EVM.burn_gas(2);
     let _ = EVM.stack.pop();
 }
 
 #[no_mangle]
 pub unsafe fn mload() {
+    trace!("MLOAD");
     EVM.burn_gas(3);
     let offset = EVM.stack.pop();
     // TODO: gas cost for memory resize (reads resize the memory too)
@@ -566,6 +627,7 @@ pub unsafe fn mload() {
 
 #[no_mangle]
 pub unsafe fn mstore() {
+    trace!("MSTORE");
     EVM.burn_gas(3);
     // TODO: gas cost for memory resize
     let (offset, value) = EVM.stack.pop2();
@@ -574,6 +636,7 @@ pub unsafe fn mstore() {
 
 #[no_mangle]
 pub unsafe fn mstore8() {
+    trace!("MSTORE8");
     EVM.burn_gas(3);
     let (offset, value) = (EVM.stack.pop(), EVM.stack.pop() & 0xFF);
     // TODO: gas cost for memory resize
@@ -583,6 +646,7 @@ pub unsafe fn mstore8() {
 
 #[no_mangle]
 pub unsafe fn sload() {
+    trace!("SLOAD");
     EVM.burn_gas(100);
     // TODO: dynamic hot/cold gas cost
     let key = EVM.stack.pop();
@@ -592,6 +656,7 @@ pub unsafe fn sload() {
 
 #[no_mangle]
 pub unsafe fn sstore() {
+    trace!("SSTORE");
     EVM.burn_gas(100);
     // TODO: dynamic hot/cold gas cost
     let (key, value) = EVM.stack.pop2();
@@ -600,6 +665,7 @@ pub unsafe fn sstore() {
 
 #[no_mangle]
 pub unsafe fn jump() {
+    trace!("JUMP");
     // We only do JUMP gas cost accounting here, the actual branch is
     // synthesized by the compiler.
     EVM.burn_gas(8);
@@ -610,15 +676,18 @@ pub unsafe fn jumpi() -> u32 {
     EVM.burn_gas(10);
     //let pc = EVM.stack.pop(); // never pushed on the stack for static jumps
     let cond = EVM.stack.pop();
-    if cond != Word::ZERO {
+    let jump = if cond != Word::ZERO {
         1
     } else {
         0
-    }
+    };
+    trace!("JUMPI {}", if jump == 1 { "true" } else { "false" });
+    jump
 }
 
 #[no_mangle]
 pub unsafe fn pc() {
+    trace!("PC");
     EVM.burn_gas(2);
     #[cfg(feature = "pc")]
     EVM.stack.push(ZERO); // TODO: instrument generated code in the compiler
@@ -628,23 +697,27 @@ pub unsafe fn pc() {
 
 #[no_mangle]
 pub unsafe fn msize() {
+    trace!("MSIZE");
     EVM.burn_gas(2);
     EVM.stack.push(Word::from(EVM.memory.size() as u64));
 }
 
 #[no_mangle]
 pub unsafe fn gas() {
+    trace!("GAS");
     EVM.burn_gas(2);
     EVM.stack.push(Word::from(EVM.gas_limit - EVM.gas_used)) // TODO: --fno-gas-accounting
 }
 
 #[no_mangle]
 pub unsafe fn jumpdest() {
+    trace!("JUMPDEST");
     unreachable!("JUMPDEST")
 }
 
 #[no_mangle]
 pub unsafe fn push1(word: u8) {
+    trace!("PUSH1 0x{:02x}", word);
     EVM.burn_gas(3);
     EVM.stack.push(Word::from(word));
 }
@@ -661,6 +734,7 @@ pub unsafe fn push3(word: u24) {
 
 #[no_mangle]
 pub unsafe fn push4(word: u32) {
+    trace!("PUSH4 0x{:04x}", word);
     EVM.burn_gas(3);
     EVM.stack.push(Word::from(word));
 }
@@ -682,6 +756,7 @@ pub unsafe fn push7(word: u56) {
 
 #[no_mangle]
 pub unsafe fn push8(word: u64) {
+    trace!("PUSH8 0x{:08x}", word);
     EVM.burn_gas(3);
     EVM.stack.push(Word::from(word));
 }
@@ -723,6 +798,7 @@ pub unsafe fn push15(word: /*u120*/ u128) {
 
 #[no_mangle]
 pub unsafe fn push16(word: u128) {
+    trace!("PUSH16 0x{:16x}", word);
     EVM.burn_gas(3);
     EVM.stack.push(Word::from_words(0, word));
 }
@@ -804,6 +880,7 @@ pub unsafe fn push31(word_0: u64, word_1: u64, word_2: u64, word_3: u56) {
 
 #[no_mangle]
 pub unsafe fn push32(word_0: u64, word_1: u64, word_2: u64, word_3: u64) {
+    trace!("PUSH32"); // TODO: trace!("PUSH32 0x{:32x}", word);
     EVM.burn_gas(3);
     let mut bytes: [u8; 32] = [0; 32];
     bytes[0..8].copy_from_slice(&word_0.to_le_bytes());
@@ -815,6 +892,7 @@ pub unsafe fn push32(word_0: u64, word_1: u64, word_2: u64, word_3: u64) {
 
 #[no_mangle]
 pub unsafe fn dup1() {
+    trace!("DUP1");
     EVM.burn_gas(3);
     EVM.stack.push(EVM.stack.peek());
 }
@@ -895,6 +973,7 @@ pub unsafe fn dup16() {
 }
 
 unsafe fn dup(n: u8) {
+    trace!("DUP{}", n);
     assert!((1..=16).contains(&n));
     EVM.burn_gas(3);
     EVM.stack.push(EVM.stack.peek_n(n as usize - 1));
@@ -981,6 +1060,7 @@ pub unsafe fn swap16() {
 }
 
 unsafe fn swap(n: u8) {
+    trace!("SWAP{}", n);
     assert!((1..=16).contains(&n));
     EVM.burn_gas(3);
     EVM.stack.swap(n.into())
@@ -988,6 +1068,7 @@ unsafe fn swap(n: u8) {
 
 #[no_mangle]
 pub unsafe fn log0() {
+    trace!("LOG0");
     EVM.burn_gas(375);
     let (offset, size) = EVM.stack.pop2();
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
@@ -1001,6 +1082,7 @@ pub unsafe fn log0() {
 
 #[no_mangle]
 pub unsafe fn log1() {
+    trace!("LOG1");
     EVM.burn_gas(750);
     let (offset, size) = EVM.stack.pop2();
     let topic = EVM.stack.pop();
@@ -1015,6 +1097,7 @@ pub unsafe fn log1() {
 
 #[no_mangle]
 pub unsafe fn log2() {
+    trace!("LOG2");
     EVM.burn_gas(1125);
     let (offset, size) = EVM.stack.pop2();
     let (topic1, topic2) = EVM.stack.pop2();
@@ -1029,6 +1112,7 @@ pub unsafe fn log2() {
 
 #[no_mangle]
 pub unsafe fn log3() {
+    trace!("LOG3");
     EVM.burn_gas(1500);
     let (offset, size) = EVM.stack.pop2();
     let (topic1, topic2, topic3) = EVM.stack.pop3();
@@ -1043,6 +1127,7 @@ pub unsafe fn log3() {
 
 #[no_mangle]
 pub unsafe fn log4() {
+    trace!("LOG4");
     EVM.burn_gas(1875);
     let (offset, size) = EVM.stack.pop2();
     let (topic1, topic2, topic3, topic4) = EVM.stack.pop4();
@@ -1057,24 +1142,28 @@ pub unsafe fn log4() {
 
 #[no_mangle]
 pub unsafe fn create() {
+    trace!("CREATE");
     EVM.burn_gas(32000);
     todo!("CREATE") // TODO
 }
 
 #[no_mangle]
 pub unsafe fn call() {
+    trace!("CALL");
     EVM.burn_gas(100);
     todo!("CALL") // TODO
 }
 
 #[no_mangle]
 pub unsafe fn callcode() {
+    trace!("CALLCODE");
     EVM.burn_gas(100);
     todo!("CALLCODE") // TODO
 }
 
 #[no_mangle]
 pub unsafe fn r#return() {
+    trace!("RETURN");
     EVM.burn_gas(0);
     let (offset, size) = EVM.stack.pop2();
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
@@ -1083,24 +1172,28 @@ pub unsafe fn r#return() {
 
 #[no_mangle]
 pub unsafe fn delegatecall() {
+    trace!("DELEGATECALL");
     EVM.burn_gas(100);
     todo!("DELEGATECALL") // TODO
 }
 
 #[no_mangle]
 pub unsafe fn create2() {
+    trace!("CREATE2");
     EVM.burn_gas(32000);
     todo!("CREATE2") // TODO
 }
 
 #[no_mangle]
 pub unsafe fn staticcall() {
+    trace!("STATICCALL");
     EVM.burn_gas(100);
     todo!("STATICCALL") // TODO
 }
 
 #[no_mangle]
 pub unsafe fn revert() {
+    trace!("REVERT");
     EVM.burn_gas(0);
     let (offset, size) = EVM.stack.pop2();
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
@@ -1109,6 +1202,7 @@ pub unsafe fn revert() {
 
 #[no_mangle]
 pub unsafe fn invalid() {
+    trace!("INVALID");
     // `INVALID` is "Equivalent to REVERT (since Byzantium fork) with 0,0 as stack
     // parameters, except that all the gas given to the current context is consumed."
     EVM.burn_gas(EVM.gas_limit);
@@ -1117,6 +1211,7 @@ pub unsafe fn invalid() {
 
 #[no_mangle]
 pub unsafe fn selfdestruct() {
+    trace!("SELFDESTRUCT");
     EVM.burn_gas(5000);
     todo!("SELFDESTRUCT") // TODO: state reset
 }
