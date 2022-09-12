@@ -273,7 +273,7 @@ impl Compiler {
             Call(self.evm_pop_function),
             I32Const(TABLE_OFFSET),
             I32Add,
-            Drop, //CallIndirect(9, 0), // FIXME: type lookup!
+            Unreachable,//CallIndirect(9, 0), // FIXME!: type lookup!
         ]
     }
 
@@ -322,7 +322,7 @@ impl Compiler {
             GetLocal(0),
             I32Const(TABLE_OFFSET),
             I32Add,
-            Drop, //CallIndirect(9, 0), // FIXME: type lookup!
+            Unreachable,//CallIndirect(9, 0), // FIXME!: type lookup!
             Else,
             match else_branch {
                 Some(Edge::Static(target)) => self.compile_jump_to_block(*target), // JUMPI has static successor branch
@@ -335,7 +335,7 @@ impl Compiler {
 
     /// Compiles the transfer of control flow to another block.
     fn compile_jump_to_block(&self, target: Label) -> Instruction {
-        let jump_idx = self.jump_table.get(&target).unwrap(); // FIXME
+        let jump_idx = self.jump_table.get(&target).unwrap(); // FIXME?
         Instruction::Call(*jump_idx)
     }
 

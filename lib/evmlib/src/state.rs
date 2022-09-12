@@ -104,8 +104,11 @@ impl Stack {
     #[allow(dead_code)]
     pub fn dump(&self) {
         print!("depth={} slots=[", self.depth);
-        for element in self.slots.iter() {
-            print!("{},", element);
+        for (i, element) in self.slots.iter().enumerate() {
+            if i == self.depth { break }
+            if i > 0 { print!(",") }
+            //print!("0x{}", hex::encode(element.to_be_bytes()));
+            print!("{}", element);
         }
         println!("]")
     }

@@ -13,13 +13,6 @@ use crate::{
     state::{Machine, Memory, Stack, Word, MAX_STACK_DEPTH, ONE, ZERO},
 };
 
-macro_rules! trace {
-    ($($t:tt)*) => {{
-        #[cfg(target_os = "wasi")]
-        eprintln!($($t)*);
-    }};
-}
-
 const KECCAK_EMPTY: Word = Word::from_words(
     0xc5d2460186f7233c927e7db2dcc703c0,
     0xe500b653ca82273b7bfad8045d85a470,
@@ -69,6 +62,17 @@ pub(crate) type Hasher = crate::near_runtime::NearRuntime;
 
 #[cfg(any(not(feature = "near"), test))]
 pub(crate) type Hasher = crate::hash_provider::Native;
+
+macro_rules! trace {
+    ($($t:tt)*) => {{
+        #[cfg(target_os = "wasi")]
+        {
+            eprint!("stack ");
+            EVM.stack.dump();
+            eprintln!($($t)*);
+        }
+    }};
+}
 
 #[no_mangle]
 pub unsafe fn stop() {
