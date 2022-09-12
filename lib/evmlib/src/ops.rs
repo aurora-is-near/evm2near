@@ -1119,7 +1119,13 @@ pub unsafe fn log2() {
     EVM.burn_gas(1125);
     let (offset, size) = EVM.stack.pop2();
     let (topic1, topic2) = EVM.stack.pop2();
-    trace!("LOG2 offset={} size={} topics={{{}, {}}}", offset, size, topic1, topic2);
+    trace!(
+        "LOG2 offset={} size={} topics={{{}, {}}}",
+        offset,
+        size,
+        topic1,
+        topic2
+    );
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
     let log = EvmLog {
         address: ENV.address(),
@@ -1134,7 +1140,14 @@ pub unsafe fn log3() {
     EVM.burn_gas(1500);
     let (offset, size) = EVM.stack.pop2();
     let (topic1, topic2, topic3) = EVM.stack.pop3();
-    trace!("LOG3 offset={} size={} topics={{{}, {}, {}}}", offset, size, topic1, topic2, topic3);
+    trace!(
+        "LOG3 offset={} size={} topics={{{}, {}, {}}}",
+        offset,
+        size,
+        topic1,
+        topic2,
+        topic3
+    );
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
     let log = EvmLog {
         address: ENV.address(),
@@ -1149,7 +1162,15 @@ pub unsafe fn log4() {
     EVM.burn_gas(1875);
     let (offset, size) = EVM.stack.pop2();
     let (topic1, topic2, topic3, topic4) = EVM.stack.pop4();
-    trace!("LOG4 offset={} size={} topics={{{}, {}, {}, {}}}", offset, size, topic1, topic2, topic3, topic4);
+    trace!(
+        "LOG4 offset={} size={} topics={{{}, {}, {}, {}}}",
+        offset,
+        size,
+        topic1,
+        topic2,
+        topic3,
+        topic4
+    );
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
     let log = EvmLog {
         address: ENV.address(),

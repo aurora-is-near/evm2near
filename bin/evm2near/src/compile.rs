@@ -1,13 +1,16 @@
 // This is free and unencumbered software released into the public domain.
 
-use std::collections::{BTreeSet, HashMap};
+use std::{
+    collections::{BTreeSet, HashMap},
+    convert::TryInto,
+};
 
 use evm_rs::{parse_opcode, Opcode, Program};
 use parity_wasm::{
     builder::{FunctionBuilder, ModuleBuilder, SignatureBuilder},
     elements::{
         BlockType, ElementSegment, ExportEntry, FuncBody, ImportCountType, InitExpr, Instruction,
-        Instructions, Internal, Local, Module, TableType, ValueType,
+        Instructions, Internal, Local, Module, TableType, Type, ValueType,
     },
 };
 
@@ -59,11 +62,13 @@ pub fn compile(
 }
 
 type FunctionIndex = u32;
+type TypeIndex = u32;
 
 struct Compiler {
     config: CompilerConfig,
     op_table: HashMap<Opcode, FunctionIndex>,
     jump_table: HashMap<Label, FunctionIndex>,
+    function_type: TypeIndex,
     evm_start_function: FunctionIndex, // _evm_start
     evm_init_function: FunctionIndex,  // _evm_init
     evm_call_function: FunctionIndex,  // _evm_call
@@ -81,6 +86,7 @@ impl Compiler {
             config,
             op_table: make_op_table(&runtime_library),
             jump_table: HashMap::new(),
+            function_type: find_runtime_function_type(&runtime_library).unwrap(),
             evm_start_function: 0, // filled in during emit_start()
             evm_init_function: find_runtime_function(&runtime_library, "_evm_init").unwrap(),
             evm_call_function: find_runtime_function(&runtime_library, "_evm_call").unwrap(),
@@ -249,10 +255,8 @@ impl Compiler {
                         block_pos += 1;
                         match op {
                             RETURN => {
-                                emit(block_pc, Some(op), vec![
-                                    Instruction::Return,
-                                ]);
-                            },
+                                emit(block_pc, Some(op), vec![Instruction::Return]);
+                            }
                             _ => {}
                         }
                     }
@@ -277,12 +281,11 @@ impl Compiler {
     /// Compiles a dynamic unconditional branch (`...; JUMP`).
     fn compile_dynamic_jump(&self) -> Vec<Instruction> {
         use Instruction::*;
-        let func_type_idx = 11; // FIXME: () -> () function type lookup!
         vec![
             Call(self.evm_pop_function),
             I32Const(TABLE_OFFSET),
             I32Add,
-            CallIndirect(func_type_idx, 0),
+            CallIndirect(self.function_type, 0),
         ]
     }
 
@@ -323,7 +326,6 @@ impl Compiler {
             .find(|e| matches!(e, Edge::Static(_) /*| Edge::Exit*/));
 
         use Instruction::*;
-        let func_type_idx = 11; // FIXME: () -> () function type lookup!
         vec![
             Call(self.evm_pop_function),
             SetLocal(0),
@@ -332,7 +334,7 @@ impl Compiler {
             GetLocal(0),
             I32Const(TABLE_OFFSET),
             I32Add,
-            CallIndirect(func_type_idx, 0),
+            CallIndirect(self.function_type, 0),
             Else,
             match else_branch {
                 Some(Edge::Static(target)) => self.compile_jump_to_block(*target), // JUMPI has static successor branch
@@ -435,5 +437,18 @@ fn find_runtime_function(module: &Module, name: &str) -> Option<FunctionIndex> {
             _ => continue,
         }
     }
-    None
+    None // not found
+}
+
+fn find_runtime_function_type(module: &Module) -> Option<TypeIndex> {
+    for (type_id, r#type) in module.type_section().unwrap().types().iter().enumerate() {
+        match r#type {
+            Type::Function(function_type) => {
+                if function_type.params().is_empty() && function_type.results().is_empty() {
+                    return Some(type_id.try_into().unwrap());
+                }
+            }
+        }
+    }
+    None // not found
 }
