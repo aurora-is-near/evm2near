@@ -30,6 +30,7 @@ pub fn compile(
 
     let mut compiler = Compiler::new(runtime_library, config);
     compiler.compile_cfg(&input_cfg, input_program);
+    compiler.emit_abi(input_abi);
 
     let mut output_module = compiler.builder.build();
 
@@ -38,22 +39,19 @@ pub fn compile(
     tables[0] = TableType::new(0xFFFF, Some(0xFFFF)); // grow the table to 65,535 elements
 
     let elements = output_module.elements_section_mut().unwrap().entries_mut();
-    for (label, func_idx) in compiler.jump_table {
+    for (label, func_idx) in &compiler.jump_table {
         // TODO: sorted by label
         use Instruction::*;
         elements.push(ElementSegment::new(
             0, // table
             Some(InitExpr::new(vec![
-                I32Const((label as i32) + TABLE_OFFSET),
+                I32Const((*label as i32) + TABLE_OFFSET),
                 End,
             ])),
-            vec![func_idx],
+            vec![*func_idx],
         ));
     }
 
-    for func in input_abi.unwrap_or_default() {
-        eprintln!("{:?}", func); // DEBUG
-    }
     output_module
 }
 
@@ -64,8 +62,10 @@ struct Compiler {
     op_table: HashMap<Opcode, FunctionIndex>,
     jump_table: HashMap<Label, FunctionIndex>,
     init_function: FunctionIndex,
-    jumpi_function: FunctionIndex,
+    prepare_function: FunctionIndex,
     pop_function: FunctionIndex,
+    jumpi_function: FunctionIndex,
+    execute_function: FunctionIndex,
     function_import_count: usize,
     builder: ModuleBuilder,
 }
@@ -78,10 +78,30 @@ impl Compiler {
             op_table: make_op_table(&runtime_library),
             jump_table: HashMap::new(),
             init_function: find_runtime_function(&runtime_library, "_init_evm").unwrap(),
-            jumpi_function: find_runtime_function(&runtime_library, "jumpi").unwrap(),
+            prepare_function: find_runtime_function(&runtime_library, "_prepare").unwrap(),
             pop_function: find_runtime_function(&runtime_library, "_pop_u32").unwrap(),
+            jumpi_function: find_runtime_function(&runtime_library, "jumpi").unwrap(),
+            execute_function: 0, // filled in during compile_cfg()
             function_import_count: runtime_library.import_count(ImportCountType::Function),
             builder: parity_wasm::builder::from_module(runtime_library),
+        }
+    }
+
+    /// Synthesizes public wrapper methods for each function in the Solidity
+    /// contract's ABI, enabling users to directly call a contract method
+    /// without going through the low-level `execute()` EVM dispatcher.
+    pub fn emit_abi(self: &mut Compiler, input_abi: Option<Functions>) {
+        assert_ne!(self.execute_function, 0); // filled in during compile_cfg()
+
+        for func in input_abi.unwrap_or_default() {
+            self.emit_function(
+                Some(func.name.clone()),
+                vec![
+                    Instruction::I32Const(func.selector() as i32),
+                    Instruction::Call(self.prepare_function),
+                    Instruction::Call(self.execute_function),
+                ],
+            );
         }
     }
 
@@ -203,7 +223,10 @@ impl Compiler {
 
             emit(block_pc, None, vec![Instruction::End]);
 
-            self.emit_function(Some(block_id), block_wasm);
+            let func_id = self.emit_function(Some(block_id), block_wasm);
+            if block.label == 0 {
+                self.execute_function = func_id
+            }
         }
     }
 
@@ -225,11 +248,13 @@ impl Compiler {
 
     /// Compiles a static conditional branch (`PUSH target; JUMPI`).
     fn compile_static_jumpi(&self, target: Label, succ: &BTreeSet<Edge>) -> Vec<Instruction> {
-        assert!(succ.iter().all(|e| matches!(e, Edge::Static(_) | Edge::Exit)));
-
-        let else_branch = succ
+        assert!(succ
             .iter()
-            .find(|e| matches!(e, Edge::Static(label) if *label != target) || matches!(e, Edge::Exit)); // FIXME
+            .all(|e| matches!(e, Edge::Static(_) /*| Edge::Exit*/)));
+
+        let else_branch = succ.iter().find(|e| {
+            matches!(e, Edge::Static(label) if *label != target) /*|| matches!(e, Edge::Exit)*/
+        }); // FIXME
 
         use Instruction::*;
         vec![
@@ -249,9 +274,13 @@ impl Compiler {
     /// Compiles a dynamic conditional branch (`...; JUMPI`).
     fn compile_dynamic_jumpi(&self, succ: &BTreeSet<Edge>) -> Vec<Instruction> {
         assert!(succ.iter().any(|e| matches!(e, Edge::Dynamic))); // then branch
-        assert!(succ.iter().any(|e| matches!(e, Edge::Static(_) | Edge::Exit))); // else branch
+        assert!(succ
+            .iter()
+            .any(|e| matches!(e, Edge::Static(_) /*| Edge::Exit*/))); // else branch
 
-        let else_branch = succ.iter().find(|e| matches!(e, Edge::Static(_) | Edge::Exit));
+        let else_branch = succ
+            .iter()
+            .find(|e| matches!(e, Edge::Static(_) /*| Edge::Exit*/));
 
         use Instruction::*;
         vec![
@@ -341,7 +370,7 @@ fn make_op_table(module: &Module) -> HashMap<Opcode, FunctionIndex> {
     for export in module.export_section().unwrap().entries() {
         match export.internal() {
             &Internal::Function(op_idx) => match export.field() {
-                "_init_evm" | "_start" | "_pop_u32" | "execute" => {}
+                "_start" | "_init_evm" | "_prepare" | "_pop_u32" | "execute" => {}
                 export_sym => match parse_opcode(&export_sym.to_ascii_uppercase()) {
                     None => unreachable!(),
                     Some(op) => _ = result.insert(op, op_idx),

@@ -2,6 +2,7 @@
 
 #![feature(stmt_expr_attributes)]
 
+mod api;
 mod env;
 mod hash_provider;
 mod near_runtime;
