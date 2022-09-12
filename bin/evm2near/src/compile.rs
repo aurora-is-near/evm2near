@@ -277,11 +277,12 @@ impl Compiler {
     /// Compiles a dynamic unconditional branch (`...; JUMP`).
     fn compile_dynamic_jump(&self) -> Vec<Instruction> {
         use Instruction::*;
+        let func_type_idx = 11; // FIXME: () -> () function type lookup!
         vec![
             Call(self.evm_pop_function),
             I32Const(TABLE_OFFSET),
             I32Add,
-            Unreachable,//CallIndirect(9, 0), // FIXME!: type lookup!
+            CallIndirect(func_type_idx, 0),
         ]
     }
 
@@ -322,6 +323,7 @@ impl Compiler {
             .find(|e| matches!(e, Edge::Static(_) /*| Edge::Exit*/));
 
         use Instruction::*;
+        let func_type_idx = 11; // FIXME: () -> () function type lookup!
         vec![
             Call(self.evm_pop_function),
             SetLocal(0),
@@ -330,7 +332,7 @@ impl Compiler {
             GetLocal(0),
             I32Const(TABLE_OFFSET),
             I32Add,
-            Unreachable,//CallIndirect(9, 0), // FIXME!: type lookup!
+            CallIndirect(func_type_idx, 0),
             Else,
             match else_branch {
                 Some(Edge::Static(target)) => self.compile_jump_to_block(*target), // JUMPI has static successor branch
