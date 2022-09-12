@@ -7,7 +7,7 @@ use crate::{
 };
 
 #[no_mangle]
-pub unsafe fn _init_evm(_table_offset: u32, chain_id: u64, balance: u64) {
+pub unsafe fn _evm_init(_table_offset: u32, chain_id: u64, balance: u64) {
     #[cfg(feature = "near")]
     {
         // TODO
@@ -33,7 +33,7 @@ pub unsafe fn _init_evm(_table_offset: u32, chain_id: u64, balance: u64) {
                                 break;
                             }
                             "--func" | "--invoke" => _ = args.next(), // skip interpreter options
-                            _ => break, // start of actual arguments
+                            _ => break,                               // start of actual arguments
                         }
                     }
                 }
@@ -53,14 +53,14 @@ pub unsafe fn _init_evm(_table_offset: u32, chain_id: u64, balance: u64) {
             None => ZERO,
             Some(s) => Word::from(s.parse::<u32>().unwrap_or(0)),
         };
-        //eprintln!("call_data={:?} call_value={:?}", ENV.call_data, EVM.call_value);
+        //eprintln!("_evm_init: call_data={:?} call_value={:?}", ENV.call_data, EVM.call_value);
     }
     EVM.chain_id = Word::from(chain_id);
     EVM.self_balance = Word::from(balance);
 }
 
 #[no_mangle]
-pub unsafe fn _prepare(selector: u32) {
+pub unsafe fn _evm_call(selector: u32) {
     #[cfg(feature = "near")]
     {
         // TODO
@@ -68,11 +68,12 @@ pub unsafe fn _prepare(selector: u32) {
     #[cfg(any(not(feature = "near"), test))]
     {
         ENV.call_data.splice(0..0, selector.to_be_bytes());
+        //eprintln!("_evm_call: call_data={:?} call_value={:?}", ENV.call_data, EVM.call_value);
         // TODO
     }
 }
 
 #[no_mangle]
-pub unsafe fn _pop_u32() -> u32 {
+pub unsafe fn _evm_pop_u32() -> u32 {
     EVM.stack.pop().as_u32()
 }

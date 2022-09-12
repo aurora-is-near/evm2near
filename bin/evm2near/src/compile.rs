@@ -29,8 +29,11 @@ pub fn compile(
     let input_cfg = analyze_cfg(input_program);
 
     let mut compiler = Compiler::new(runtime_library, config);
+    compiler.emit_wasm_start();
+    compiler.emit_evm_start();
     compiler.compile_cfg(&input_cfg, input_program);
-    compiler.emit_abi(input_abi);
+    compiler.emit_abi_execute();
+    compiler.emit_abi_methods(input_abi);
 
     let mut output_module = compiler.builder.build();
 
@@ -61,11 +64,12 @@ struct Compiler {
     config: CompilerConfig,
     op_table: HashMap<Opcode, FunctionIndex>,
     jump_table: HashMap<Label, FunctionIndex>,
-    init_function: FunctionIndex,
-    prepare_function: FunctionIndex,
-    pop_function: FunctionIndex,
+    evm_start_function: FunctionIndex, // _evm_start
+    evm_init_function: FunctionIndex,  // _evm_init
+    evm_call_function: FunctionIndex,  // _evm_call
+    evm_exec_function: FunctionIndex,  // _evm_exec
+    evm_pop_function: FunctionIndex,   // _evm_pop_u32
     jumpi_function: FunctionIndex,
-    execute_function: FunctionIndex,
     function_import_count: usize,
     builder: ModuleBuilder,
 }
@@ -77,29 +81,67 @@ impl Compiler {
             config,
             op_table: make_op_table(&runtime_library),
             jump_table: HashMap::new(),
-            init_function: find_runtime_function(&runtime_library, "_init_evm").unwrap(),
-            prepare_function: find_runtime_function(&runtime_library, "_prepare").unwrap(),
-            pop_function: find_runtime_function(&runtime_library, "_pop_u32").unwrap(),
+            evm_start_function: 0, // filled in during emit_start()
+            evm_init_function: find_runtime_function(&runtime_library, "_evm_init").unwrap(),
+            evm_call_function: find_runtime_function(&runtime_library, "_evm_call").unwrap(),
+            evm_exec_function: 0, // filled in during compile_cfg()
+            evm_pop_function: find_runtime_function(&runtime_library, "_evm_pop_u32").unwrap(),
             jumpi_function: find_runtime_function(&runtime_library, "jumpi").unwrap(),
-            execute_function: 0, // filled in during compile_cfg()
             function_import_count: runtime_library.import_count(ImportCountType::Function),
             builder: parity_wasm::builder::from_module(runtime_library),
         }
     }
 
+    /// Emit an empty `_start` function to make all WebAssembly runtimes happy.
+    fn emit_wasm_start(self: &mut Compiler) {
+        _ = self.emit_function(Some("_start".to_string()), vec![]);
+    }
+
+    /// Synthesizes a start function that initializes the EVM state with the
+    /// correct configuration.
+    fn emit_evm_start(self: &mut Compiler) {
+        assert_ne!(self.evm_init_function, 0);
+
+        self.evm_start_function = self.emit_function(
+            Some("_evm_start".to_string()),
+            vec![
+                Instruction::I32Const(TABLE_OFFSET),
+                Instruction::I64Const(self.config.chain_id.try_into().unwrap()), // --chain-id
+                Instruction::I64Const(0),                                        // TODO: --balance
+                Instruction::Call(self.evm_init_function),
+            ],
+        );
+    }
+
+    fn emit_abi_execute(self: &mut Compiler) {
+        assert_ne!(self.evm_start_function, 0);
+        assert_ne!(self.evm_exec_function, 0); // filled in during compile_cfg()
+
+        _ = self.emit_function(
+            Some("execute".to_string()),
+            vec![
+                Instruction::Call(self.evm_start_function),
+                Instruction::Call(self.evm_exec_function),
+            ],
+        );
+    }
+
     /// Synthesizes public wrapper methods for each function in the Solidity
     /// contract's ABI, enabling users to directly call a contract method
-    /// without going through the low-level `execute()` EVM dispatcher.
-    pub fn emit_abi(self: &mut Compiler, input_abi: Option<Functions>) {
-        assert_ne!(self.execute_function, 0); // filled in during compile_cfg()
+    /// without going through the low-level `execute` EVM dispatcher.
+    pub fn emit_abi_methods(self: &mut Compiler, input_abi: Option<Functions>) {
+        assert_ne!(self.evm_start_function, 0);
+        assert_ne!(self.evm_call_function, 0);
+        assert_ne!(self.evm_exec_function, 0); // filled in during compile_cfg()
 
         for func in input_abi.unwrap_or_default() {
-            self.emit_function(
+            _ = self.emit_function(
                 Some(func.name.clone()),
                 vec![
+                    Instruction::Call(self.evm_start_function),
                     Instruction::I32Const(func.selector() as i32),
-                    Instruction::Call(self.prepare_function),
-                    Instruction::Call(self.execute_function),
+                    Instruction::Call(self.evm_call_function),
+                    Instruction::Call(self.evm_exec_function),
                 ],
             );
         }
@@ -107,15 +149,8 @@ impl Compiler {
 
     /// Compiles the program's control-flow graph.
     fn compile_cfg(self: &mut Compiler, input_cfg: &CFGProgram, input_program: &Program) {
-        let start_func_idx = self.emit_function(
-            Some("_start".to_string()),
-            vec![
-                Instruction::I32Const(TABLE_OFFSET),
-                Instruction::I64Const(self.config.chain_id.try_into().unwrap()), // --chain-id
-                Instruction::I64Const(0),                                        // TODO: --balance
-                Instruction::Call(self.init_function),
-            ],
-        );
+        assert_ne!(self.evm_start_function, 0); // filled in during emit_start()
+        assert_eq!(self.evm_exec_function, 0); // filled in below
 
         self.jump_table = self.make_jump_table(input_cfg);
 
@@ -143,10 +178,6 @@ impl Compiler {
                     }
                 }
             };
-
-            if block.label == 0 {
-                emit(block_pc, None, vec![Instruction::Call(start_func_idx)]);
-            }
 
             let block_code = block.code(&input_program.0);
             let mut block_pos = 0;
@@ -225,7 +256,7 @@ impl Compiler {
 
             let func_id = self.emit_function(Some(block_id), block_wasm);
             if block.label == 0 {
-                self.execute_function = func_id
+                self.evm_exec_function = func_id
             }
         }
     }
@@ -239,7 +270,7 @@ impl Compiler {
     fn compile_dynamic_jump(&self) -> Vec<Instruction> {
         use Instruction::*;
         vec![
-            Call(self.pop_function),
+            Call(self.evm_pop_function),
             I32Const(TABLE_OFFSET),
             I32Add,
             Drop, //CallIndirect(9, 0), // FIXME: type lookup!
@@ -284,7 +315,7 @@ impl Compiler {
 
         use Instruction::*;
         vec![
-            Call(self.pop_function),
+            Call(self.evm_pop_function),
             SetLocal(0),
             Call(self.jumpi_function),
             If(BlockType::NoResult),
@@ -360,7 +391,7 @@ impl Compiler {
 
 fn make_block_id(block: &Block) -> String {
     match block.label {
-        0 => "execute".to_string(), // FIXME
+        0 => "_evm_exec".to_string(),
         pc => format!("_{:04x}", pc),
     }
 }
@@ -370,7 +401,8 @@ fn make_op_table(module: &Module) -> HashMap<Opcode, FunctionIndex> {
     for export in module.export_section().unwrap().entries() {
         match export.internal() {
             &Internal::Function(op_idx) => match export.field() {
-                "_start" | "_init_evm" | "_prepare" | "_pop_u32" | "execute" => {}
+                "_evm_start" | "_evm_init" | "_evm_call" | "_evm_exec" | "_evm_pop_u32"
+                | "execute" => {}
                 export_sym => match parse_opcode(&export_sym.to_ascii_uppercase()) {
                     None => unreachable!(),
                     Some(op) => _ = result.insert(op, op_idx),
