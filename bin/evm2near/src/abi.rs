@@ -1,6 +1,8 @@
 // This is free and unencumbered software released into the public domain.
 
 use serde::Deserialize;
+use sha3::{Digest, Keccak256};
+use std::fmt;
 
 #[derive(Deserialize, Debug, PartialEq)]
 pub struct Functions(Vec<Function>);
@@ -31,10 +33,33 @@ pub enum ValueType {
     Bool,
     Function,
     Int8,
+    Int32,
     Int256,
     String,
     Uint8,
+    Uint32,
     Uint256,
+}
+
+impl fmt::Display for ValueType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use ValueType::*;
+        match self {
+            Address => write!(f, "address"),
+            AddressPayable => write!(f, "address payable"),
+            Bytes => write!(f, "bytes"),
+            Bytes32 => write!(f, "bytes32"),
+            Bool => write!(f, "bool"),
+            Function => write!(f, "function"),
+            Int8 => write!(f, "int8"),
+            Int32 => write!(f, "int32"),
+            Int256 => write!(f, "int256"),
+            String => write!(f, "string"),
+            Uint8 => write!(f, "uint8"),
+            Uint32 => write!(f, "uint32"),
+            Uint256 => write!(f, "uint256"),
+        }
+    }
 }
 
 #[derive(Deserialize, Debug, PartialEq)]
@@ -46,24 +71,70 @@ pub enum StateMutability {
     View,
 }
 
+impl fmt::Display for StateMutability {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use StateMutability::*;
+        match self {
+            Nonpayable => write!(f, "nonpayable"),
+            Payable => write!(f, "payable"),
+            Pure => write!(f, "pure"),
+            View => write!(f, "view"),
+        }
+    }
+}
+
 #[allow(dead_code)]
 #[derive(Deserialize, Debug, PartialEq)]
 #[serde(rename_all(deserialize = "camelCase"))]
 pub struct Parameter {
-    name: String,
-    r#type: ValueType,
-    internal_type: ValueType,
+    pub name: String,
+    pub r#type: ValueType,
+    pub internal_type: ValueType,
+}
+
+impl fmt::Display for Parameter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.r#type)
+    }
 }
 
 #[allow(dead_code)]
 #[derive(Deserialize, Debug, PartialEq)]
 #[serde(rename_all(deserialize = "camelCase"))]
 pub struct Function {
-    name: String,
-    inputs: Vec<Parameter>,
-    outputs: Vec<Parameter>,
-    state_mutability: StateMutability,
-    r#type: String,
+    pub name: String,
+    pub inputs: Vec<Parameter>,
+    pub outputs: Vec<Parameter>,
+    pub state_mutability: StateMutability,
+    pub r#type: String,
+}
+
+impl fmt::Display for Function {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}(", self.name)?;
+        for (i, input) in self.inputs.iter().enumerate() {
+            if i > 0 {
+                write!(f, ",")?
+            }
+            write!(f, "{}", input)?;
+        }
+        write!(f, ")")
+    }
+}
+
+impl Function {
+    #[allow(dead_code)]
+    pub fn selector(&self) -> u32 {
+        u32::from_be_bytes(self.selector_bytes())
+    }
+
+    pub fn selector_bytes(&self) -> [u8; 4] {
+        let input = format!("{}", self);
+        let bytes = Keccak256::digest(input);
+        let mut result = [0u8; 4];
+        result.copy_from_slice(&bytes[0..4]);
+        result
+    }
 }
 
 #[allow(dead_code)]
@@ -78,6 +149,8 @@ pub fn parse_bytes(json: &[u8]) -> Result<Functions, serde_json::Error> {
 
 #[cfg(test)]
 mod tests {
+    use crate::abi;
+
     use super::*;
 
     static MULTIPLY: &str = r#"[
@@ -120,5 +193,34 @@ mod tests {
             r#type: "function".to_string(),
         }];
         assert_eq!(parse_str(MULTIPLY).unwrap().0, parsed);
+    }
+
+    #[test]
+    fn test_display() {
+        let funcs = parse_str(MULTIPLY).unwrap().0;
+        let func = funcs.first().unwrap();
+        assert_eq!(format!("{}", func), "multiply(int256,int256)");
+    }
+
+    #[test]
+    fn test_selector() {
+        // See: https://docs.soliditylang.org/en/develop/abi-spec.html#examples
+        let baz_abi = r#"[
+            {
+                "name":"baz",
+                "type":"function",
+                "inputs":[
+                    {"internalType":"uint32","name":"x","type":"uint32"},
+                    {"internalType":"bool","name":"y","type":"bool"}
+                ],
+                "outputs":[
+                    {"internalType":"bool","name":"r","type":"bool"}
+                ],
+                "stateMutability":"pure"
+            }
+        ]"#;
+        let funcs = parse_str(baz_abi).unwrap().0;
+        let func = funcs.first().unwrap();
+        assert_eq!(func.selector(), 0xcdcd77c0);
     }
 }
