@@ -4,14 +4,8 @@ use serde::Deserialize;
 use sha3::{Digest, Keccak256};
 use std::fmt;
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Eq, Default)]
 pub struct Functions(Vec<Function>);
-
-impl Default for Functions {
-    fn default() -> Self {
-        Self(vec![])
-    }
-}
 
 impl IntoIterator for Functions {
     type Item = Function;
@@ -23,7 +17,7 @@ impl IntoIterator for Functions {
 }
 
 /// See: https://docs.soliditylang.org/en/v0.8.16/types.html
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all(deserialize = "camelCase"))]
 pub enum ValueType {
     Address,
@@ -62,7 +56,7 @@ impl fmt::Display for ValueType {
     }
 }
 
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all(deserialize = "camelCase"))]
 pub enum StateMutability {
     Nonpayable,
@@ -84,7 +78,7 @@ impl fmt::Display for StateMutability {
 }
 
 #[allow(dead_code)]
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all(deserialize = "camelCase"))]
 pub struct Parameter {
     pub name: String,
@@ -99,7 +93,7 @@ impl fmt::Display for Parameter {
 }
 
 #[allow(dead_code)]
-#[derive(Deserialize, Debug, PartialEq)]
+#[derive(Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all(deserialize = "camelCase"))]
 pub struct Function {
     pub name: String,
@@ -139,18 +133,16 @@ impl Function {
 
 #[allow(dead_code)]
 pub fn parse_str(json: &str) -> Result<Functions, serde_json::Error> {
-    serde_json::from_str::<Vec<Function>>(json).map(|fs| Functions(fs))
+    serde_json::from_str::<Vec<Function>>(json).map(Functions)
 }
 
 #[allow(dead_code)]
 pub fn parse_bytes(json: &[u8]) -> Result<Functions, serde_json::Error> {
-    serde_json::from_slice::<Vec<Function>>(json).map(|fs| Functions(fs))
+    serde_json::from_slice::<Vec<Function>>(json).map(Functions)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::abi;
-
     use super::*;
 
     static MULTIPLY: &str = r#"[

@@ -253,11 +253,8 @@ impl Compiler {
                         emit(block_pc, Some(op), vec![call]);
                         block_pc += op.size();
                         block_pos += 1;
-                        match op {
-                            RETURN => {
-                                emit(block_pc, Some(op), vec![Instruction::Return]);
-                            }
-                            _ => {}
+                        if op == &RETURN {
+                            emit(block_pc, Some(op), vec![Instruction::Return]);
                         }
                     }
                     [] => unreachable!("impossible match"),
