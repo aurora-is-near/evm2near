@@ -14,7 +14,7 @@ mod tests {
             ENV.reset();
             stop();
             assert_eq!(ENV.exit_status, Some(ExitStatus::Success));
-            assert_eq!(&ENV.return_data, &[]);
+            assert!(ENV.return_data.is_empty());
         }
     }
 
@@ -1146,7 +1146,7 @@ mod tests {
             ENV.reset();
             invalid();
             assert_eq!(ENV.exit_status, Some(ExitStatus::Revert));
-            assert_eq!(&ENV.return_data, &[]);
+            assert!(ENV.return_data.is_empty());
         }
     }
 
