@@ -12,12 +12,37 @@ pub unsafe fn _init_evm(_table_offset: u32, chain_id: u64, balance: u64) {
     {
         // TODO
     }
+
     #[cfg(not(feature = "near"))]
     {
         let mut args = std::env::args();
-        // TODO: look for "--""
-        let _ = args.next(); // consume the program name
-        ENV.call_data = match args.next() {
+
+        // Remove fluff from the command-line arguments:
+        let mut arg = args.next();
+        let mut arg_pos = 0;
+        loop {
+            match &arg {
+                None => break, // no more arguments
+                Some(s) => {
+                    if arg_pos == 0 && (s.ends_with(".wasm") || s.ends_with(".wasi")) {
+                        // consume the program name
+                    } else {
+                        match s.as_str() {
+                            "--" => {
+                                arg = args.next(); // start of actual arguments
+                                break;
+                            }
+                            "--func" | "--invoke" => _ = args.next(), // skip interpreter options
+                            _ => break, // start of actual arguments
+                        }
+                    }
+                }
+            }
+            arg = args.next();
+            arg_pos += 1;
+        }
+
+        ENV.call_data = match arg {
             None => Vec::new(),
             Some(hexbytes) => match hex::decode(hexbytes) {
                 Err(err) => panic!("{}", err),
@@ -28,7 +53,7 @@ pub unsafe fn _init_evm(_table_offset: u32, chain_id: u64, balance: u64) {
             None => ZERO,
             Some(s) => Word::from(s.parse::<u32>().unwrap_or(0)),
         };
-        //eprintln!("EVM.call_data={:?} EVM.call_value={:?}", EVM.call_data, EVM.call_value);
+        //eprintln!("call_data={:?} call_value={:?}", ENV.call_data, EVM.call_value);
     }
     EVM.chain_id = Word::from(chain_id);
     EVM.self_balance = Word::from(balance);
