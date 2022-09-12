@@ -215,6 +215,7 @@ impl NearRuntime {
     fn read_register(register_id: u64) -> Vec<u8> {
         let data_size = Self::register_len(register_id);
         let mut buffer = Vec::with_capacity(data_size);
+        buffer.resize(data_size, 0);
         Self::read_register_to_buffer(register_id, &mut buffer);
         buffer
     }
