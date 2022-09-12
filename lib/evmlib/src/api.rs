@@ -62,9 +62,13 @@ pub unsafe fn _evm_init(_table_offset: u32, chain_id: u64, balance: u64) {
 
 #[no_mangle]
 pub unsafe fn _evm_call(selector: u32) {
-    #[cfg(feature = "near")]
+    #[cfg(all(feature = "near", not(test)))]
     {
-        // TODO
+        use crate::env::Env;
+        ENV.call_data();
+        if let Some(call_data) = ENV.call_data.as_mut() {
+            call_data.splice(0..0, selector.to_be_bytes());
+        }
     }
     #[cfg(any(not(feature = "near"), test))]
     {
