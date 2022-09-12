@@ -1187,6 +1187,8 @@ pub unsafe fn r#return() {
     trace!("RETURN offset={} size={}", offset, size);
     let data = EVM.memory.slice(offset.as_usize(), size.as_usize());
     ENV.value_return(data);
+    // There is no host function to successfully terminate execution, so
+    // the compiler will insert a WebAssembly RETURN instruction here.
 }
 
 #[no_mangle]

@@ -55,6 +55,7 @@ pub unsafe fn _evm_init(_table_offset: u32, chain_id: u64, balance: u64) {
         };
         //eprintln!("_evm_init: call_data={:?} call_value={:?}", ENV.call_data, EVM.call_value);
     }
+
     EVM.chain_id = Word::from(chain_id);
     EVM.self_balance = Word::from(balance);
 }
