@@ -105,8 +105,12 @@ impl Stack {
     pub fn dump(&self) {
         print!("depth={} slots=[", self.depth);
         for (i, element) in self.slots.iter().enumerate() {
-            if i == self.depth { break }
-            if i > 0 { print!(",") }
+            if i == self.depth {
+                break;
+            }
+            if i > 0 {
+                print!(",")
+            }
             //print!("0x{}", hex::encode(element.to_be_bytes()));
             print!("{}", element);
         }
