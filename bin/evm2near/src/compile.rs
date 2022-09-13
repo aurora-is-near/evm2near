@@ -62,13 +62,20 @@ pub fn compile(
     // Overwrite the `_abi_buffer` data segment in evmlib with the ABI data
     // (function parameter names and types) for all public Solidity contract
     // methods:
+    let abi_buffer_ptr: usize = compiler.abi_buffer_off.try_into().unwrap();
     for data in output_module.data_section_mut().unwrap().entries_mut() {
-        match data.offset().as_ref().unwrap().code() {
-            [Instruction::I32Const(offset), Instruction::End]
-                if *offset == compiler.abi_buffer_off => {} // found it
-            _ => continue, // skip other data segments
+        let min_ptr: usize = match data.offset().as_ref().unwrap().code() {
+            [Instruction::I32Const(off), Instruction::End] => (*off).try_into().unwrap(),
+            _ => continue, // skip any nonstandard data segments
+        };
+        let max_ptr: usize = min_ptr + data.value().len();
+        if abi_buffer_ptr >= min_ptr && abi_buffer_ptr < max_ptr {
+            let min_off = abi_buffer_ptr - min_ptr;
+            let max_off = min_off + abi_data.len();
+            assert!(min_ptr + max_off <= max_ptr);
+            data.value_mut()[min_off..max_off].copy_from_slice(&abi_data);
+            break; // found it
         }
-        data.value_mut()[0..abi_data.len()].copy_from_slice(&abi_data);
     }
 
     output_module
@@ -100,7 +107,7 @@ impl Compiler {
     fn new(runtime_library: Module, config: CompilerConfig) -> Compiler {
         Compiler {
             config,
-            abi_buffer_off: 1075152, // FIXME: look up the _abi_buffer global
+            abi_buffer_off: find_abi_buffer(&runtime_library).unwrap(),
             abi_buffer_len: 0xFFFF,  // TODO: ensure this matches _abi_buffer.len() in evmlib
             op_table: make_op_table(&runtime_library),
             jump_table: HashMap::new(),
@@ -492,6 +499,24 @@ fn find_runtime_function_type(module: &Module) -> Option<TypeIndex> {
                     return Some(type_id.try_into().unwrap());
                 }
             }
+        }
+    }
+    None // not found
+}
+
+fn find_abi_buffer(module: &Module) -> Option<DataOffset> {
+    for export in module.export_section().unwrap().entries() {
+        match export.internal() {
+            &Internal::Global(idx) => {
+                if export.field() == "_abi_buffer" { // found it
+                    let global = module.global_section().unwrap().entries().get(idx as usize).unwrap();
+                    match global.init_expr().code().first().unwrap() {
+                        Instruction::I32Const(off) => return Some(*off),
+                        _ => return None,
+                    }
+                }
+            }
+            _ => continue,
         }
     }
     None // not found

@@ -75,7 +75,7 @@ macro_rules! trace {
 }
 
 #[no_mangle]
-static mut _abi_buffer: [u8; 0xFFFF] = [1; 0xFFFF]; // FIXME
+pub(crate) static mut _abi_buffer: [u8; 0xFFFF] = [1; 0xFFFF]; // FIXME
 
 #[no_mangle]
 pub unsafe fn stop() {
