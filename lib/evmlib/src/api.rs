@@ -51,15 +51,23 @@ pub unsafe fn _evm_init(_table_offset: u32, chain_id: u64, balance: u64) {
         }
 
         ENV.call_data = match arg {
-            None => Vec::new(),
-            Some(hexbytes) => match hex::decode(hexbytes) { // FIXME
-                Err(err) => panic!("{}", err),
-                Ok(bytes) => bytes,
-            },
+            None => Vec::new(), // no call data given
+            Some(input) => {
+                if input.starts_with("0x") {
+                    match hex::decode(&input[2..]) {
+                        Err(err) => panic!("{}", err),
+                        Ok(bytes) => bytes,
+                    }
+                } else if input.starts_with("{") || input.starts_with("[") {
+                    input.into_bytes() // JSON
+                } else {
+                    panic!("expected JSON or hexadecimal input, but got: {}", input);
+                }
+            }
         };
         EVM.call_value = match args.next() {
             None => ZERO,
-            Some(s) => Word::from(s.parse::<u32>().unwrap_or(0)),
+            Some(s) => Word::from(s.parse::<u64>().unwrap_or(0)), // TODO: support decimal point as well
         };
         //eprintln!("_evm_init: call_data={:?} call_value={:?}", ENV.call_data, EVM.call_value);
     }
@@ -77,8 +85,12 @@ pub unsafe fn _evm_call(
     param_types_len: usize,
 ) {
     let raw_call_data = ENV.call_data();
-    let param_names_ptr: *mut u8 = _abi_buffer.as_mut_ptr().offset(param_names_off.try_into().unwrap());
-    let param_types_ptr: *mut u8 = _abi_buffer.as_mut_ptr().offset(param_types_off.try_into().unwrap());
+    let param_names_ptr: *mut u8 = _abi_buffer
+        .as_mut_ptr()
+        .offset(param_names_off.try_into().unwrap());
+    let param_types_ptr: *mut u8 = _abi_buffer
+        .as_mut_ptr()
+        .offset(param_types_off.try_into().unwrap());
     let param_names = Vec::from_raw_parts(param_names_ptr, param_names_len, param_names_len);
     let param_types = Vec::from_raw_parts(param_types_ptr, param_types_len, param_types_len);
     let call_data = if param_names.is_empty() {
@@ -86,8 +98,9 @@ pub unsafe fn _evm_call(
         call_data[0..4].copy_from_slice(&selector.to_be_bytes());
         call_data[4..].copy_from_slice(raw_call_data);
         call_data
-    }
-    else {
+    } else {
+        // TODO: support raw call data as well
+        // TODO: check that sufficient arguments were provided
         transform_json_call_data(selector, param_names, param_types, raw_call_data).unwrap()
     };
     #[cfg(all(feature = "near", not(test)))]
