@@ -12,6 +12,9 @@ use solidity_types::ethabi::{
 };
 
 #[no_mangle]
+pub static mut _abi_buffer: [u8; 0xFFFF] = [1; 0xFFFF]; // FIXME
+
+#[no_mangle]
 pub unsafe fn _evm_init(_table_offset: u32, chain_id: u64, balance: u64) {
     #[cfg(feature = "near")]
     {
@@ -49,7 +52,7 @@ pub unsafe fn _evm_init(_table_offset: u32, chain_id: u64, balance: u64) {
 
         ENV.call_data = match arg {
             None => Vec::new(),
-            Some(hexbytes) => match hex::decode(hexbytes) {
+            Some(hexbytes) => match hex::decode(hexbytes) { // FIXME
                 Err(err) => panic!("{}", err),
                 Ok(bytes) => bytes,
             },
@@ -68,14 +71,16 @@ pub unsafe fn _evm_init(_table_offset: u32, chain_id: u64, balance: u64) {
 #[no_mangle]
 pub unsafe fn _evm_call(
     selector: u32,
-    param_names_ptr: *mut u8,
-    params_names_len: usize,
-    params_types_ptr: *mut u8,
-    params_types_len: usize,
+    param_names_off: usize, // relative to _abi_buffer
+    param_names_len: usize,
+    param_types_off: usize, // relative to _abi_buffer
+    param_types_len: usize,
 ) {
     let json_call_data = ENV.call_data();
-    let param_names = Vec::from_raw_parts(param_names_ptr, params_names_len, params_names_len);
-    let param_types = Vec::from_raw_parts(params_types_ptr, params_types_len, params_types_len);
+    let param_names_ptr: *mut u8 = _abi_buffer.as_mut_ptr().offset(param_names_off.try_into().unwrap());
+    let param_types_ptr: *mut u8 = _abi_buffer.as_mut_ptr().offset(param_types_off.try_into().unwrap());
+    let param_names = Vec::from_raw_parts(param_names_ptr, param_names_len, param_names_len);
+    let param_types = Vec::from_raw_parts(param_types_ptr, param_types_len, param_types_len);
     let call_data =
         transform_json_call_data(selector, param_names, param_types, json_call_data).unwrap();
     #[cfg(all(feature = "near", not(test)))]
