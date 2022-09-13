@@ -75,6 +75,9 @@ macro_rules! trace {
 }
 
 #[no_mangle]
+pub(crate) static mut _abi_buffer: [u8; 0xFFFF] = [1; 0xFFFF]; // FIXME
+
+#[no_mangle]
 pub unsafe fn stop() {
     trace!("STOP");
     EVM.burn_gas(0);

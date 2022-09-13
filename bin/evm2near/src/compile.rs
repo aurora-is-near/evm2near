@@ -3,6 +3,7 @@
 use std::{
     collections::{BTreeSet, HashMap},
     convert::TryInto,
+    io::Write,
 };
 
 use evm_rs::{parse_opcode, Opcode, Program};
@@ -36,7 +37,7 @@ pub fn compile(
     compiler.emit_evm_start();
     compiler.compile_cfg(&input_cfg, input_program);
     compiler.emit_abi_execute();
-    compiler.emit_abi_methods(input_abi);
+    let abi_data = compiler.emit_abi_methods(input_abi).unwrap();
 
     let mut output_module = compiler.builder.build();
 
@@ -58,14 +59,36 @@ pub fn compile(
         ));
     }
 
+    // Overwrite the `_abi_buffer` data segment in evmlib with the ABI data
+    // (function parameter names and types) for all public Solidity contract
+    // methods:
+    let abi_buffer_ptr: usize = compiler.abi_buffer_off.try_into().unwrap();
+    for data in output_module.data_section_mut().unwrap().entries_mut() {
+        let min_ptr: usize = match data.offset().as_ref().unwrap().code() {
+            [Instruction::I32Const(off), Instruction::End] => (*off).try_into().unwrap(),
+            _ => continue, // skip any nonstandard data segments
+        };
+        let max_ptr: usize = min_ptr + data.value().len();
+        if abi_buffer_ptr >= min_ptr && abi_buffer_ptr < max_ptr {
+            let min_off = abi_buffer_ptr - min_ptr;
+            let max_off = min_off + abi_data.len();
+            assert!(min_ptr + max_off <= max_ptr);
+            data.value_mut()[min_off..max_off].copy_from_slice(&abi_data);
+            break; // found it
+        }
+    }
+
     output_module
 }
 
+type DataOffset = i32;
 type FunctionIndex = u32;
 type TypeIndex = u32;
 
 struct Compiler {
     config: CompilerConfig,
+    abi_buffer_off: DataOffset,
+    abi_buffer_len: usize,
     op_table: HashMap<Opcode, FunctionIndex>,
     jump_table: HashMap<Label, FunctionIndex>,
     function_type: TypeIndex,
@@ -84,6 +107,8 @@ impl Compiler {
     fn new(runtime_library: Module, config: CompilerConfig) -> Compiler {
         Compiler {
             config,
+            abi_buffer_off: find_abi_buffer(&runtime_library).unwrap(),
+            abi_buffer_len: 0xFFFF,  // TODO: ensure this matches _abi_buffer.len() in evmlib
             op_table: make_op_table(&runtime_library),
             jump_table: HashMap::new(),
             function_type: find_runtime_function_type(&runtime_library).unwrap(),
@@ -135,22 +160,51 @@ impl Compiler {
     /// Synthesizes public wrapper methods for each function in the Solidity
     /// contract's ABI, enabling users to directly call a contract method
     /// without going through the low-level `execute` EVM dispatcher.
-    pub fn emit_abi_methods(self: &mut Compiler, input_abi: Option<Functions>) {
+    pub fn emit_abi_methods(
+        self: &mut Compiler,
+        input_abi: Option<Functions>,
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         assert_ne!(self.evm_start_function, 0);
         assert_ne!(self.evm_call_function, 0);
         assert_ne!(self.evm_exec_function, 0); // filled in during compile_cfg()
 
+        let mut data = Vec::with_capacity(self.abi_buffer_len);
         for func in input_abi.unwrap_or_default() {
+            let names_off = data.len();
+            for (i, input) in func.inputs.iter().enumerate() {
+                if i > 0 {
+                    write!(data, ",")?;
+                }
+                write!(data, "{}", input.name)?;
+            }
+            let names_len = data.len() - names_off;
+            data.push(0); // NUL
+
+            let types_off = data.len();
+            for (i, input) in func.inputs.iter().enumerate() {
+                if i > 0 {
+                    write!(data, ",")?;
+                }
+                write!(data, "{}", input.r#type)?;
+            }
+            let types_len = data.len() - types_off;
+            data.push(0); // NUL
+
             _ = self.emit_function(
                 Some(func.name.clone()),
                 vec![
                     Instruction::Call(self.evm_start_function),
                     Instruction::I32Const(func.selector() as i32),
+                    Instruction::I32Const(names_off.try_into().unwrap()), // params_names_ptr
+                    Instruction::I32Const(names_len.try_into().unwrap()), // params_names_len
+                    Instruction::I32Const(types_off.try_into().unwrap()), // params_types_ptr
+                    Instruction::I32Const(types_len.try_into().unwrap()), // params_types_len
                     Instruction::Call(self.evm_call_function),
                     Instruction::Call(self.evm_exec_function),
                 ],
             );
         }
+        Ok(data)
     }
 
     /// Compiles the program's control-flow graph.
@@ -410,10 +464,10 @@ fn make_op_table(module: &Module) -> HashMap<Opcode, FunctionIndex> {
     for export in module.export_section().unwrap().entries() {
         match export.internal() {
             &Internal::Function(op_idx) => match export.field() {
-                "_evm_start" | "_evm_init" | "_evm_call" | "_evm_exec" | "_evm_pop_u32"
-                | "execute" => {}
+                "_abi_buffer" | "_evm_start" | "_evm_init" | "_evm_call" | "_evm_exec"
+                | "_evm_pop_u32" | "execute" => {}
                 export_sym => match parse_opcode(&export_sym.to_ascii_uppercase()) {
-                    None => unreachable!(),
+                    None => unreachable!(), // TODO
                     Some(op) => _ = result.insert(op, op_idx),
                 },
             },
@@ -445,6 +499,24 @@ fn find_runtime_function_type(module: &Module) -> Option<TypeIndex> {
                     return Some(type_id.try_into().unwrap());
                 }
             }
+        }
+    }
+    None // not found
+}
+
+fn find_abi_buffer(module: &Module) -> Option<DataOffset> {
+    for export in module.export_section().unwrap().entries() {
+        match export.internal() {
+            &Internal::Global(idx) => {
+                if export.field() == "_abi_buffer" { // found it
+                    let global = module.global_section().unwrap().entries().get(idx as usize).unwrap();
+                    match global.init_expr().code().first().unwrap() {
+                        Instruction::I32Const(off) => return Some(*off),
+                        _ => return None,
+                    }
+                }
+            }
+            _ => continue,
         }
     }
     None // not found
