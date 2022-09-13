@@ -137,7 +137,7 @@ impl Memory {
     pub fn store_word(&mut self, offset: usize, value: Word) {
         let end_offset = offset + WORD_SIZE;
         self.resize(end_offset);
-        self.bytes[offset..end_offset].copy_from_slice(&value.to_le_bytes());
+        self.bytes[offset..end_offset].copy_from_slice(&value.to_be_bytes());
     }
 
     pub fn store_slice(&mut self, offset: usize, data: &[u8]) {
@@ -175,7 +175,7 @@ impl Memory {
             return ZERO;
         }
         let end_offset = offset + mem::size_of::<Word>();
-        Word::from_le_bytes(to_array(&self.bytes[offset..end_offset]))
+        Word::from_be_bytes(to_array(&self.bytes[offset..end_offset]))
     }
 
     pub fn slice(&self, offset: usize, size: usize) -> &[u8] {

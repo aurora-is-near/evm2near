@@ -521,7 +521,7 @@ mod tests {
         unsafe {
             EVM.reset();
             push1(42);
-            push1(0);
+            push1(31);
             mstore8();
             assert_eq!(EVM.memory.load_word(0), 42);
         }
