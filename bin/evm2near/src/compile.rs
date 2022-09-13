@@ -3,6 +3,7 @@
 use std::{
     collections::{BTreeSet, HashMap},
     convert::TryInto,
+    io::Write,
 };
 
 use evm_rs::{parse_opcode, Opcode, Program};
@@ -36,7 +37,7 @@ pub fn compile(
     compiler.emit_evm_start();
     compiler.compile_cfg(&input_cfg, input_program);
     compiler.emit_abi_execute();
-    compiler.emit_abi_methods(input_abi);
+    let abi_data = compiler.emit_abi_methods(input_abi).unwrap();
 
     let mut output_module = compiler.builder.build();
 
@@ -58,14 +59,29 @@ pub fn compile(
         ));
     }
 
+    // Overwrite the `_abi_buffer` data segment in evmlib with the ABI data
+    // (function parameter names and types) for all public Solidity contract
+    // methods:
+    for data in output_module.data_section_mut().unwrap().entries_mut() {
+        match data.offset().as_ref().unwrap().code() {
+            [Instruction::I32Const(offset), Instruction::End]
+                if *offset == compiler.abi_buffer_off => {} // found it
+            _ => continue, // skip other data segments
+        }
+        data.value_mut()[0..abi_data.len()].copy_from_slice(&abi_data);
+    }
+
     output_module
 }
 
+type DataOffset = i32;
 type FunctionIndex = u32;
 type TypeIndex = u32;
 
 struct Compiler {
     config: CompilerConfig,
+    abi_buffer_off: DataOffset,
+    abi_buffer_len: usize,
     op_table: HashMap<Opcode, FunctionIndex>,
     jump_table: HashMap<Label, FunctionIndex>,
     function_type: TypeIndex,
@@ -84,6 +100,8 @@ impl Compiler {
     fn new(runtime_library: Module, config: CompilerConfig) -> Compiler {
         Compiler {
             config,
+            abi_buffer_off: 1075152, // FIXME: look up the _abi_buffer global
+            abi_buffer_len: 0xFFFF,  // TODO: ensure this matches _abi_buffer.len() in evmlib
             op_table: make_op_table(&runtime_library),
             jump_table: HashMap::new(),
             function_type: find_runtime_function_type(&runtime_library).unwrap(),
@@ -135,22 +153,51 @@ impl Compiler {
     /// Synthesizes public wrapper methods for each function in the Solidity
     /// contract's ABI, enabling users to directly call a contract method
     /// without going through the low-level `execute` EVM dispatcher.
-    pub fn emit_abi_methods(self: &mut Compiler, input_abi: Option<Functions>) {
+    pub fn emit_abi_methods(
+        self: &mut Compiler,
+        input_abi: Option<Functions>,
+    ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         assert_ne!(self.evm_start_function, 0);
         assert_ne!(self.evm_call_function, 0);
         assert_ne!(self.evm_exec_function, 0); // filled in during compile_cfg()
 
+        let mut data = Vec::with_capacity(self.abi_buffer_len);
         for func in input_abi.unwrap_or_default() {
+            let names_off = data.len();
+            for (i, input) in func.inputs.iter().enumerate() {
+                if i > 0 {
+                    write!(data, ",")?;
+                }
+                write!(data, "{}", input.name)?;
+            }
+            let names_len = data.len() - names_off;
+            data.push(0); // NUL
+
+            let types_off = data.len();
+            for (i, input) in func.inputs.iter().enumerate() {
+                if i > 0 {
+                    write!(data, ",")?;
+                }
+                write!(data, "{}", input.r#type)?;
+            }
+            let types_len = data.len() - types_off;
+            data.push(0); // NUL
+
             _ = self.emit_function(
                 Some(func.name.clone()),
                 vec![
                     Instruction::Call(self.evm_start_function),
                     Instruction::I32Const(func.selector() as i32),
+                    Instruction::I32Const(names_off.try_into().unwrap()), // params_names_ptr
+                    Instruction::I32Const(names_len.try_into().unwrap()), // params_names_len
+                    Instruction::I32Const(types_off.try_into().unwrap()), // params_types_ptr
+                    Instruction::I32Const(types_len.try_into().unwrap()), // params_types_len
                     Instruction::Call(self.evm_call_function),
                     Instruction::Call(self.evm_exec_function),
                 ],
             );
         }
+        Ok(data)
     }
 
     /// Compiles the program's control-flow graph.
@@ -410,10 +457,10 @@ fn make_op_table(module: &Module) -> HashMap<Opcode, FunctionIndex> {
     for export in module.export_section().unwrap().entries() {
         match export.internal() {
             &Internal::Function(op_idx) => match export.field() {
-                "_evm_start" | "_evm_init" | "_evm_call" | "_evm_exec" | "_evm_pop_u32"
-                | "execute" => {}
+                "_abi_buffer" | "_evm_start" | "_evm_init" | "_evm_call" | "_evm_exec"
+                | "_evm_pop_u32" | "execute" => {}
                 export_sym => match parse_opcode(&export_sym.to_ascii_uppercase()) {
-                    None => unreachable!(),
+                    None => unreachable!(), // TODO
                     Some(op) => _ = result.insert(op, op_idx),
                 },
             },
