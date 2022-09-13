@@ -18,6 +18,7 @@ parity-wasm = "0.45.0"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.85"
 sha3 = "0.10"
+solidity-types = { path = "../../lib/solidity-types" }
 wild = "2.1.0"
 
 [[bin]]

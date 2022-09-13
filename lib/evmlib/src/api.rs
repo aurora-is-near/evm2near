@@ -6,7 +6,10 @@ use crate::{
     ops::{ENV, EVM},
     state::{Word, ZERO},
 };
-use ethabi::ethereum_types::{H160, U256};
+use solidity_types::ethabi::{
+    self,
+    ethereum_types::{H160, U256},
+};
 
 #[no_mangle]
 pub unsafe fn _evm_init(_table_offset: u32, chain_id: u64, balance: u64) {
@@ -114,8 +117,9 @@ fn transform_json_call_data(
         .ok_or(TransformCallDataError::NotJsonObject)?;
     let mut abi_tokens: Vec<ethabi::Token> = Vec::with_capacity(param_names.len());
     for (name, typ) in param_names.split(',').zip(param_types.split(',')) {
-        let abi_type = ethabi::param_type::Reader::read(typ)
-            .map_err(|_| TransformCallDataError::InvalidAbiType)?;
+        let abi_type = solidity_types::parse_type(typ)
+            .and_then(|t| t.as_param_type())
+            .ok_or(TransformCallDataError::InvalidAbiType)?;
         let param_value = json_object
             .get(name)
             .ok_or(TransformCallDataError::MissingParameter)?;

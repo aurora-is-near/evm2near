@@ -1,0 +1,13 @@
+[package]
+name = "solidity-types"
+version = "0.1.0"
+edition = "2021"
+description = "Simple implementation of a data structure for https://docs.soliditylang.org/en/v0.8.16/types.html"
+publish = false
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+ethabi = { version = "17", default-features = false }
+serde = { version = "1", features = ["derive"] }

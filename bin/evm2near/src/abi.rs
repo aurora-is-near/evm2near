@@ -2,6 +2,7 @@
 
 use serde::Deserialize;
 use sha3::{Digest, Keccak256};
+use solidity_types::ValueType;
 use std::fmt;
 
 #[derive(Deserialize, Debug, PartialEq, Eq, Default)]
@@ -13,46 +14,6 @@ impl IntoIterator for Functions {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
-    }
-}
-
-/// See: https://docs.soliditylang.org/en/v0.8.16/types.html
-#[derive(Deserialize, Debug, PartialEq, Eq)]
-#[serde(rename_all(deserialize = "camelCase"))]
-pub enum ValueType {
-    Address,
-    AddressPayable,
-    Bytes,
-    Bytes32,
-    Bool,
-    Function,
-    Int8,
-    Int32,
-    Int256,
-    String,
-    Uint8,
-    Uint32,
-    Uint256,
-}
-
-impl fmt::Display for ValueType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use ValueType::*;
-        match self {
-            Address => write!(f, "address"),
-            AddressPayable => write!(f, "address payable"),
-            Bytes => write!(f, "bytes"),
-            Bytes32 => write!(f, "bytes32"),
-            Bool => write!(f, "bool"),
-            Function => write!(f, "function"),
-            Int8 => write!(f, "int8"),
-            Int32 => write!(f, "int32"),
-            Int256 => write!(f, "int256"),
-            String => write!(f, "string"),
-            Uint8 => write!(f, "uint8"),
-            Uint32 => write!(f, "uint32"),
-            Uint256 => write!(f, "uint256"),
-        }
     }
 }
 
