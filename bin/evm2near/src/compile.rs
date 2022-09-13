@@ -108,7 +108,7 @@ impl Compiler {
         Compiler {
             config,
             abi_buffer_off: find_abi_buffer(&runtime_library).unwrap(),
-            abi_buffer_len: 0xFFFF,  // TODO: ensure this matches _abi_buffer.len() in evmlib
+            abi_buffer_len: 0xFFFF, // TODO: ensure this matches _abi_buffer.len() in evmlib
             op_table: make_op_table(&runtime_library),
             jump_table: HashMap::new(),
             function_type: find_runtime_function_type(&runtime_library).unwrap(),
@@ -221,19 +221,23 @@ impl Compiler {
             let mut block_wasm = vec![];
             let mut emit = |pc: usize, evm: Option<&Opcode>, wasm: Vec<Instruction>| {
                 if wasm.is_empty() {
-                    eprintln!(
-                        "{:04x} {:<73}",
-                        pc,
-                        evm.map(|op| op.to_string()).unwrap_or_default()
-                    ); // DEBUG
+                    if self.config.debug {
+                        eprintln!(
+                            "{:04x} {:<73}",
+                            pc,
+                            evm.map(|op| op.to_string()).unwrap_or_default()
+                        ); // DEBUG
+                    }
                 } else {
                     for wasm_op in wasm {
-                        eprintln!(
-                            "{:04x} {:<73} {}",
-                            pc,
-                            evm.map(|op| op.to_string()).unwrap_or_default(),
-                            wasm_op
-                        ); // DEBUG
+                        if self.config.debug {
+                            eprintln!(
+                                "{:04x} {:<73} {}",
+                                pc,
+                                evm.map(|op| op.to_string()).unwrap_or_default(),
+                                wasm_op
+                            ); // DEBUG
+                        }
                         block_wasm.push(wasm_op);
                     }
                 }
@@ -508,8 +512,14 @@ fn find_abi_buffer(module: &Module) -> Option<DataOffset> {
     for export in module.export_section().unwrap().entries() {
         match export.internal() {
             &Internal::Global(idx) => {
-                if export.field() == "_abi_buffer" { // found it
-                    let global = module.global_section().unwrap().entries().get(idx as usize).unwrap();
+                if export.field() == "_abi_buffer" {
+                    // found it
+                    let global = module
+                        .global_section()
+                        .unwrap()
+                        .entries()
+                        .get(idx as usize)
+                        .unwrap();
                     match global.init_expr().code().first().unwrap() {
                         Instruction::I32Const(off) => return Some(*off),
                         _ => return None,

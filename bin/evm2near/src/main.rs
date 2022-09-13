@@ -188,6 +188,7 @@ fn main() -> impl std::process::Termination {
         input_abi,
         runtime_library,
         CompilerConfig {
+            debug: options.debug,
             gas_accounting: !options.no_gas_accounting,
             program_counter: !options.no_program_counter,
             chain_id: match options.chain_id.as_str() {
