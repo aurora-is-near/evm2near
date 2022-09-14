@@ -85,14 +85,19 @@ pub unsafe fn _evm_call(
     param_types_len: usize,
 ) {
     let raw_call_data = ENV.call_data();
+
     let param_names_ptr: *mut u8 = _abi_buffer
         .as_mut_ptr()
         .offset(param_names_off.try_into().unwrap());
+    let mut param_names = vec![0u8; param_names_len];
+    param_names_ptr.copy_to(param_names.as_mut_ptr(), param_names_len);
+
     let param_types_ptr: *mut u8 = _abi_buffer
         .as_mut_ptr()
         .offset(param_types_off.try_into().unwrap());
-    let param_names = Vec::from_raw_parts(param_names_ptr, param_names_len, param_names_len);
-    let param_types = Vec::from_raw_parts(param_types_ptr, param_types_len, param_types_len);
+    let mut param_types = vec![0u8; param_types_len];
+    param_types_ptr.copy_to(param_types.as_mut_ptr(), param_types_len);
+
     let call_data = if param_names.is_empty() {
         let mut call_data: Vec<u8> = vec![0; 4 + raw_call_data.len()];
         call_data[0..4].copy_from_slice(&selector.to_be_bytes());
@@ -103,6 +108,7 @@ pub unsafe fn _evm_call(
         // TODO: check that sufficient arguments were provided
         transform_json_call_data(selector, param_names, param_types, raw_call_data).unwrap()
     };
+
     #[cfg(all(feature = "near", not(test)))]
     {
         ENV.call_data = Some(call_data);
