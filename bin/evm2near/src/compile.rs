@@ -97,6 +97,7 @@ struct Compiler {
     evm_call_function: FunctionIndex,  // _evm_call
     evm_exec_function: FunctionIndex,  // _evm_exec
     evm_pop_function: FunctionIndex,   // _evm_pop_u32
+    evm_pc_function: FunctionIndex,    // _evm_set_pc
     jumpi_function: FunctionIndex,
     function_import_count: usize,
     builder: ModuleBuilder,
@@ -117,6 +118,7 @@ impl Compiler {
             evm_call_function: find_runtime_function(&runtime_library, "_evm_call").unwrap(),
             evm_exec_function: 0, // filled in during compile_cfg()
             evm_pop_function: find_runtime_function(&runtime_library, "_evm_pop_u32").unwrap(),
+            evm_pc_function: find_runtime_function(&runtime_library, "_evm_set_pc").unwrap(),
             jumpi_function: find_runtime_function(&runtime_library, "jumpi").unwrap(),
             function_import_count: runtime_library.import_count(ImportCountType::Function),
             builder: parity_wasm::builder::from_module(runtime_library),
@@ -248,6 +250,16 @@ impl Compiler {
             while block_pos < block_code.len() {
                 use Opcode::*;
                 let code = &block_code[block_pos..];
+                if self.config.program_counter {
+                    emit(
+                        block_pc,
+                        None,
+                        vec![
+                            Instruction::I32Const(block_pc.try_into().unwrap()),
+                            Instruction::Call(self.evm_pc_function),
+                        ],
+                    );
+                }
                 match code {
                     [op @ JUMPDEST, ..] => {
                         emit(block_pc, Some(op), vec![]);
@@ -469,7 +481,7 @@ fn make_op_table(module: &Module) -> HashMap<Opcode, FunctionIndex> {
         match export.internal() {
             &Internal::Function(op_idx) => match export.field() {
                 "_abi_buffer" | "_evm_start" | "_evm_init" | "_evm_call" | "_evm_exec"
-                | "_evm_pop_u32" | "execute" => {}
+                | "_evm_pop_u32" | "_evm_set_pc" | "execute" => {}
                 export_sym => match parse_opcode(&export_sym.to_ascii_uppercase()) {
                     None => unreachable!(), // TODO
                     Some(op) => _ = result.insert(op, op_idx),

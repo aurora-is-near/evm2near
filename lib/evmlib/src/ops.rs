@@ -20,8 +20,11 @@ const KECCAK_EMPTY: Word = Word::from_words(
 
 pub(crate) static mut EVM: Machine = Machine {
     trace_level: 0,
-    gas_limit: 10_000_000,
+    #[cfg(feature = "pc")]
+    program_counter: 0,
+    #[cfg(feature = "gas")]
     gas_used: 0,
+    gas_limit: 10_000_000,
     gas_price: 0, // gas is ultimately paid in $NEAR
     stack: Stack {
         depth: 0,
@@ -712,7 +715,7 @@ pub unsafe fn pc() {
     trace!("PC");
     EVM.burn_gas(2);
     #[cfg(feature = "pc")]
-    EVM.stack.push(ZERO); // TODO: instrument generated code in the compiler
+    EVM.stack.push(Word::from(EVM.program_counter));
     #[cfg(not(feature = "pc"))]
     EVM.stack.push(ZERO) // --fno-program-counter
 }

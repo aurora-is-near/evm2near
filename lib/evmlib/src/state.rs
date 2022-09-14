@@ -23,6 +23,9 @@ pub(crate) struct Memory {
 pub(crate) struct Machine {
     #[allow(dead_code)]
     pub(crate) trace_level: u8,
+    #[cfg(feature = "pc")]
+    pub(crate) program_counter: u32,
+    #[cfg(feature = "gas")]
     pub(crate) gas_used: u64,
     pub(crate) gas_limit: u64,
     pub(crate) gas_price: u64,
