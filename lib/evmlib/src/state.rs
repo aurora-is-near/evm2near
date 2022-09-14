@@ -8,7 +8,7 @@ pub(crate) type Word = u256;
 pub(crate) const ZERO: Word = u256::ZERO;
 pub(crate) const ONE: Word = u256::ONE;
 
-pub(crate) const MAX_STACK_DEPTH: usize = 16;
+pub(crate) const MAX_STACK_DEPTH: usize = 32;
 pub(crate) const WORD_SIZE: usize = mem::size_of::<Word>();
 
 pub(crate) struct Stack {
@@ -51,7 +51,7 @@ impl Stack {
 
     pub fn push(&mut self, word: Word) {
         if self.depth == MAX_STACK_DEPTH {
-            panic!("stack overflow");
+            panic!("stack overflow"); // FIXME
         }
         self.slots[self.depth] = word;
         self.depth += 1;
@@ -59,7 +59,7 @@ impl Stack {
 
     pub fn pop(&mut self) -> Word {
         if self.depth == 0 {
-            panic!("stack underflow");
+            panic!("stack underflow"); // FIXME
         }
         self.depth -= 1;
         let result = self.slots[self.depth];
@@ -81,21 +81,21 @@ impl Stack {
 
     pub fn peek(&self) -> Word {
         if self.depth == 0 {
-            panic!("stack underflow");
+            panic!("stack underflow"); // FIXME
         }
         self.slots[self.depth - 1]
     }
 
     pub fn peek_n(&self, n: usize) -> Word {
         if n >= self.depth {
-            panic!("stack underflow");
+            panic!("stack underflow"); // FIXME
         }
         self.slots[self.depth - 1 - n]
     }
 
     pub fn swap(&mut self, n: usize) {
         if n >= self.depth {
-            panic!("stack underflow");
+            panic!("stack underflow"); // FIXME
         }
         let tos = self.depth - 1;
         self.slots.swap(tos, tos - n)

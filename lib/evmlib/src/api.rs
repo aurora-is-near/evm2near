@@ -55,13 +55,13 @@ pub unsafe fn _evm_init(_table_offset: u32, chain_id: u64, balance: u64) {
             Some(input) => {
                 if input.starts_with("0x") {
                     match hex::decode(&input[2..]) {
-                        Err(err) => panic!("{}", err),
+                        Err(err) => panic!("{}", err), // FIXME
                         Ok(bytes) => bytes,
                     }
                 } else if input.starts_with("{") || input.starts_with("[") {
                     input.into_bytes() // JSON
                 } else {
-                    panic!("expected JSON or hexadecimal input, but got: {}", input);
+                    panic!("expected JSON or hexadecimal input, but got: {}", input); // FIXME
                 }
             }
         };
