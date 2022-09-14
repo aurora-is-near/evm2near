@@ -19,6 +19,7 @@ const KECCAK_EMPTY: Word = Word::from_words(
 );
 
 pub(crate) static mut EVM: Machine = Machine {
+    trace_level: 0,
     gas_limit: 10_000_000,
     gas_used: 0,
     gas_price: 0, // gas is ultimately paid in $NEAR
@@ -66,9 +67,11 @@ pub(crate) type Hasher = crate::hash_provider::Native;
 macro_rules! trace {
     ($($t:tt)*) => {{
         #[cfg(target_os = "wasi")]
-        {
-            eprint!("stack ");
-            EVM.stack.dump();
+        if EVM.trace_level > 0 {
+            if EVM.trace_level > 1 {
+                eprint!("stack ");
+                EVM.stack.dump();
+            }
             eprintln!($($t)*);
         }
     }};

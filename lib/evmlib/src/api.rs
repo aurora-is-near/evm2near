@@ -65,6 +65,9 @@ pub unsafe fn _evm_init(_table_offset: u32, chain_id: u64, balance: u64) {
                 }
             }
         };
+
+        EVM.trace_level = 0; // TODO: look for --trace in args
+
         EVM.call_value = match args.next() {
             None => ZERO,
             Some(s) => Word::from(s.parse::<u64>().unwrap_or(0)), // TODO: support decimal point as well
