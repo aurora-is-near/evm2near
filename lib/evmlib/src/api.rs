@@ -61,7 +61,8 @@ pub unsafe fn _evm_init(_table_offset: u32, chain_id: u64, balance: u64) {
                 } else if input.starts_with("{") || input.starts_with("[") {
                     input.into_bytes() // JSON
                 } else {
-                    panic!("expected JSON or hexadecimal input, but got: {}", input); // FIXME
+                    panic!("expected JSON or hexadecimal input, but got: {}", input);
+                    // FIXME
                 }
             }
         };
@@ -157,9 +158,8 @@ fn transform_json_call_data(
         .ok_or(TransformCallDataError::NotJsonObject)?;
     let mut abi_tokens: Vec<ethabi::Token> = Vec::with_capacity(param_names.len());
     for (name, typ) in param_names.split(',').zip(param_types.split(',')) {
-        let abi_type = solidity_types::parse_type(typ)
-            .and_then(|t| t.as_param_type())
-            .ok_or(TransformCallDataError::InvalidAbiType)?;
+        let abi_type = solidity_types::parse_param_type(typ)
+            .map_err(|_| TransformCallDataError::InvalidAbiType)?;
         let param_value = json_object
             .get(name)
             .ok_or(TransformCallDataError::MissingParameter)?;
