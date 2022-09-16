@@ -192,7 +192,7 @@ fn parse_json_value_to_abi_type(
             Ok(ethabi::Token::Bytes(bytes))
         }
         ethabi::ParamType::Int(_) => {
-            let number = parse_json_value_to_u256(param_value)?;
+            let number = parse_json_value_to_i256(param_value)?;
             Ok(ethabi::Token::Int(number))
         }
         ethabi::ParamType::Uint(_) => {
@@ -269,6 +269,32 @@ fn parse_json_value_to_u256(value: &serde_json::Value) -> Result<U256, Transform
         serde_json::Value::Number(num) => num
             .as_u64()
             .map(U256::from)
+            .ok_or(TransformCallDataError::InvalidAbiValue),
+        _ => Err(TransformCallDataError::InvalidAbiValue),
+    }
+}
+
+fn parse_json_value_to_i256(value: &serde_json::Value) -> Result<U256, TransformCallDataError> {
+    match value {
+        serde_json::Value::String(s) => {
+            let parsed = if s.starts_with("0x") {
+                ethabi::ethereum_types::U256::from_str_radix(s, 16)
+                    .map_err(|_| TransformCallDataError::InvalidAbiValue)?
+            } else {
+                let number = ethnum::i256::from_str_radix(s, 10)
+                    .map_err(|_| TransformCallDataError::InvalidAbiValue)?;
+                let bytes = number.to_be_bytes();
+                U256::from_big_endian(&bytes)
+            };
+            Ok(parsed)
+        }
+        serde_json::Value::Number(num) => num
+            .as_i64()
+            .map(|i| {
+                let number = ethnum::i256::from(i);
+                let bytes = number.to_be_bytes();
+                U256::from_big_endian(&bytes)
+            })
             .ok_or(TransformCallDataError::InvalidAbiValue),
         _ => Err(TransformCallDataError::InvalidAbiValue),
     }
