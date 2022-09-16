@@ -11,4 +11,3 @@ crate-type = ["lib"]
 [dependencies]
 ethabi = { version = "17", default-features = false }
 nom = "7.1.1"
-serde = { version = "1", features = ["derive"] }

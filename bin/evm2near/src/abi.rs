@@ -2,7 +2,6 @@
 
 use serde::Deserialize;
 use sha3::{Digest, Keccak256};
-use solidity_types::ValueType;
 use std::fmt;
 
 #[derive(Deserialize, Debug, PartialEq, Eq, Default)]
@@ -43,8 +42,11 @@ impl fmt::Display for StateMutability {
 #[serde(rename_all(deserialize = "camelCase"))]
 pub struct Parameter {
     pub name: String,
-    pub r#type: ValueType,
-    pub internal_type: ValueType,
+    /// Note: this type must be an ABI type, as opposed to a Solidity type.
+    /// See https://docs.soliditylang.org/en/develop/abi-spec.html#mapping-solidity-to-abi-types
+    /// for the distinction.
+    pub r#type: String,
+    pub internal_type: Option<String>,
 }
 
 impl fmt::Display for Parameter {
@@ -128,19 +130,19 @@ mod tests {
             inputs: vec![
                 Parameter {
                     name: "a".to_string(),
-                    r#type: ValueType::Int256,
-                    internal_type: ValueType::Int256,
+                    r#type: "int256".to_string(),
+                    internal_type: Some("int256".to_string()),
                 },
                 Parameter {
                     name: "b".to_string(),
-                    r#type: ValueType::Int256,
-                    internal_type: ValueType::Int256,
+                    r#type: "int256".to_string(),
+                    internal_type: Some("int256".to_string()),
                 },
             ],
             outputs: vec![Parameter {
                 name: "".to_string(),
-                r#type: ValueType::Int256,
-                internal_type: ValueType::Int256,
+                r#type: "int256".to_string(),
+                internal_type: Some("int256".to_string()),
             }],
             state_mutability: StateMutability::Pure,
             r#type: "function".to_string(),

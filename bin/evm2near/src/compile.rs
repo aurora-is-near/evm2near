@@ -187,6 +187,9 @@ impl Compiler {
                 if i > 0 {
                     write!(data, ",")?;
                 }
+                if solidity_types::parse_param_type(&input.r#type).is_err() {
+                    panic!("Unknown Solidity type: {}", input.r#type);
+                }
                 write!(data, "{}", input.r#type)?;
             }
             let types_len = data.len() - types_off;
