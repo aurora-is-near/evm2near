@@ -16,7 +16,7 @@ near = []
 crate-type = ["cdylib"]
 
 [dependencies]
-solidity-types = { path = "../solidity-types" }
+abi-types = { path = "../abi-types" }
 ethnum = "1.2.2"
 hex = "0.4.3"
 serde_json = "1"

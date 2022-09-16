@@ -1,5 +1,5 @@
 [package]
-name = "solidity-types"
+name = "abi-types"
 version = "0.1.0"
 edition = "2021"
 description = "Simple implementation of a data structure for https://docs.soliditylang.org/en/v0.8.16/types.html"

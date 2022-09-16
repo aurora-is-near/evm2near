@@ -187,8 +187,8 @@ impl Compiler {
                 if i > 0 {
                     write!(data, ",")?;
                 }
-                if solidity_types::parse_param_type(&input.r#type).is_err() {
-                    panic!("Unknown Solidity type: {}", input.r#type);
+                if abi_types::parse_param_type(&input.r#type).is_err() {
+                    panic!("Unknown ABI type: {}", input.r#type);
                 }
                 write!(data, "{}", input.r#type)?;
             }

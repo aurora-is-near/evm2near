@@ -2,7 +2,7 @@
 members = [
   "bin/evm2near",
   "lib/evmlib",
-  "lib/solidity-types",
+  "lib/abi-types",
 ]
 
 # Enable basic optimizations only, to aid debugging:
