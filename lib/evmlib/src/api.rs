@@ -93,14 +93,12 @@ pub unsafe fn _evm_call(
     let param_names_ptr: *mut u8 = _abi_buffer
         .as_mut_ptr()
         .offset(param_names_off.try_into().unwrap());
-    let mut param_names = vec![0u8; param_names_len];
-    param_names_ptr.copy_to(param_names.as_mut_ptr(), param_names_len);
+    let param_names = std::slice::from_raw_parts(param_names_ptr, param_names_len);
 
     let param_types_ptr: *mut u8 = _abi_buffer
         .as_mut_ptr()
         .offset(param_types_off.try_into().unwrap());
-    let mut param_types = vec![0u8; param_types_len];
-    param_types_ptr.copy_to(param_types.as_mut_ptr(), param_types_len);
+    let param_types = std::slice::from_raw_parts(param_types_ptr, param_types_len);
 
     let call_data = if param_names.is_empty() {
         let mut call_data: Vec<u8> = vec![0; 4 + raw_call_data.len()];
@@ -138,14 +136,14 @@ pub unsafe fn _evm_set_pc(pc: u32) {
 /// using the given ABI (parameter names and types).
 fn transform_json_call_data(
     selector: u32,
-    param_names: Vec<u8>,
-    param_types: Vec<u8>,
+    param_names: &[u8],
+    param_types: &[u8],
     json_call_data: &[u8],
 ) -> Result<Vec<u8>, TransformCallDataError> {
     let param_names =
-        String::from_utf8(param_names).map_err(|_| TransformCallDataError::InvalidUtf8String)?;
+        std::str::from_utf8(param_names).map_err(|_| TransformCallDataError::InvalidUtf8String)?;
     let param_types =
-        String::from_utf8(param_types).map_err(|_| TransformCallDataError::InvalidUtf8String)?;
+        std::str::from_utf8(param_types).map_err(|_| TransformCallDataError::InvalidUtf8String)?;
     assert_eq!(
         param_names.split(',').count(),
         param_types.split(',').count(),
@@ -292,8 +290,8 @@ mod tests {
     fn test_transform_json_call_data() {
         let output = super::transform_json_call_data(
             0x3c4308a8,
-            b"a,b".to_vec(),
-            b"int256,int256".to_vec(),
+            b"a,b",
+            b"int256,int256",
             r#"{"a": 6, "b": 7}"#.as_bytes(),
         )
         .unwrap();
