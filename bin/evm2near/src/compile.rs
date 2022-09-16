@@ -219,16 +219,17 @@ impl Compiler {
 
         self.jump_table = self.make_jump_table(input_cfg);
 
-        for block in input_cfg.0.values() {
+        for (block_label, block) in input_cfg.0.iter() {
             let block_id = make_block_id(block);
 
             let mut block_pc: usize = 0;
             let mut block_wasm = vec![];
-            let mut emit = |pc: usize, evm: Option<&Opcode>, wasm: Vec<Instruction>| {
+            let mut emit = |block_pc: usize, evm: Option<&Opcode>, wasm: Vec<Instruction>| {
+                let pc = block_label + block_pc;
                 if wasm.is_empty() {
                     if self.config.debug {
                         eprintln!(
-                            "{:04x} {:<73}",
+                            "{:06x} {:<71}",
                             pc,
                             evm.map(|op| op.to_string()).unwrap_or_default()
                         ); // DEBUG
@@ -237,7 +238,7 @@ impl Compiler {
                     for wasm_op in wasm {
                         if self.config.debug {
                             eprintln!(
-                                "{:04x} {:<73} {}",
+                                "{:06x} {:<71} {}",
                                 pc,
                                 evm.map(|op| op.to_string()).unwrap_or_default(),
                                 wasm_op
@@ -254,11 +255,12 @@ impl Compiler {
                 use Opcode::*;
                 let code = &block_code[block_pos..];
                 if self.config.program_counter {
+                    let pc = block_label + block_pc;
                     emit(
                         block_pc,
                         None,
                         vec![
-                            Instruction::I32Const(block_pc.try_into().unwrap()),
+                            Instruction::I32Const(pc.try_into().unwrap()),
                             Instruction::Call(self.evm_pc_function),
                         ],
                     );

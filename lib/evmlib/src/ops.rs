@@ -70,11 +70,14 @@ pub(crate) type Hasher = crate::hash_provider::Native;
 macro_rules! trace {
     ($($t:tt)*) => {{
         #[cfg(target_os = "wasi")]
-        if EVM.trace_level > 0 {
-            if EVM.trace_level > 1 {
-                eprint!("stack ");
+        if EVM.trace_level >= 1 {
+            if EVM.trace_level >= 2 {
+                #[cfg(feature = "pc")]
+                eprint!("{:06x}\tstack ", EVM.program_counter);
                 EVM.stack.dump();
             }
+            #[cfg(feature = "pc")]
+            eprint!("{:06x}\t", EVM.program_counter);
             eprintln!($($t)*);
         }
     }};
