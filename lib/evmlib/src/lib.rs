@@ -5,6 +5,7 @@
 mod api;
 mod env;
 mod hash_provider;
+mod json_utils;
 mod near_runtime;
 mod ops;
 mod state;
