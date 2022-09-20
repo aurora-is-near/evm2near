@@ -740,7 +740,6 @@ pub unsafe fn gas() {
 #[no_mangle]
 pub unsafe fn jumpdest() {
     trace!("JUMPDEST");
-    unreachable!("JUMPDEST")
 }
 
 #[no_mangle]
@@ -1271,7 +1270,7 @@ fn as_usize_or_oog(word: Word) -> usize {
     if word > Word::new(usize::MAX as u128) {
         unsafe {
             ENV.exit_oog();
-            unreachable!();
+            unreachable!("OOG");
         }
     } else {
         word.as_usize()

@@ -98,7 +98,6 @@ struct Compiler {
     evm_exec_function: FunctionIndex,  // _evm_exec
     evm_pop_function: FunctionIndex,   // _evm_pop_u32
     evm_pc_function: FunctionIndex,    // _evm_set_pc
-    jumpi_function: FunctionIndex,
     function_import_count: usize,
     builder: ModuleBuilder,
 }
@@ -119,7 +118,6 @@ impl Compiler {
             evm_exec_function: 0, // filled in during compile_cfg()
             evm_pop_function: find_runtime_function(&runtime_library, "_evm_pop_u32").unwrap(),
             evm_pc_function: find_runtime_function(&runtime_library, "_evm_set_pc").unwrap(),
-            jumpi_function: find_runtime_function(&runtime_library, "jumpi").unwrap(),
             function_import_count: runtime_library.import_count(ImportCountType::Function),
             builder: parity_wasm::builder::from_module(runtime_library),
         }
@@ -267,7 +265,15 @@ impl Compiler {
                 }
                 match code {
                     [op @ JUMPDEST, ..] => {
-                        emit(block_pc, Some(op), vec![]);
+                        emit(
+                            block_pc,
+                            Some(op),
+                            if self.config.optimize_level == 0 {
+                                vec![self.compile_operator(op)]
+                            } else {
+                                vec![] // omit JUMPDEST tracing at -O1 or higher
+                            },
+                        );
                         block_pc += op.size();
                         block_pos += 1;
                     }
@@ -347,13 +353,17 @@ impl Compiler {
 
     /// Compiles a static unconditional branch (`PUSH target; JUMP`).
     fn compile_static_jump(&self, target: Label) -> Vec<Instruction> {
-        vec![self.compile_jump_to_block(target)]
+        vec![
+            self.compile_operator(&Opcode::JUMP), // TODO: omit with --fno-gas-accounting
+            self.compile_jump_to_block(target),
+        ]
     }
 
     /// Compiles a dynamic unconditional branch (`...; JUMP`).
     fn compile_dynamic_jump(&self) -> Vec<Instruction> {
         use Instruction::*;
         vec![
+            self.compile_operator(&Opcode::JUMP), // TODO: omit with --fno-gas-accounting
             Call(self.evm_pop_function),
             I32Const(TABLE_OFFSET),
             I32Add,
@@ -373,7 +383,7 @@ impl Compiler {
 
         use Instruction::*;
         vec![
-            Call(self.jumpi_function),
+            self.compile_operator(&Opcode::JUMPI),
             If(BlockType::NoResult),
             self.compile_jump_to_block(target),
             Else,
@@ -401,7 +411,7 @@ impl Compiler {
         vec![
             Call(self.evm_pop_function),
             SetLocal(0),
-            Call(self.jumpi_function),
+            self.compile_operator(&Opcode::JUMPI),
             If(BlockType::NoResult),
             GetLocal(0),
             I32Const(TABLE_OFFSET),
