@@ -249,6 +249,7 @@ impl Compiler {
 
             let block_code = block.code(&input_program.0);
             let mut block_pos = 0;
+            let mut emitted_jump = false;
             while block_pos < block_code.len() {
                 use Opcode::*;
                 let code = &block_code[block_pos..];
@@ -292,6 +293,7 @@ impl Compiler {
                         );
                         block_pc += push.size() + jump.size();
                         block_pos += 2;
+                        emitted_jump = true;
                     }
                     [push @ PUSHn(_, label, _), jump @ (JUMP | JUMPI), ..] => {
                         // Static unconditional/conditional branch:
@@ -308,12 +310,14 @@ impl Compiler {
                         );
                         block_pc += push.size() + jump.size();
                         block_pos += 2;
+                        emitted_jump = true;
                     }
                     [jump @ JUMP, ..] => {
                         // Dynamic unconditional branch:
                         emit(block_pc, Some(jump), self.compile_dynamic_jump());
                         block_pc += jump.size();
                         block_pos += 1;
+                        emitted_jump = true;
                     }
                     [jump @ JUMPI, ..] => {
                         // Dynamic conditional branch:
@@ -324,6 +328,7 @@ impl Compiler {
                         );
                         block_pc += jump.size();
                         block_pos += 1;
+                        emitted_jump = true;
                     }
                     [op, ..] => {
                         let operands = encode_operands(op);
@@ -339,6 +344,17 @@ impl Compiler {
                         }
                     }
                     [] => unreachable!("impossible match"),
+                }
+            }
+
+            if !emitted_jump && !block.succ.contains(&Edge::Exit) {
+                assert_eq!(block.succ.len(), 1);
+                match block.succ.iter().next() {
+                    Some(Edge::Static(succ)) => {
+                        // Fall through to the next block:
+                        emit(block_pc, None, vec![self.compile_jump_to_block(*succ)]);
+                    }
+                    _ => unreachable!("nonstatic successor"),
                 }
             }
 

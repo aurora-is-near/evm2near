@@ -103,7 +103,8 @@ pub fn analyze_cfg(program: &Program) -> CFGProgram {
                 block.close();
             }
             JUMPDEST => {
-                if !block.closed { // no JUMP/JUMPI ending the previous block
+                if !block.closed {
+                    // no JUMP/JUMPI ending the previous block
                     assert!(block.succ.is_empty());
                     block.add_succ(Edge::Static(pc));
                     block.close();
