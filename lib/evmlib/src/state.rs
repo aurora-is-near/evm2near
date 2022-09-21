@@ -192,7 +192,9 @@ impl Memory {
         for i in 0..self.bytes.len() / 32 {
             let p = i * 32;
             let bytes = &self.bytes[p..p + 32];
-            eprintln!("\t0x{:04x} {:?}", p, bytes);
+            if bytes.iter().any(|b| *b != 0) {
+                eprintln!("\t0x{:06x} {:?}", p, bytes);
+            }
         }
     }
 }
