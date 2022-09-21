@@ -108,18 +108,18 @@ impl Stack {
 
     #[allow(dead_code)]
     pub fn dump(&self) {
-        print!("depth={} slots=[", self.depth);
+        eprint!("{}[", self.depth);
         for (i, element) in self.slots.iter().enumerate() {
             if i == self.depth {
                 break;
             }
             if i > 0 {
-                print!(",")
+                eprint!(",")
             }
-            //print!("0x{}", hex::encode(element.to_be_bytes()));
-            print!("{}", element);
+            //eprint!("0x{}", hex::encode(element.to_be_bytes()));
+            eprint!("{}", element);
         }
-        println!("]")
+        eprintln!("]")
     }
 }
 
@@ -189,7 +189,11 @@ impl Memory {
 
     #[allow(dead_code)]
     pub fn dump(&self) {
-        println!("{:?}", self.bytes)
+        for i in 0..self.bytes.len() / 32 {
+            let p = i * 32;
+            let bytes = &self.bytes[p..p + 32];
+            eprintln!("\t0x{:04x} {:?}", p, bytes);
+        }
     }
 }
 

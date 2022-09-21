@@ -74,11 +74,18 @@ macro_rules! trace {
         if EVM.trace_level >= 1 {
             if EVM.trace_level >= 2 {
                 #[cfg(feature = "pc")]
-                eprint!("{:06x}\tstack ", EVM.program_counter);
+                eprint!("@{:04x}\t", EVM.program_counter);
+                eprint!("stack: ");
                 EVM.stack.dump();
+                if EVM.trace_level >= 3 {
+                    #[cfg(feature = "pc")]
+                    eprint!("@{:04x}\t", EVM.program_counter);
+                    eprintln!("memory:");
+                    EVM.memory.dump();
+                }
             }
             #[cfg(feature = "pc")]
-            eprint!("{:06x}\t", EVM.program_counter);
+            eprint!("@{:04x}\t", EVM.program_counter);
             eprintln!($($t)*);
         }
     }};
