@@ -92,12 +92,13 @@ struct Compiler {
     op_table: HashMap<Opcode, FunctionIndex>,
     jump_table: HashMap<Label, FunctionIndex>,
     function_type: TypeIndex,
-    evm_start_function: FunctionIndex, // _evm_start
-    evm_init_function: FunctionIndex,  // _evm_init
-    evm_call_function: FunctionIndex,  // _evm_call
-    evm_exec_function: FunctionIndex,  // _evm_exec
-    evm_pop_function: FunctionIndex,   // _evm_pop_u32
-    evm_pc_function: FunctionIndex,    // _evm_set_pc
+    evm_start_function: FunctionIndex,     // _evm_start
+    evm_init_function: FunctionIndex,      // _evm_init
+    evm_call_function: FunctionIndex,      // _evm_call
+    evm_exec_function: FunctionIndex,      // _evm_exec
+    evm_post_exec_function: FunctionIndex, // _evm_post_exec
+    evm_pop_function: FunctionIndex,       // _evm_pop_u32
+    evm_pc_function: FunctionIndex,        // _evm_set_pc
     jumpi_function: FunctionIndex,
     function_import_count: usize,
     builder: ModuleBuilder,
@@ -116,6 +117,8 @@ impl Compiler {
             evm_start_function: 0, // filled in during emit_start()
             evm_init_function: find_runtime_function(&runtime_library, "_evm_init").unwrap(),
             evm_call_function: find_runtime_function(&runtime_library, "_evm_call").unwrap(),
+            evm_post_exec_function: find_runtime_function(&runtime_library, "_evm_post_exec")
+                .unwrap(),
             evm_exec_function: 0, // filled in during compile_cfg()
             evm_pop_function: find_runtime_function(&runtime_library, "_evm_pop_u32").unwrap(),
             evm_pc_function: find_runtime_function(&runtime_library, "_evm_set_pc").unwrap(),
@@ -155,6 +158,9 @@ impl Compiler {
             vec![
                 Instruction::Call(self.evm_start_function),
                 Instruction::Call(self.evm_exec_function),
+                Instruction::I32Const(0),
+                Instruction::I32Const(0), // output_types_len == 0 means no JSON encoding
+                Instruction::Call(self.evm_post_exec_function),
             ],
         );
     }
@@ -195,6 +201,19 @@ impl Compiler {
             let types_len = data.len() - types_off;
             data.push(0); // NUL
 
+            let output_types_off = data.len();
+            for (i, output) in func.outputs.iter().enumerate() {
+                if i > 0 {
+                    write!(data, ",")?;
+                }
+                if abi_types::parse_param_type(&output.r#type).is_err() {
+                    panic!("Unknown ABI type: {}", output.r#type);
+                }
+                write!(data, "{}", output.r#type)?;
+            }
+            let output_types_len = data.len() - output_types_off;
+            data.push(0); // NUL
+
             _ = self.emit_function(
                 Some(func.name.clone()),
                 vec![
@@ -206,6 +225,9 @@ impl Compiler {
                     Instruction::I32Const(types_len.try_into().unwrap()), // params_types_len
                     Instruction::Call(self.evm_call_function),
                     Instruction::Call(self.evm_exec_function),
+                    Instruction::I32Const(output_types_off.try_into().unwrap()), // output_types_off
+                    Instruction::I32Const(output_types_len.try_into().unwrap()), // output_types_len
+                    Instruction::Call(self.evm_post_exec_function),
                 ],
             );
         }
@@ -484,7 +506,7 @@ fn make_op_table(module: &Module) -> HashMap<Opcode, FunctionIndex> {
         match export.internal() {
             &Internal::Function(op_idx) => match export.field() {
                 "_abi_buffer" | "_evm_start" | "_evm_init" | "_evm_call" | "_evm_exec"
-                | "_evm_pop_u32" | "_evm_set_pc" | "execute" => {}
+                | "_evm_post_exec" | "_evm_pop_u32" | "_evm_set_pc" | "execute" => {}
                 export_sym => match parse_opcode(&export_sym.to_ascii_uppercase()) {
                     None => unreachable!(), // TODO
                     Some(op) => _ = result.insert(op, op_idx),

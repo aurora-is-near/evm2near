@@ -45,6 +45,7 @@ pub(crate) static mut ENV: crate::near_runtime::NearRuntime = crate::near_runtim
     origin_cache: None,
     caller_cache: None,
     exit_status: None,
+    return_data: Vec::new(),
 };
 
 #[cfg(any(not(feature = "near"), test))]

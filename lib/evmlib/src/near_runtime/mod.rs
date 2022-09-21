@@ -25,6 +25,7 @@ pub struct NearRuntime {
     pub origin_cache: Option<Address>,
     pub caller_cache: Option<Address>,
     pub exit_status: Option<ExitStatus>,
+    pub return_data: Vec<u8>,
 }
 
 impl HashProvider for NearRuntime {
@@ -175,25 +176,54 @@ impl Env for NearRuntime {
 
     fn value_return(&mut self, return_data: &[u8]) {
         self.exit_status = Some(ExitStatus::Success);
-        unsafe {
-            value_return(return_data.len() as u64, return_data.as_ptr() as u64);
-        }
+        self.return_data = return_data.to_vec();
     }
 
     fn revert(&mut self, return_data: &[u8]) {
         self.exit_status = Some(ExitStatus::Revert);
-        let message = format!("REVERT 0x{}", hex::encode(return_data));
-        unsafe {
-            panic_utf8(message.len() as u64, message.as_ptr() as u64);
-        }
+        self.return_data = return_data.to_vec();
     }
 
     fn exit_oog(&mut self) {
         self.exit_status = Some(ExitStatus::OutOfGas);
-        let message = "OUT OF GAS";
-        unsafe {
-            panic_utf8(message.len() as u64, message.as_ptr() as u64);
+    }
+
+    fn post_exec(&self) {
+        match &self.exit_status {
+            Some(ExitStatus::Success) => {
+                let return_data = &self.return_data;
+                unsafe {
+                    value_return(return_data.len() as u64, return_data.as_ptr() as u64);
+                }
+            }
+            Some(ExitStatus::Revert) => {
+                let message = format!("REVERT 0x{}", hex::encode(&self.return_data));
+                unsafe {
+                    panic_utf8(message.len() as u64, message.as_ptr() as u64);
+                }
+            }
+            Some(ExitStatus::OutOfGas) => {
+                let message = "OUT OF GAS";
+                unsafe {
+                    panic_utf8(message.len() as u64, message.as_ptr() as u64);
+                }
+            }
+            None => {
+                panic!("Exited without any status being set!")
+            }
         }
+    }
+
+    fn get_return_data(&self) -> &[u8] {
+        &self.return_data
+    }
+
+    fn get_exit_status(&self) -> &Option<ExitStatus> {
+        &self.exit_status
+    }
+
+    fn overwrite_return_data(&mut self, return_data: Vec<u8>) {
+        self.return_data = return_data;
     }
 }
 
@@ -289,5 +319,5 @@ extern "C" {
     fn log_utf8(len: u64, ptr: u64);
 
     fn value_return(value_len: u64, value_ptr: u64);
-    fn panic_utf8(len: u64, ptr: u64);
+    fn panic_utf8(len: u64, ptr: u64) -> !;
 }

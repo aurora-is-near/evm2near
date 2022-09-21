@@ -25,6 +25,13 @@ pub trait Env {
     fn revert(&mut self, return_data: &[u8]);
     /// Exit due to out of gas
     fn exit_oog(&mut self);
+    /// Called when all execution is finished to post the result
+    /// to the parent runtime (eg NEAR runtime).
+    fn post_exec(&self);
+    fn get_return_data(&self) -> &[u8];
+    fn get_exit_status(&self) -> &Option<ExitStatus>;
+    /// Used to when encoding the output as JSON instead of raw bytes
+    fn overwrite_return_data(&mut self, return_data: Vec<u8>);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
