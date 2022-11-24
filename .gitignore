@@ -4,6 +4,9 @@
 # Visual Studio Code
 .vscode/
 
+# Intellij IDE
+.idea/
+
 # Editor backup files
 *~
 
@@ -17,3 +20,6 @@
 /evm2near-*-*
 /evmlib.wasi
 /evmlib.wasm
+
+# NEAR testchain
+neardev/
