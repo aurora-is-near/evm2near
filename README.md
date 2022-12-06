@@ -118,6 +118,7 @@ brew install rustup mingw-w64 wabt
 curl -sSf https://sh.rustup.rs | sh
 
 sudo apt install mingw-w64 wabt
+sudo apt install gcc
 ```
 
 ### Release Builds
