@@ -82,11 +82,11 @@ brew install rustup solidity wabt
 ```console
 curl -sSf https://sh.rustup.rs | sh
 
-apt-add-repository ppa:ethereum/ethereum
-apt update
-apt install solc
+sudo apt-add-repository ppa:ethereum/ethereum
+sudo apt update
+sudo apt install solc
 
-apt install wabt
+sudo apt install wabt
 ```
 
 ### Development Builds
@@ -117,7 +117,7 @@ brew install rustup mingw-w64 wabt
 ```console
 curl -sSf https://sh.rustup.rs | sh
 
-apt install mingw-w64 wabt
+sudo apt install mingw-w64 wabt
 ```
 
 ### Release Builds
