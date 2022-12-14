@@ -2,6 +2,9 @@ use std::collections::{HashSet, HashMap};
 use std::vec::Vec;
 use queues::{Queue};
 use queues::IsQueue;
+use std::env;
+use std::fs;
+
 pub type NodeId = u32;
 
 
@@ -193,3 +196,25 @@ impl Graph {
 
 
 }
+
+pub fn ReadGraph(filepath : &str) -> Graph {
+    println!("{}:", filepath);
+    let mut fullpath = "test/".to_owned();
+    fullpath.push_str(filepath);
+    let data = fs::read_to_string(fullpath).unwrap();
+    let lines = data.split("\n").collect::<Vec<&str>>();
+    let mut result = Graph::new();
+    let size = lines[0].parse::<NodeId>().unwrap();
+    for _ in 0..size {
+        result.add_vertex(Block::new());
+    }
+    for line in lines {
+        if line.contains(" ") {
+            let nums = line.split(" ").collect::<Vec<&str>>();
+            result.add_edge(nums[0].parse::<NodeId>().unwrap(),
+                            nums[1].parse::<NodeId>().unwrap())
+        }
+    }
+    return result;
+}
+
