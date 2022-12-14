@@ -41,7 +41,7 @@ pub fn main() {
 // mod graph;
 // use std::borrow::Borrow;
 //
-// pub fn TestGraph(mut g : Graph) {
+// pub fn TestGraph(mut g : Graph, name : &str) {
 //     let res = g.reverse_postorder(0);
 //     println!("Reverse postorder:");
 //     for n in res {
@@ -55,11 +55,15 @@ pub fn main() {
 //     println!("Labels:");
 //     g.put_labels(0);
 //     g.print_labels();
+//     g.gen_dot(name.strip_suffix(".txt").unwrap());
 // }
 //
 // fn main() {
 //     let paths = fs::read_dir("test/").unwrap();
 //     for entry in paths {
-//         TestGraph(ReadGraph(entry.unwrap().path().file_name().unwrap().to_string_lossy().borrow()));
+//         let path = entry.unwrap().path();
+//         // let filename = ;
+//         TestGraph(ReadGraph(path.file_name().unwrap().to_string_lossy().borrow()),
+//                   path.file_name().unwrap().to_string_lossy().borrow());
 //     }
 // }

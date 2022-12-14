@@ -4,6 +4,8 @@ use queues::{Queue};
 use queues::IsQueue;
 use std::env;
 use std::fs;
+use std::fs::File;
+use std::io::prelude::*;
 
 pub type NodeId = u32;
 
@@ -193,7 +195,23 @@ impl Graph {
             print!("\n");
         }
     }
-
+ 
+    pub fn gen_dot(&self, graphname : &str) -> () {
+        let mut res = format!("digraph {graphname} {{ \n");
+        for i in 0..self.next_id {
+            let s = format!("    N{i}[label=\"N{i}\"];\n");
+            res.push_str(&s);
+        }
+        for (from, node) in &self.id2node {
+            for to in &node.succ {
+                let s = format!("    N{from} -> N{to}[label=\"\"];\n");
+                res.push_str(&s);
+            }
+        }
+        res.push_str("}\n");
+        let mut file = File::create(format!("dots/{graphname}.dot")).unwrap();
+        file.write_all(res.as_bytes()).unwrap();
+    }
 
 }
 
