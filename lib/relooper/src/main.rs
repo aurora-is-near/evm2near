@@ -34,14 +34,14 @@ pub fn main() {
 }
 
 // extern crate queues;
+// use crate::graph::Block;
 // use crate::graph::Graph;
 // use crate::graph::ReadGraph;
-// use crate::graph::Block;
 // use std::fs;
 // mod graph;
 // use std::borrow::Borrow;
 //
-// pub fn TestGraph(mut g : Graph, name : &str) {
+// pub fn TestGraph(mut g: Graph, name: &str) {
 //     let res = g.reverse_postorder(0);
 //     println!("Reverse postorder:");
 //     for n in res {
@@ -50,7 +50,7 @@ pub fn main() {
 //     println!("\nDomination tree: ");
 //     let dt = g.domination_tree(0);
 //     for p in dt {
-//         println!("k : {}, v : {}", p.0 , p.1);
+//         println!("k : {}, v : {}", p.0, p.1);
 //     }
 //     println!("Labels:");
 //     g.put_labels(0);
@@ -63,7 +63,9 @@ pub fn main() {
 //     for entry in paths {
 //         let path = entry.unwrap().path();
 //         // let filename = ;
-//         TestGraph(ReadGraph(path.file_name().unwrap().to_string_lossy().borrow()),
-//                   path.file_name().unwrap().to_string_lossy().borrow());
+//         TestGraph(
+//             ReadGraph(path.file_name().unwrap().to_string_lossy().borrow()),
+//             path.file_name().unwrap().to_string_lossy().borrow(),
+//         );
 //     }
 // }
