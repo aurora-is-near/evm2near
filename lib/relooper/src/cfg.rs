@@ -2,42 +2,45 @@ use std::collections::{BTreeMap, HashSet};
 use std::iter::once;
 
 pub type CfgLabel = usize;
+pub type CfgEdge = (CfgLabel, bool);
 pub struct Cfg {
-    out_edges: BTreeMap<CfgLabel, Vec<CfgLabel>>,
-    in_edges: BTreeMap<CfgLabel, Vec<CfgLabel>>,
+    out_edges: BTreeMap<CfgLabel, Vec<CfgEdge>>,
 }
 
-impl From<Vec<(CfgLabel, CfgLabel)>> for Cfg {
-    fn from(edges: Vec<(CfgLabel, CfgLabel)>) -> Self {
-        let mut out_edges: BTreeMap<CfgLabel, Vec<CfgLabel>> = BTreeMap::new();
-        let mut in_edges: BTreeMap<CfgLabel, Vec<CfgLabel>> = BTreeMap::new();
-        for (from, to) in edges {
-            out_edges.entry(from).or_default().push(to);
-            in_edges.entry(to).or_default().push(from);
+impl From<Vec<(CfgLabel, CfgLabel, bool)>> for Cfg {
+    fn from(edges: Vec<(CfgLabel, CfgLabel, bool)>) -> Self {
+        let mut out_edges: BTreeMap<CfgLabel, Vec<CfgEdge>> = BTreeMap::new();
+        for (from, to, is_conditional) in edges {
+            out_edges
+                .entry(from)
+                .or_default()
+                .push((to, is_conditional));
         }
 
-        Cfg {
-            out_edges,
-            in_edges,
-        }
+        Cfg { out_edges }
     }
 }
 
 impl Cfg {
-    pub fn nodes(&self) -> HashSet<CfgLabel> {
-        let m = &self
-            .out_edges
-            .iter()
-            .flat_map(|(&from, to)| to.iter().copied().chain(once(from)))
-            .collect::<HashSet<_>>();
-        m.to_owned()
-    }
-
-    pub fn edges(&self) -> Vec<(CfgLabel, CfgLabel)> {
+    pub fn edges_raw(&self) -> HashSet<(CfgLabel, CfgEdge)> {
         self.out_edges
             .iter()
             .flat_map(|(&from, to)| to.iter().map(move |&t| (from, t)))
-            .collect::<Vec<_>>()
+            .collect()
+    }
+
+    pub fn edges(&self) -> HashSet<(CfgLabel, CfgLabel, bool)> {
+        self.edges_raw()
+            .iter()
+            .map(|&(from, (to, is_cond))| (from, to, is_cond))
+            .collect()
+    }
+
+    pub fn nodes(&self) -> HashSet<CfgLabel> {
+        self.edges()
+            .iter()
+            .flat_map(|&(f, t, is_cond)| vec![f, t])
+            .collect()
     }
 
     pub fn children(&self, label: CfgLabel) -> HashSet<CfgLabel> {
@@ -45,16 +48,7 @@ impl Cfg {
             .get(&label)
             .into_iter()
             .flatten()
-            .copied()
-            .collect()
-    }
-
-    pub fn parents(&self, label: CfgLabel) -> HashSet<CfgLabel> {
-        self.in_edges
-            .get(&label)
-            .into_iter()
-            .flatten()
-            .copied()
+            .map(|&(to, is_cond)| to)
             .collect()
     }
 }

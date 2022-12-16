@@ -1,9 +1,10 @@
+use crate::cfg::CfgEdge;
 use crate::re_graph::ReBlockType;
 use crate::{Cfg, CfgLabel, ReBlock, ReGraph, ReLabel};
-use dot::{Edges, Id, Nodes};
+use dot::{Edges, Id, Nodes, Style};
 use std::borrow::Cow;
 
-impl<'a> dot::Labeller<'a, CfgLabel, (CfgLabel, CfgLabel)> for Cfg {
+impl<'a> dot::Labeller<'a, CfgLabel, (CfgLabel, CfgEdge)> for Cfg {
     fn graph_id(&'a self) -> Id<'a> {
         Id::new("cfg").unwrap()
     }
@@ -11,25 +12,33 @@ impl<'a> dot::Labeller<'a, CfgLabel, (CfgLabel, CfgLabel)> for Cfg {
     fn node_id(&'a self, n: &CfgLabel) -> Id<'a> {
         Id::new(format!("n{}", n)).unwrap()
     }
+
+    fn edge_style(&'a self, (_f, (_t, is_cond)): &(CfgLabel, CfgEdge)) -> Style {
+        if *is_cond {
+            Style::Dashed
+        } else {
+            Style::None
+        }
+    }
 }
 
-impl<'a> dot::GraphWalk<'a, CfgLabel, (CfgLabel, CfgLabel)> for Cfg {
+impl<'a> dot::GraphWalk<'a, CfgLabel, (CfgLabel, CfgEdge)> for Cfg {
     fn nodes(&'a self) -> Nodes<'a, CfgLabel> {
         let nodes = self.nodes();
         let v = nodes.into_iter().collect::<Vec<CfgLabel>>();
         Cow::Owned(v)
     }
 
-    fn edges(&'a self) -> Edges<'a, (CfgLabel, CfgLabel)> {
-        Cow::Owned(self.edges())
+    fn edges(&'a self) -> Edges<'a, (CfgLabel, CfgEdge)> {
+        Cow::Owned(self.edges_raw().into_iter().collect())
     }
 
-    fn source(&'a self, (from, _to): &(CfgLabel, CfgLabel)) -> CfgLabel {
-        *from
+    fn source(&'a self, &(from, _to): &(CfgLabel, CfgEdge)) -> CfgLabel {
+        from
     }
 
-    fn target(&'a self, (_from, to): &(CfgLabel, CfgLabel)) -> CfgLabel {
-        *to
+    fn target(&'a self, &(_from, (to, is_cond)): &(CfgLabel, CfgEdge)) -> CfgLabel {
+        to
     }
 }
 

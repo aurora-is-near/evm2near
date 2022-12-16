@@ -175,12 +175,12 @@ impl<'a> Relooper<'a> {
     }
 
     fn gen_node(&mut self, node: CfgLabel, context: Vec<Context>) -> ReBlock {
-        let dominated: Vec<CfgLabel> = self
+        let merge_children: Vec<CfgLabel> = self
             .children(node)
             .into_iter()
             .filter(|n| self.merges.contains(n))
             .collect();
-        self.node_within(node, dominated, context)
+        self.node_within(node, merge_children, context)
     }
 
     fn do_tree(&mut self, node: CfgLabel, context: Vec<Context>) -> ReBlock {
