@@ -34,14 +34,13 @@ pub fn main() {
 }
 
 // extern crate queues;
-// use crate::graph::Block;
+// use crate::graph::read_graph;
 // use crate::graph::Graph;
-// use crate::graph::ReadGraph;
 // use std::fs;
 // mod graph;
 // use std::borrow::Borrow;
 //
-// pub fn TestGraph(mut g: Graph, name: &str) {
+// pub fn test_graph(mut g: Graph, name: &str) {
 //     let res = g.reverse_postorder(0);
 //     println!("Reverse postorder:");
 //     for n in res {
@@ -56,6 +55,10 @@ pub fn main() {
 //     g.put_labels(0);
 //     g.print_labels();
 //     g.gen_dot(name.strip_suffix(".txt").unwrap());
+//     let mut reducable_name = "reducable_".to_owned();
+//     reducable_name.push_str(name);
+//     g.reducable()
+//         .gen_dot(reducable_name.strip_suffix(".txt").unwrap())
 // }
 //
 // fn main() {
@@ -63,8 +66,8 @@ pub fn main() {
 //     for entry in paths {
 //         let path = entry.unwrap().path();
 //         // let filename = ;
-//         TestGraph(
-//             ReadGraph(path.file_name().unwrap().to_string_lossy().borrow()),
+//         test_graph(
+//             read_graph(path.file_name().unwrap().to_string_lossy().borrow()),
 //             path.file_name().unwrap().to_string_lossy().borrow(),
 //         );
 //     }

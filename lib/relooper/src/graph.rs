@@ -1,10 +1,8 @@
 use queues::IsQueue;
 use queues::Queue;
 use std::collections::{HashMap, HashSet};
-use std::env;
 use std::fs;
 use std::fs::File;
-use std::hash::Hash;
 use std::io::prelude::*;
 use std::vec::Vec;
 
@@ -196,7 +194,7 @@ impl Graph {
         }
     }
 
-    fn put_if_labels(&mut self, begin: NodeId) -> () {
+    fn put_if_labels(&mut self, _begin: NodeId) -> () {
         for (id, node) in &self.id2node {
             if node.succ.len() > 1 {
                 self.if_nodes.insert(*id);
@@ -205,7 +203,7 @@ impl Graph {
     }
 
     pub fn print_labels(&self) -> () {
-        for (id, node) in &self.id2node {
+        for (id, _node) in &self.id2node {
             print!("{}: ", id);
             if self.merge_nodes.contains(id) {
                 print!("MERGE, ");
@@ -242,7 +240,7 @@ impl Graph {
     }
 }
 
-pub fn ReadGraph(filepath: &str) -> Graph {
+pub fn read_graph(filepath: &str) -> Graph {
     println!("{}:", filepath);
     let mut fullpath = "test/".to_owned();
     fullpath.push_str(filepath);
@@ -267,7 +265,7 @@ pub fn ReadGraph(filepath: &str) -> Graph {
 
 pub type SuperNodeId = isize;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct SuperNode {
     super_id: SuperNodeId,
     cfg_ids: HashSet<NodeId>, // which cfg nodes in this supernode
@@ -275,7 +273,7 @@ struct SuperNode {
 }
 
 impl SuperNode {
-    pub fn build(self, cfg_node: Node, id: SuperNodeId) -> SuperNode {
+    pub fn build(mut self, cfg_node: Node, id: SuperNodeId) -> SuperNode {
         self.super_id = id;
         self.cfg_ids.insert(cfg_node.id);
         self.cfg_ids2cfg_nodes.insert(cfg_node.id, cfg_node);
@@ -293,15 +291,14 @@ struct Supergraph {
 }
 
 impl Supergraph {
-    pub fn build(self, g: &Graph) -> Supergraph {
-        for (id, block) in g.id2block {
-            self.origin2block.insert(id, block);
+    pub fn build(mut self, g: &Graph) -> Supergraph {
+        for (id, block) in &g.id2block {
+            self.origin2block.insert(*id, block.clone());
         }
-        for (id, cfg_node) in g.id2node {
-            self.id2node.insert(
-                self.next_id,
-                SuperNode::default().build(cfg_node, self.next_id),
-            );
+        for (_id, cfg_node) in &g.id2node {
+            let tmp = SuperNode::default();
+            self.id2node
+                .insert(self.next_id, tmp.build(cfg_node.clone(), self.next_id));
             self.next_id += 1;
         }
         self.next_cfg_id = g.next_id;
@@ -310,7 +307,7 @@ impl Supergraph {
         return self;
     }
 
-    pub fn run(self) -> Supergraph {
+    pub fn run(mut self) -> Supergraph {
         loop {
             if self.can_merge() {
                 self.merge(self.mergeble_nodes());
@@ -325,20 +322,20 @@ impl Supergraph {
     }
 
     pub fn in_which_supernode(&self, nid: NodeId) -> SuperNodeId {
-        for (id, node) in self.id2node {
+        for (id, node) in &self.id2node {
             if node.cfg_ids.contains(&nid) {
-                return id;
+                return *id;
             }
         }
         panic!("No such node");
     }
 
     pub fn can_merge(&self) -> bool {
-        for (sid, snode) in self.id2node {
+        for (_sid, snode) in &self.id2node {
             let mut super_precs: HashSet<SuperNodeId> = HashSet::default();
-            for (cfg_id, cfg_node) in snode.cfg_ids2cfg_nodes {
-                for prec_id in cfg_node.prec {
-                    super_precs.insert(self.in_which_supernode(prec_id));
+            for (_cfg_id, cfg_node) in &snode.cfg_ids2cfg_nodes {
+                for prec_id in &cfg_node.prec {
+                    super_precs.insert(self.in_which_supernode(*prec_id));
                 }
             }
             if super_precs.len() == 1 {
@@ -349,11 +346,11 @@ impl Supergraph {
     }
 
     pub fn can_clone(&self) -> bool {
-        for (sid, snode) in self.id2node {
+        for (_sid, snode) in &self.id2node {
             let mut super_precs: HashSet<SuperNodeId> = HashSet::default();
-            for (cfg_id, cfg_node) in snode.cfg_ids2cfg_nodes {
-                for prec_id in cfg_node.prec {
-                    super_precs.insert(self.in_which_supernode(prec_id));
+            for (_cfg_id, cfg_node) in &snode.cfg_ids2cfg_nodes {
+                for prec_id in &cfg_node.prec {
+                    super_precs.insert(self.in_which_supernode(*prec_id));
                 }
             }
             if super_precs.len() > 1 {
@@ -365,15 +362,15 @@ impl Supergraph {
 
     // returns two random mergeble nodes in format (master_id, slave_id)
     pub fn mergeble_nodes(&self) -> (SuperNodeId, SuperNodeId) {
-        for (sid, snode) in self.id2node {
+        for (sid, snode) in &self.id2node {
             let mut super_precs: HashSet<SuperNodeId> = HashSet::default();
-            for (cfg_id, cfg_node) in snode.cfg_ids2cfg_nodes {
-                for prec_id in cfg_node.prec {
-                    super_precs.insert(self.in_which_supernode(prec_id));
+            for (_cfg_id, cfg_node) in &snode.cfg_ids2cfg_nodes {
+                for prec_id in &cfg_node.prec {
+                    super_precs.insert(self.in_which_supernode(*prec_id));
                 }
             }
             if super_precs.len() == 1 {
-                return (*super_precs.iter().next().unwrap(), sid);
+                return (*super_precs.iter().next().unwrap(), *sid);
             }
         }
 
@@ -382,15 +379,15 @@ impl Supergraph {
 
     // returns clonable node with all its precessors in format (masters_ids, slave_id)
     pub fn clonable_nodes(&self) -> (HashSet<SuperNodeId>, SuperNodeId) {
-        for (sid, snode) in self.id2node {
+        for (sid, snode) in &self.id2node {
             let mut super_precs: HashSet<SuperNodeId> = HashSet::default();
-            for (cfg_id, cfg_node) in snode.cfg_ids2cfg_nodes {
-                for prec_id in cfg_node.prec {
-                    super_precs.insert(self.in_which_supernode(prec_id));
+            for (_cfg_id, cfg_node) in &snode.cfg_ids2cfg_nodes {
+                for prec_id in &cfg_node.prec {
+                    super_precs.insert(self.in_which_supernode(*prec_id));
                 }
             }
             if super_precs.len() == 1 {
-                return (super_precs, sid);
+                return (super_precs, *sid);
             }
         }
         panic!("no clonable nodes");
@@ -414,20 +411,19 @@ impl Supergraph {
             new_cfg_ids.insert(*id, self.next_id);
             self.next_cfg_id += 1;
         }
-        for (old, new) in new_cfg_ids {
+        for (old, _new) in &new_cfg_ids {
             let node = self
                 .id2node
                 .get(&slave)
                 .unwrap()
                 .cfg_ids2cfg_nodes
                 .get(&old)
-                .unwrap();
-            &self.copy_to_other_supernode(
-                &node,
-                self.id2node.get(&slave).unwrap(),
-                self.id2node.get_mut(&master).unwrap(),
-                *new_cfg_ids.get(&node.id).unwrap(),
-            );
+                .unwrap()
+                .clone();
+
+            let new_id = *new_cfg_ids.get(&node.id).unwrap();
+
+            self.copy_to_other_supernode(node.clone(), slave, master, new_id);
         }
     }
 
@@ -457,12 +453,14 @@ impl Supergraph {
     }
 
     pub fn copy_to_other_supernode(
-        &self,
-        node: &Node,
-        snode_from: &SuperNode,
-        snode_to: &mut SuperNode,
+        &mut self,
+        node: Node,
+        snode_from_id: SuperNodeId,
+        snode_to_id: SuperNodeId,
         new_id: NodeId,
     ) -> () {
+        let snode_from = self.id2node.get(&snode_from_id).unwrap().clone();
+        let mut snode_to = self.id2node.get(&snode_to_id).unwrap().clone();
         snode_to.cfg_ids.insert(new_id);
         snode_to.cfg_ids2cfg_nodes.insert(new_id, node.clone());
         snode_to
@@ -493,6 +491,7 @@ impl Supergraph {
                 .unwrap()
                 .succ
                 .remove(&to);
+
             snode_to
                 .cfg_ids2cfg_nodes
                 .get_mut(&to)
@@ -500,5 +499,6 @@ impl Supergraph {
                 .prec
                 .remove(&from);
         }
+        *self.id2node.get_mut(&snode_to_id).unwrap() = snode_to;
     }
 }
