@@ -4,6 +4,7 @@ mod relooper;
 mod traversal;
 
 use crate::cfg::{Cfg, CfgLabel};
+use crate::relooper::reloop;
 use crate::traversal::graph::dfs::Dfs;
 
 pub fn main() {
@@ -29,15 +30,5 @@ pub fn main() {
     let dfs: Vec<_> = Dfs::start_from(0 as CfgLabel, |&n| graph.children(n).into_iter()).collect();
     println!("dfs: {:?}", dfs);
 
-    // let re_builder = ReBuilder::create(&graph, 0);
-    // let re_graph = re_builder.reloop();
-
-    // let mut f_relooped = File::create("relooped.dot").unwrap();
-    // dot::render(&re_graph, &mut f_relooped).unwrap();
-
-    // let start = 0 as CfgLabel;
-    // let res_b = BfsGraph::start_from(&start).traverse(|x| graph.0.get(x).into_iter().flatten());
-    // println!("Bfs:{:?}", res_b);
-    // let res_d = DfsGraph::start_from(&start).traverse(|x| graph.0.get(x).into_iter().flatten());
-    // println!("Dfs:{:?}", res_d);
+    reloop(&graph, 0);
 }

@@ -1,9 +1,6 @@
 use crate::cfg::CfgEdge::*;
 use crate::cfg::{Cfg, CfgLabel};
-use crate::re_graph::ReBlockType::{Block, If, Loop};
-use crate::re_graph::ReEdge::Next;
-use crate::re_graph::ReLabel::{FromCfg, Generated};
-use crate::re_graph::{ReBlock, ReBlockType, ReEdge, ReGraph, ReLabel};
+use crate::re_graph::{ReBlock::*, ReSeq};
 use crate::traversal::graph;
 use std::collections::{HashMap, HashSet};
 
@@ -51,25 +48,12 @@ struct Relooper<'a> {
     // reachability: HashMap<CfgLabel, HashSet<CfgLabel>>,
     postorder_rev: HashMap<CfgLabel, usize>,
     domitation: DomTree,
-    last_generated_label: usize,
     ifs: HashSet<CfgLabel>,
     loops: HashSet<CfgLabel>,
     merges: HashSet<CfgLabel>,
-    blocks: HashMap<ReLabel, ReBlock>,
 }
 
 impl<'a> Relooper<'a> {
-    fn generate_label(&mut self) -> ReLabel {
-        self.last_generated_label += 1;
-        Generated(self.last_generated_label)
-    }
-
-    // fn reachable(&self, l: &CfgLabel) -> &HashSet<CfgLabel> {
-    //     self.reachability
-    //         .get(l)
-    //         .expect("that label should be in the initial cfg")
-    // }
-
     fn children(&self, label: CfgLabel) -> Vec<CfgLabel> {
         let mut res = self
             .domitation
@@ -91,18 +75,7 @@ impl<'a> Relooper<'a> {
             .unwrap()
     }
 
-    fn new_block(&mut self, typ: ReBlockType, label: ReLabel, next: ReEdge) -> ReLabel {
-        let block = ReBlock::new(typ, label, next);
-        assert!(self.blocks.insert(label, block).is_none());
-        label
-    }
-
-    fn gen_block(&mut self, typ: ReBlockType, next: ReEdge) -> ReLabel {
-        let label = self.generate_label();
-        self.new_block(typ, label, next)
-    }
-
-    fn do_branch(&self, from: CfgLabel, to: CfgLabel, context: &Vec<Context>) -> Option<usize> {
+    fn do_branch(&mut self, from: CfgLabel, to: CfgLabel, context: &Vec<Context>) -> ReSeq {
         if self.is_backward(from, to) || self.merges.contains(&to) {
             let idx_coll = context
                 .iter()
@@ -121,9 +94,9 @@ impl<'a> Relooper<'a> {
             let &jump_idx = idx_coll
                 .first()
                 .expect("suitable jump target not found in context");
-            Some(jump_idx)
+            ReSeq(vec![Br(jump_idx)]) //TODO is seq really necessary there?
         } else {
-            None
+            self.do_tree(to, context)
         }
     }
 
@@ -132,47 +105,37 @@ impl<'a> Relooper<'a> {
         node: CfgLabel,
         merges: &Vec<CfgLabel>,
         context: &Vec<Context>,
-    ) -> ReLabel {
+    ) -> ReSeq {
         let mut current_merges = merges.clone();
         match current_merges.pop() {
             Some(merge) => {
                 let mut new_ctx = context.clone();
                 new_ctx.push(Context::BlockHeadedBy(merge));
                 let inner = self.node_within(node, &current_merges, &new_ctx);
-                let curr = self.do_tree(merge, context);
+                let merge_block = self.do_tree(merge, context);
 
-                // let c = self.gen_block(Block, )
-                todo!("concat inner & curr, so returning value needed to be changed to smth")
+                Block(inner).concat(merge_block)
             }
             None => {
-                match self.cfg.edge(node) {
-                    Uncond(u) => match self.do_branch(node, *u, context) {
-                        Some(br) => self.new_block(Block, FromCfg(node), ReEdge::Uncond(br)),
-                        None => {
-                            let next_block = self.do_tree(*u, context);
-                            self.new_block(Block, FromCfg(node), Next(next_block))
-                        }
-                    },
+                let actions = Actions(node);
+                match *self.cfg.edge(node) {
+                    Uncond(u) => actions.concat(self.do_branch(node, u, context)),
                     Cond(true_label, false_label) => {
                         let mut if_context = context.clone();
                         if_context.push(Context::If);
 
-                        let true_branch = match self.do_branch(node, *true_label, &if_context) {
-                            Some(br) => todo!(),
-                            None => todo!(),
-                        };
-                        let false_branch = self.do_branch(node, *false_label, &if_context);
+                        let true_branch = self.do_branch(node, true_label, &if_context);
+                        let false_branch = self.do_branch(node, false_label, &if_context);
 
-                        // ReBlock::new(ReBlockType::If(), )
-                        todo!()
+                        ReSeq(vec![If(true_branch, false_branch)])
                     }
-                    Terminal => todo!(),
+                    Terminal => ReSeq(vec![Return]),
                 }
             }
         }
     }
 
-    fn gen_node(&mut self, node: CfgLabel, context: &Vec<Context>) -> ReLabel {
+    fn gen_node(&mut self, node: CfgLabel, context: &Vec<Context>) -> ReSeq {
         let merge_children: Vec<CfgLabel> = self
             .children(node)
             .into_iter()
@@ -181,51 +144,18 @@ impl<'a> Relooper<'a> {
         self.node_within(node, &merge_children, context)
     }
 
-    fn do_tree(&mut self, node: CfgLabel, context: &Vec<Context>) -> ReLabel {
+    fn do_tree(&mut self, node: CfgLabel, context: &Vec<Context>) -> ReSeq {
         if self.loops.contains(&node) {
             let mut ctx = context.clone();
             ctx.push(Context::LoopHeadedBy(node));
-            let next_block = self.gen_node(node, context);
-            let re_label = FromCfg(node);
-            let block = ReBlock::new(Loop, re_label, Next(next_block));
-            re_label
+            ReSeq::single(Loop(self.gen_node(node, &ctx)))
         } else {
             self.gen_node(node, context)
         }
     }
-
-    // fn dummy() -> ReGraph {
-    //     let mut m = HashMap::new();
-    //     m.insert(
-    //         FromCfg(0),
-    //         ReBlock::new(
-    //             If(FromCfg(1)),
-    //             FromCfg(0),
-    //             ReEdge::Cond(FromCfg(0), FromCfg(2)),
-    //         ),
-    //     );
-    //     m.insert(
-    //         FromCfg(1),
-    //         ReBlock::new(Block, FromCfg(1), ReEdge::Uncond(FromCfg(3))),
-    //     );
-    //     m.insert(
-    //         FromCfg(2),
-    //         ReBlock::new(Block, FromCfg(2), ReEdge::Uncond(FromCfg(3))),
-    //     );
-    //     m.insert(
-    //         FromCfg(3),
-    //         ReBlock::new(Block, FromCfg(3), ReEdge::Uncond(FromCfg(4))),
-    //     );
-    //     m.insert(
-    //         FromCfg(4),
-    //         ReBlock::new(Loop, FromCfg(4), ReEdge::Uncond(FromCfg(0))),
-    //     );
-    //
-    //     ReGraph(m)
-    // }
 }
 
-pub fn reloop(cfg: &Cfg, entry: CfgLabel) -> ReGraph {
+pub fn reloop(cfg: &Cfg, entry: CfgLabel) -> ReSeq {
     let nodes = cfg.nodes();
 
     let reachability: HashMap<CfgLabel, HashSet<CfgLabel>> = nodes
@@ -243,17 +173,10 @@ pub fn reloop(cfg: &Cfg, entry: CfgLabel) -> ReGraph {
         entry,
         postorder_rev: Default::default(), //TODO
         domitation: Default::default(),    //TODO
-        last_generated_label: 0,
         ifs: Default::default(),
         loops: Default::default(),
         merges: Default::default(),
-        blocks: Default::default(),
     };
 
-    let re_entry = relooper.do_tree(entry, &Vec::new());
-
-    ReGraph {
-        start: re_entry,
-        blocks: relooper.blocks,
-    }
+    relooper.do_tree(entry, &Vec::new())
 }
