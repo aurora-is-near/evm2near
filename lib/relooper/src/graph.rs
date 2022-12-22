@@ -428,6 +428,8 @@ impl Supergraph {
         self.id2node.remove(&slave);
     }
 
+    // this function make a copy of slave supernode, then, node by node move its cfg nodes to master supernode
+    // and remove all inedges of slave node, that are not from master node.
     pub fn make_clone(&mut self, (master, slave): (SuperNodeId, SuperNodeId)) -> () {
         let mut new_cfg_ids: HashMap<NodeId, NodeId> = HashMap::default(); // old -> new
         for id in &self.id2node.get(&slave).unwrap().cfg_ids {
@@ -435,7 +437,7 @@ impl Supergraph {
             self.next_cfg_id += 1;
         }
         for (old, _new) in &new_cfg_ids {
-            let node = self
+            let mut node = self
                 .id2node
                 .get(&slave)
                 .unwrap()
@@ -445,7 +447,7 @@ impl Supergraph {
                 .clone();
 
             let new_id = *new_cfg_ids.get(&node.id).unwrap();
-
+            // node.id = new_id;
             self.copy_to_other_supernode(node.clone(), slave, master, new_id);
         }
     }
@@ -475,6 +477,7 @@ impl Supergraph {
         };
     }
 
+    // this method copyes node (cfg node) from snode_from to snode_to (super nodes)
     pub fn copy_to_other_supernode(
         &mut self,
         node: Node,
@@ -485,19 +488,20 @@ impl Supergraph {
         let snode_from = self.id2node.get(&snode_from_id).unwrap().clone();
         let mut snode_to = self.id2node.get(&snode_to_id).unwrap().clone();
         snode_to.cfg_ids.insert(new_id);
-        snode_to.cfg_ids2cfg_nodes.insert(new_id, node.clone());
+        snode_to.cfg_ids2cfg_nodes.insert(new_id, node.clone()); // cut precs of this node
+
         snode_to
             .cfg_ids2cfg_nodes
             .get_mut(&new_id)
             .unwrap()
             .prec
             .retain(|prec_id: &NodeId| -> bool {
-                snode_from.cfg_ids.contains(&prec_id) && snode_to.cfg_ids.contains(&prec_id)
+                snode_from.cfg_ids.contains(&prec_id) || snode_to.cfg_ids.contains(&prec_id)
             });
 
         let is_foreighn = |prec_id: &NodeId| -> bool {
-            snode_from.cfg_ids.contains(&prec_id) && snode_to.cfg_ids.contains(&prec_id)
-            // maybe wrong predicate ?
+            !snode_from.cfg_ids.contains(&prec_id) && !snode_to.cfg_ids.contains(&prec_id)
+            // maybe wrong predicate ? maybe fixed
         };
 
         let mut foreighn_precs: HashSet<(NodeId, NodeId)> = HashSet::default();
@@ -518,6 +522,7 @@ impl Supergraph {
                 .succ
                 .remove(&to);
 
+            // ????
             snode_to
                 .cfg_ids2cfg_nodes
                 .get_mut(&to)
@@ -525,28 +530,36 @@ impl Supergraph {
                 .prec
                 .remove(&from);
         }
+
         *self.id2node.get_mut(&snode_to_id).unwrap() = snode_to;
     }
 }
 
 #[test]
-pub fn test_build_1() -> () {
-    let g = read_graph("1.txt");
-    let sg = Supergraph::default().build(&g);
-    for i in 0..7 {
-        assert!(sg.origin2block.contains_key(&i));
-    }
-    let mut cfg_ids: HashSet<NodeId> = HashSet::default();
-    for i in 0..7 {
-        let node = sg.id2node.get(&i).unwrap();
-        assert!(node.super_id == i);
-        for id in &node.cfg_ids {
-            println!("{}", id);
-            cfg_ids.insert(*id);
+pub fn test_build() -> () {
+    for graph_no in 0..1 {
+        match graph_no {
+            0 => {
+                let g = read_graph("1.txt");
+                let sg = Supergraph::default().build(&g);
+                for i in 0..7 {
+                    assert!(sg.origin2block.contains_key(&i));
+                }
+                let mut cfg_ids: HashSet<NodeId> = HashSet::default();
+                for i in 0..7 {
+                    let node = sg.id2node.get(&i).unwrap();
+                    assert!(node.super_id == i);
+                    for id in &node.cfg_ids {
+                        println!("{}", id);
+                        cfg_ids.insert(*id);
+                    }
+                }
+                for i in 0..7 {
+                    assert!(cfg_ids.contains(&i));
+                }
+            }
+            _ => panic!("Test build for graph {} is not implemented!", graph_no),
         }
-    }
-    for i in 0..7 {
-        assert!(cfg_ids.contains(&i));
     }
 }
 
