@@ -51,3 +51,38 @@ where
         })
     }
 }
+
+fn dfs_post_inner<T, ChIt, ChFun>(
+    start: T,
+    get_children: &mut ChFun,
+    res: &mut Vec<T>,
+    visited: &mut HashSet<T>,
+) where
+    T: Hash + Eq + Copy,
+    ChIt: IntoIterator<Item = T>,
+    ChFun: FnMut(&T) -> ChIt,
+{
+    for x in get_children(&start) {
+        if !visited.contains(&x) {
+            visited.insert(x);
+            dfs_post_inner(x, get_children, res, visited);
+        }
+    }
+
+    res.push(start);
+}
+
+pub fn dfs_post<T, ChIt, ChFun>(start: T, get_children: &mut ChFun) -> Vec<T>
+where
+    T: Hash + Eq + Copy,
+    ChIt: IntoIterator<Item = T>,
+    ChFun: FnMut(&T) -> ChIt,
+{
+    let mut visited: HashSet<T> = HashSet::from([start]);
+    let mut res: Vec<T> = Vec::new();
+
+    dfs_post_inner(start, get_children, &mut res, &mut visited); //TODO rewrite using Iterator or at least without recursion
+
+    res.reverse();
+    res
+}

@@ -2,6 +2,7 @@ use crate::cfg::CfgEdge::*;
 use crate::cfg::{Cfg, CfgLabel};
 use crate::re_graph::{ReBlock::*, ReSeq};
 use crate::traversal::graph;
+use crate::traversal::graph::dfs::dfs_post;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Default)]
@@ -166,13 +167,18 @@ pub fn reloop(cfg: &Cfg, entry: CfgLabel) -> ReSeq {
             (l, reachable)
         })
         .collect();
-    println!("n{:?}", reachability);
+
+    let postorder_rev = dfs_post(entry, &mut |x| cfg.children(*x))
+        .into_iter()
+        .enumerate()
+        .map(|(i, n)| (n, i))
+        .collect::<HashMap<_, _>>();
 
     let mut relooper = Relooper {
         cfg,
         entry,
-        postorder_rev: Default::default(), //TODO
-        domitation: Default::default(),    //TODO
+        postorder_rev,
+        domitation: todo!(), //TODO
         ifs: Default::default(),
         loops: Default::default(),
         merges: Default::default(),
