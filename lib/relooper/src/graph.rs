@@ -15,6 +15,16 @@ struct Node {
     pub prec: HashSet<NodeId>,
 }
 
+impl Node {
+    pub fn new(id_: NodeId) -> Node {
+        return Node {
+            id: id_,
+            succ: HashSet::default(),
+            prec: HashSet::default(),
+        };
+    }
+}
+
 #[derive(Clone)]
 pub struct Block {
     pub data: u32,
@@ -54,7 +64,7 @@ impl Graph {
 
     pub fn add_vertex(&mut self, block: Block) -> () {
         self.id2block.insert(self.next_id, block);
-        self.id2node.insert(self.next_id, Node::default());
+        self.id2node.insert(self.next_id, Node::new(self.next_id));
         self.next_id += 1;
         // println!("{}", self.next_id);
     }
@@ -291,7 +301,9 @@ struct Supergraph {
 }
 
 impl Supergraph {
+    // i think here is a mistake
     pub fn build(mut self, g: &Graph) -> Supergraph {
+        println!("len g.id2node = {}", g.id2node.len());
         for (id, block) in &g.id2block {
             self.origin2block.insert(*id, block.clone());
         }
@@ -303,7 +315,6 @@ impl Supergraph {
         }
         self.next_cfg_id = g.next_id;
         // TODO: make superedges;
-
         return self;
     }
 
@@ -322,11 +333,18 @@ impl Supergraph {
     }
 
     pub fn in_which_supernode(&self, nid: NodeId) -> SuperNodeId {
+        println!("in which supernode called with nid = {}", nid);
         for (id, node) in &self.id2node {
+            format!("super id {}\n", id);
+            for sid in &node.cfg_ids {
+                print!("\tsub id {}\n", sid);
+            }
             if node.cfg_ids.contains(&nid) {
                 return *id;
             }
         }
+        println!("BBBBBBBBBBBBBBBBBB");
+        println!("len id2node = {}", &self.id2node.len());
         panic!("No such node");
     }
 
@@ -394,11 +412,16 @@ impl Supergraph {
     }
 
     pub fn merge(&mut self, (master, slave): (SuperNodeId, SuperNodeId)) -> () {
+        println!("merge nodes slave : {}, master : {}", slave, master);
         self.make_clone((master, slave));
         self.id2node.remove(&slave);
     }
 
     pub fn split(&mut self, (masters, slave): (HashSet<SuperNodeId>, SuperNodeId)) -> () {
+        println!("split nodes slave : {}, masters:", slave);
+        for id in &masters {
+            println!("{},", id)
+        }
         for master in masters {
             self.make_clone((master, slave));
         }
@@ -474,11 +497,14 @@ impl Supergraph {
 
         let is_foreighn = |prec_id: &NodeId| -> bool {
             snode_from.cfg_ids.contains(&prec_id) && snode_to.cfg_ids.contains(&prec_id)
+            // maybe wrong predicate ?
         };
+
         let mut foreighn_precs: HashSet<(NodeId, NodeId)> = HashSet::default();
-        for id in &snode_from.cfg_ids2cfg_nodes.get(&new_id).unwrap().prec {
+        for id in &snode_from.cfg_ids2cfg_nodes.get(&node.id).unwrap().prec {
+            // here should be other id. Maybe i fix it ?
             if is_foreighn(id) {
-                foreighn_precs.insert((*id, new_id));
+                foreighn_precs.insert((*id, node.id));
             }
         }
         for (from, to) in foreighn_precs {
@@ -500,5 +526,45 @@ impl Supergraph {
                 .remove(&from);
         }
         *self.id2node.get_mut(&snode_to_id).unwrap() = snode_to;
+    }
+}
+
+#[test]
+pub fn test_build_1() -> () {
+    let g = read_graph("1.txt");
+    let sg = Supergraph::default().build(&g);
+    for i in 0..7 {
+        assert!(sg.origin2block.contains_key(&i));
+    }
+    let mut cfg_ids: HashSet<NodeId> = HashSet::default();
+    for i in 0..7 {
+        let node = sg.id2node.get(&i).unwrap();
+        assert!(node.super_id == i);
+        for id in &node.cfg_ids {
+            println!("{}", id);
+            cfg_ids.insert(*id);
+        }
+    }
+    for i in 0..7 {
+        assert!(cfg_ids.contains(&i));
+    }
+}
+
+#[test]
+pub fn test_node_clone() -> () {
+    let node = Node {
+        id: 3,
+        prec: HashSet::default(),
+        succ: HashSet::default(),
+    };
+    let node_clonned = node.clone();
+    assert!(node_clonned.id == 3);
+}
+
+#[test]
+pub fn test_graph_ids() -> () {
+    let g = read_graph("1.txt");
+    for id in 0..7 {
+        assert!(g.id2node.get(&id).unwrap().id == id);
     }
 }
