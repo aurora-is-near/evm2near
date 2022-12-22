@@ -1,14 +1,40 @@
 use crate::cfg::CfgEdge::*;
 use crate::cfg::{Cfg, CfgLabel};
-use crate::re_graph::{ReBlock::*, ReSeq};
+use crate::relooper::ReBlock::*;
 use crate::traversal::graph;
 use crate::traversal::graph::dfs::dfs_post;
 use std::collections::{HashMap, HashSet};
 
+pub struct ReSeq(pub Vec<ReBlock>);
+
+pub enum ReBlock {
+    Block(ReSeq),
+    Loop(ReSeq),
+    If(ReSeq, ReSeq),
+
+    Actions(CfgLabel),
+    Br(usize),
+    Return,
+}
+
+impl ReBlock {
+    pub(crate) fn concat(self, other: ReSeq) -> ReSeq {
+        let mut blocks = vec![self];
+        blocks.extend(other.0);
+        ReSeq(blocks)
+    }
+}
+
+impl ReSeq {
+    pub(crate) fn single(block: ReBlock) -> ReSeq {
+        ReSeq(vec![block])
+    }
+}
+
 #[derive(Default)]
 struct DomTree {
-    pub dominates: HashMap<CfgLabel, HashSet<CfgLabel>>,
-    pub dominated: HashMap<CfgLabel, CfgLabel>,
+    dominates: HashMap<CfgLabel, HashSet<CfgLabel>>,
+    dominated: HashMap<CfgLabel, CfgLabel>,
 }
 
 impl From<Vec<(CfgLabel, CfgLabel)>> for DomTree {
