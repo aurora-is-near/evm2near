@@ -21,7 +21,7 @@ impl CfgEdge {
 }
 
 pub struct Cfg {
-    out_edges: HashMap<CfgLabel, CfgEdge>,
+    pub(crate) out_edges: HashMap<CfgLabel, CfgEdge>,
 }
 
 impl From<Vec<(CfgLabel, CfgLabel, bool)>> for Cfg {

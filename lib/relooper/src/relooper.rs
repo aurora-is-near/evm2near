@@ -62,6 +62,31 @@ impl DomTree {
     }
 }
 
+struct NodesOrdering {
+    idx: HashMap<CfgLabel, usize>,
+    vec: Vec<CfgLabel>,
+}
+
+impl NodesOrdering {
+    fn new(cfg: &Cfg, entry: CfgLabel) -> Self {
+        let vec = dfs_post(entry, &mut |x| cfg.children(*x));
+        let idx: HashMap<CfgLabel, usize> = vec.iter().enumerate().map(|(i, &n)| (n, i)).collect();
+        Self { vec, idx }
+    }
+
+    fn is_backward(&self, from: CfgLabel, to: CfgLabel) -> bool {
+        self.idx
+            .get(&from)
+            .zip(self.idx.get(&to))
+            .map(|(&f, &t)| f < t)
+            .unwrap()
+    }
+
+    fn is_forward(&self, from: CfgLabel, to: CfgLabel) -> bool {
+        !self.is_backward(from, to)
+    }
+}
+
 #[derive(Clone, Copy)]
 enum Context {
     If,
@@ -73,7 +98,7 @@ struct Relooper<'a> {
     cfg: &'a Cfg,
     entry: CfgLabel,
     // reachability: HashMap<CfgLabel, HashSet<CfgLabel>>,
-    postorder_rev: HashMap<CfgLabel, usize>,
+    ordering: NodesOrdering,
     domitation: DomTree,
     ifs: HashSet<CfgLabel>,
     loops: HashSet<CfgLabel>,
@@ -88,22 +113,16 @@ impl<'a> Relooper<'a> {
             .into_iter()
             .collect::<Vec<_>>();
         res.sort_by_key(|n| {
-            self.postorder_rev
+            self.ordering
+                .idx
                 .get(n)
                 .expect("every node should have postorder numbering")
         });
         res
     }
 
-    fn is_backward(&self, from: CfgLabel, to: CfgLabel) -> bool {
-        self.postorder_rev
-            .get(&from)
-            .and_then(|&f| self.postorder_rev.get(&to).map(|&t| f < t))
-            .unwrap()
-    }
-
     fn do_branch(&mut self, from: CfgLabel, to: CfgLabel, context: &Vec<Context>) -> ReSeq {
-        if self.is_backward(from, to) || self.merges.contains(&to) {
+        if self.ordering.is_backward(from, to) || self.merges.contains(&to) {
             let idx_coll = context
                 .iter()
                 .enumerate()
@@ -203,7 +222,7 @@ pub fn reloop(cfg: &Cfg, entry: CfgLabel) -> ReSeq {
     let mut relooper = Relooper {
         cfg,
         entry,
-        postorder_rev,
+        ordering: NodesOrdering::new(cfg, entry),
         domitation: todo!(), //TODO
         ifs: Default::default(),
         loops: Default::default(),

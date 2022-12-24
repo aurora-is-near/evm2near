@@ -1,5 +1,6 @@
 mod cfg;
 mod graph;
+mod reducability;
 mod relooper;
 mod traversal;
 
