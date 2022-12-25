@@ -2,9 +2,7 @@ use crate::cfg::{Cfg, CfgEdge, CfgLabel};
 use crate::relooper::NodeOrdering;
 use crate::traversal::graph::bfs::Bfs;
 use crate::traversal::graph::dfs::Dfs;
-use queues::IsQueue;
-use queues::Queue;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::vec::Vec;
 
 pub struct EnrichedCfg {
@@ -66,24 +64,24 @@ impl EnrichedCfg {
     pub fn domination_tree(&self, begin: CfgLabel) -> HashMap<CfgLabel, CfgLabel> /* map points from node id to id of its dominator */
     {
         let mut result = HashMap::<CfgLabel, CfgLabel>::new();
-        let mut bfs = Queue::<CfgLabel>::new();
+        let mut bfs = VecDeque::<CfgLabel>::new();
         let mut visited = HashSet::<CfgLabel>::new();
         for &n in self.node_ordering.sequence() {
             result.insert(n, begin);
         }
-        bfs.add(begin).unwrap(); // should be next. upd: i dont think so
+        bfs.push_back(begin); // should be next. upd: i dont think so
         visited.insert(begin);
         loop {
-            if bfs.size() == 0 {
+            if bfs.len() == 0 {
                 break;
             }
-            let cur_id = bfs.peek().unwrap();
+            let &cur_id = bfs.front().unwrap();
             visited.insert(cur_id);
-            bfs.remove().unwrap();
+            bfs.pop_front().unwrap();
             self.update_dominators(cur_id, begin, &mut result);
             for id in &self.cfg.children(cur_id) {
                 if !visited.contains(id) {
-                    bfs.add(*id).unwrap();
+                    bfs.push_back(*id);
                 }
             }
         }
