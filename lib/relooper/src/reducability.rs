@@ -1,6 +1,23 @@
 use crate::cfg::CfgLabel;
-use crate::graph::{EnrichedCfg, Node};
+use crate::graph::EnrichedCfg;
 use std::collections::{HashMap, HashSet};
+
+#[derive(Default, Clone)]
+pub struct Node {
+    pub id: CfgLabel,
+    pub succ: HashSet<CfgLabel>,
+    pub prec: HashSet<CfgLabel>,
+}
+
+impl Node {
+    pub fn new(id_: CfgLabel) -> Node {
+        return Node {
+            id: id_,
+            succ: HashSet::default(),
+            prec: HashSet::default(),
+        };
+    }
+}
 
 pub type SuperNodeId = usize;
 
@@ -31,11 +48,11 @@ struct SuperGraph {
 impl SuperGraph {
     // i think here is a mistake
     pub fn build(mut self, g: &EnrichedCfg) -> SuperGraph {
-        println!("len g.id2node = {}", g.id2node.len());
-        for (_id, cfg_node) in &g.id2node {
+        for (&cfg_node) in &g.cfg.nodes() {
             let tmp = SuperNode::default();
+            // self.id2node.insert(self.next_id, tmp.build(cfg_node.clone(), self.next_id));
             self.id2node
-                .insert(self.next_id, tmp.build(cfg_node.clone(), self.next_id));
+                .insert(self.next_id, tmp.build(Node::new(cfg_node), self.next_id));
             self.next_id += 1;
         }
         // TODO: make superedges;

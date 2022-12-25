@@ -9,10 +9,10 @@ pub struct Dfs<T, ChFun> {
 
 impl<T, ChIt, ChFun> Dfs<T, ChFun>
 where
-    ChIt: Iterator<Item = T>,
+    ChIt: IntoIterator<Item = T>,
     ChFun: FnMut(&T) -> ChIt,
 {
-    pub fn start_iter<I: Iterator<Item = T>>(iter: I, get_children: ChFun) -> Self {
+    pub fn start_iter<I: IntoIterator<Item = T>>(iter: I, get_children: ChFun) -> Self {
         Dfs {
             visited: HashSet::new(),
             queue: VecDeque::from_iter(iter),
@@ -32,7 +32,7 @@ where
 impl<T, ChIt, ChFun> Iterator for Dfs<T, ChFun>
 where
     T: Hash + Eq + Copy,
-    ChIt: Iterator<Item = T>,
+    ChIt: IntoIterator<Item = T>,
     ChFun: FnMut(&T) -> ChIt,
 {
     type Item = T;
@@ -40,10 +40,11 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         self.queue.pop_back().map(|current| {
             let children = (self.get_children)(&current)
+                .into_iter()
                 .filter(|c| !self.visited.contains(c))
                 .collect::<HashSet<_>>();
-            for c in &children {
-                self.visited.insert(*c);
+            for &c in &children {
+                self.visited.insert(c);
             }
             self.queue.extend(children.into_iter());
 

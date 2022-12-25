@@ -62,19 +62,19 @@ impl DomTree {
     }
 }
 
-struct NodesOrdering {
+pub struct NodeOrdering {
     idx: HashMap<CfgLabel, usize>,
     vec: Vec<CfgLabel>,
 }
 
-impl NodesOrdering {
-    fn new(cfg: &Cfg, entry: CfgLabel) -> Self {
+impl NodeOrdering {
+    pub fn new(cfg: &Cfg, entry: CfgLabel) -> Self {
         let vec = dfs_post(entry, &mut |x| cfg.children(*x));
         let idx: HashMap<CfgLabel, usize> = vec.iter().enumerate().map(|(i, &n)| (n, i)).collect();
         Self { vec, idx }
     }
 
-    fn is_backward(&self, from: CfgLabel, to: CfgLabel) -> bool {
+    pub fn is_backward(&self, from: CfgLabel, to: CfgLabel) -> bool {
         self.idx
             .get(&from)
             .zip(self.idx.get(&to))
@@ -82,8 +82,12 @@ impl NodesOrdering {
             .unwrap()
     }
 
-    fn is_forward(&self, from: CfgLabel, to: CfgLabel) -> bool {
+    pub fn is_forward(&self, from: CfgLabel, to: CfgLabel) -> bool {
         !self.is_backward(from, to)
+    }
+
+    pub fn sequence(&self) -> &Vec<CfgLabel> {
+        &self.vec
     }
 }
 
@@ -98,7 +102,7 @@ struct Relooper<'a> {
     cfg: &'a Cfg,
     entry: CfgLabel,
     // reachability: HashMap<CfgLabel, HashSet<CfgLabel>>,
-    ordering: NodesOrdering,
+    ordering: NodeOrdering,
     domitation: DomTree,
     ifs: HashSet<CfgLabel>,
     loops: HashSet<CfgLabel>,
@@ -222,7 +226,7 @@ pub fn reloop(cfg: &Cfg, entry: CfgLabel) -> ReSeq {
     let mut relooper = Relooper {
         cfg,
         entry,
-        ordering: NodesOrdering::new(cfg, entry),
+        ordering: NodeOrdering::new(cfg, entry),
         domitation: todo!(), //TODO
         ifs: Default::default(),
         loops: Default::default(),

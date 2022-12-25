@@ -1,36 +1,17 @@
 use crate::cfg::{Cfg, CfgEdge, CfgLabel};
-use crate::traversal::graph::dfs::dfs_post;
+use crate::relooper::NodeOrdering;
+use crate::traversal::graph::bfs::Bfs;
+use crate::traversal::graph::dfs::Dfs;
 use queues::IsQueue;
 use queues::Queue;
 use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::fs::File;
-use std::io::prelude::*;
 use std::vec::Vec;
 
-#[derive(Default, Clone)]
-pub struct Node {
-    pub id: CfgLabel,
-    pub succ: HashSet<CfgLabel>,
-    pub prec: HashSet<CfgLabel>,
-}
-
-impl Node {
-    pub fn new(id_: CfgLabel) -> Node {
-        return Node {
-            id: id_,
-            succ: HashSet::default(),
-            prec: HashSet::default(),
-        };
-    }
-}
-
 pub struct EnrichedCfg {
-    cfg: Cfg,
+    pub(crate) cfg: Cfg,
     entry: CfgLabel,
     back_edges: HashMap<CfgLabel, Vec<CfgLabel>>,
-    postorder_rev: HashMap<CfgLabel, usize>,
-    pub(crate) id2node: HashMap<CfgLabel, Node>,
+    node_ordering: NodeOrdering,
     pub(crate) merge_nodes: HashSet<CfgLabel>,
     pub(crate) loop_nodes: HashSet<CfgLabel>,
     pub(crate) if_nodes: HashSet<CfgLabel>,
@@ -46,22 +27,28 @@ impl EnrichedCfg {
             }
         }
 
-        let postorder_rev = dfs_post(entry, &mut |x| cfg.children(*x))
-            .into_iter()
-            .enumerate()
-            .map(|(i, n)| (n, i))
-            .collect::<HashMap<_, _>>();
+        let node_ordering = NodeOrdering::new(&cfg, entry);
 
         let mut merge_nodes: HashSet<CfgLabel> = HashSet::new();
         let mut loop_nodes: HashSet<CfgLabel> = HashSet::new();
         let mut if_nodes: HashSet<CfgLabel> = HashSet::new();
 
         for n in cfg.nodes() {
-            match cfg.out_edges.get(&n).unwrap() {
-                CfgEdge::Cond(_, _) => {
-                    if_nodes.insert(n);
+            let back_edges_count = back_edges.get(&n).map_or(0, |v| v.len());
+            if back_edges_count > 1 {
+                merge_nodes.insert(n);
+            }
+
+            let reachable: HashSet<_> =
+                Bfs::start_from_except(n, |&l| cfg.children(l).into_iter()).collect();
+            for c in cfg.children(n).into_iter() {
+                if node_ordering.is_backward(n, c) && reachable.contains(&c) {
+                    loop_nodes.insert(n);
                 }
-                _ => {}
+            }
+
+            if let CfgEdge::Cond(_, _) = cfg.out_edges.get(&n).unwrap() {
+                if_nodes.insert(n);
             }
         }
 
@@ -69,38 +56,11 @@ impl EnrichedCfg {
             cfg,
             entry,
             back_edges,
-            postorder_rev,
-            id2node: Default::default(),
-            merge_nodes: Default::default(),
-            loop_nodes: Default::default(),
-            if_nodes: Default::default(),
+            node_ordering,
+            merge_nodes,
+            loop_nodes,
+            if_nodes,
         }
-    }
-}
-
-impl EnrichedCfg {
-    // TODO cache result
-    pub fn reverse_postorder(&self, begin: CfgLabel) -> Vec<CfgLabel> {
-        let mut res = Vec::<CfgLabel>::default();
-        let mut visited = HashSet::<CfgLabel>::default();
-        self.dfs(begin, &mut res, &mut visited);
-        res.reverse();
-        return res;
-    }
-
-    fn dfs(
-        &self,
-        current_node: CfgLabel,
-        res: &mut Vec<CfgLabel>,
-        visited: &mut HashSet<CfgLabel>,
-    ) -> () {
-        for id in &self.cfg.children(current_node) {
-            if !visited.contains(&id) {
-                visited.insert(*id);
-                self.dfs(*id, res, visited);
-            }
-        }
-        res.push(current_node);
     }
 
     pub fn domination_tree(&self, begin: CfgLabel) -> HashMap<CfgLabel, CfgLabel> /* map points from node id to id of its dominator */
@@ -108,8 +68,7 @@ impl EnrichedCfg {
         let mut result = HashMap::<CfgLabel, CfgLabel>::new();
         let mut bfs = Queue::<CfgLabel>::new();
         let mut visited = HashSet::<CfgLabel>::new();
-        let nodes = self.reverse_postorder(begin);
-        for n in nodes {
+        for &n in self.node_ordering.sequence() {
             result.insert(n, begin);
         }
         bfs.add(begin).unwrap(); // should be next. upd: i dont think so
@@ -137,15 +96,22 @@ impl EnrichedCfg {
         origin: CfgLabel,
         result: &mut HashMap<CfgLabel, CfgLabel>,
     ) -> () {
-        let reachable = self.reverse_postorder(origin);
         let mut reachable_set = HashSet::<CfgLabel>::default();
-        for node in reachable {
+        for &node in self.node_ordering.sequence() {
             reachable_set.insert(node);
         }
-        let mut reached = Vec::<CfgLabel>::default();
-        let mut visited = HashSet::<CfgLabel>::default();
-        visited.insert(cur_id);
-        self.dfs(origin, &mut reached, &mut visited);
+
+        let reached = Dfs::start_from(origin, |&n| {
+            let mut ch = self.cfg.children(n);
+            ch.remove(&cur_id);
+            ch
+        });
+
+        // let mut reached = Vec::<CfgLabel>::default();
+        // let mut visited = HashSet::<CfgLabel>::default();
+        // visited.insert(cur_id);
+        // self.dfs(origin, &mut reached, &mut visited);
+
         for id in reached {
             reachable_set.remove(&id);
         }
@@ -155,84 +121,22 @@ impl EnrichedCfg {
         }
     }
 
-    fn is_backward(&self, from: CfgLabel, to: CfgLabel) -> bool {
-        self.postorder_rev
-            .get(&from)
-            .and_then(|&f| self.postorder_rev.get(&to).map(|&t| f < t))
-            .unwrap()
-    }
-
-    fn is_forward(&self, from: CfgLabel, to: CfgLabel) -> bool {
-        !self.is_backward(from, to)
-    }
-
-    // // TODO: check if edge exist
-    // fn is_forward(&self, begin: CfgLabel, from: CfgLabel, to: CfgLabel) -> bool {
-    //     let order = self.reverse_postorder(begin);
-    //     for id in order {
-    //         if id == from {
-    //             return true;
-    //         }
-    //         if id == to {
-    //             return false;
+    // pub fn gen_dot(&self, graphname: &str) -> () {
+    //     let mut res = format!("digraph {graphname} {{ \n");
+    //     for i in self.cfg.nodes() {
+    //         let s = format!("    N{i}[label=\"N{i}\"];\n");
+    //         res.push_str(&s);
+    //     }
+    //     for (from, node) in &self.id2node {
+    //         for to in &node.succ {
+    //             let s = format!("    N{from} -> N{to}[label=\"\"];\n");
+    //             res.push_str(&s);
     //         }
     //     }
-    //     return false;
+    //     res.push_str("}\n");
+    //     let mut file = File::create(format!("dots/{graphname}.dot")).unwrap();
+    //     file.write_all(res.as_bytes()).unwrap();
     // }
-    //
-    // fn is_backward(&self, begin: CfgLabel, from: CfgLabel, to: CfgLabel) -> bool {
-    //     return !self.is_forward(begin, from, to);
-    // }
-
-    fn put_merge_labels(&mut self) {
-        for (id, node) in &self.id2node {
-            let mut forward_inedjes = 0;
-            for origin in &node.prec {
-                if self.is_forward(*origin, *id) {
-                    forward_inedjes += 1;
-                }
-            }
-            if forward_inedjes >= 2 {
-                self.merge_nodes.insert(*id);
-            }
-        }
-    }
-
-    fn put_loop_labels(&mut self, begin: CfgLabel) -> () {
-        for (id, node) in &self.id2node {
-            for origin in &node.prec {
-                if self.is_backward(*origin, *id) {
-                    self.loop_nodes.insert(*id);
-                    break;
-                }
-            }
-        }
-    }
-
-    fn put_if_labels(&mut self, _begin: CfgLabel) -> () {
-        for (id, node) in &self.id2node {
-            if node.succ.len() > 1 {
-                self.if_nodes.insert(*id);
-            }
-        }
-    }
-
-    pub fn gen_dot(&self, graphname: &str) -> () {
-        let mut res = format!("digraph {graphname} {{ \n");
-        for i in self.cfg.nodes() {
-            let s = format!("    N{i}[label=\"N{i}\"];\n");
-            res.push_str(&s);
-        }
-        for (from, node) in &self.id2node {
-            for to in &node.succ {
-                let s = format!("    N{from} -> N{to}[label=\"\"];\n");
-                res.push_str(&s);
-            }
-        }
-        res.push_str("}\n");
-        let mut file = File::create(format!("dots/{graphname}.dot")).unwrap();
-        file.write_all(res.as_bytes()).unwrap();
-    }
 }
 
 // pub fn read_graph(filepath: &str) -> EnrichedCfg {
