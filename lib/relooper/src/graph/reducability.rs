@@ -1,4 +1,4 @@
-use crate::cfg::CfgLabel;
+use crate::graph::cfg::CfgLabel;
 use crate::graph::EnrichedCfg;
 use std::collections::{HashMap, HashSet};
 

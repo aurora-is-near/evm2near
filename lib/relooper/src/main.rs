@@ -1,12 +1,8 @@
-mod cfg;
 mod graph;
-mod reducability;
-mod relooper;
 mod traversal;
 
-use crate::cfg::{Cfg, CfgLabel};
+use crate::graph::cfg::Cfg;
 use crate::graph::EnrichedCfg;
-use crate::relooper::reloop;
 
 pub fn main() {
     let graph = Cfg::from(vec![
@@ -26,9 +22,8 @@ pub fn main() {
     ]);
     // let graph = Cfg::from(vec![(0, 1), (0, 2), (1, 3), (1, 4), (1, 5), (2, 6), (6, 7)]);
 
-    let egraph = EnrichedCfg::new(graph, 0);
-    let dot_str = egraph.to_dot();
-    std::fs::write("out.dot", dot_str);
+    let e_graph = EnrichedCfg::new(graph, 0);
+    std::fs::write("out.dot", e_graph.to_dot()).expect("fs error");
 
     // reloop(&graph, 0);
 }

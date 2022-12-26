@@ -1,4 +1,4 @@
-use crate::cfg::CfgEdge::{Cond, Terminal, Uncond};
+use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
 use std::collections::{HashMap, HashSet};
 use std::iter::once;
 
