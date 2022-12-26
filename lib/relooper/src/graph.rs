@@ -1,8 +1,9 @@
 use crate::cfg::{Cfg, CfgEdge, CfgLabel};
-use crate::relooper::NodeOrdering;
+use crate::relooper::{DomTree, NodeOrdering};
 use crate::traversal::graph::bfs::Bfs;
 use crate::traversal::graph::dfs::Dfs;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fmt::format;
 use std::vec::Vec;
 
 pub struct EnrichedCfg {
@@ -10,13 +11,14 @@ pub struct EnrichedCfg {
     entry: CfgLabel,
     back_edges: HashMap<CfgLabel, Vec<CfgLabel>>,
     node_ordering: NodeOrdering,
-    pub(crate) merge_nodes: HashSet<CfgLabel>,
-    pub(crate) loop_nodes: HashSet<CfgLabel>,
-    pub(crate) if_nodes: HashSet<CfgLabel>,
+    domination: DomTree,
+    merge_nodes: HashSet<CfgLabel>,
+    loop_nodes: HashSet<CfgLabel>,
+    if_nodes: HashSet<CfgLabel>,
 }
 
 impl EnrichedCfg {
-    fn new(cfg: Cfg, entry: CfgLabel) -> Self {
+    pub fn new(cfg: Cfg, entry: CfgLabel) -> Self {
         let mut back_edges: HashMap<CfgLabel, Vec<CfgLabel>> = HashMap::default();
 
         for (&from, &to_edge) in &cfg.out_edges {
@@ -41,7 +43,7 @@ impl EnrichedCfg {
                 Bfs::start_from_except(n, |&l| cfg.children(l).into_iter()).collect();
             for c in cfg.children(n).into_iter() {
                 if node_ordering.is_backward(n, c) && reachable.contains(&c) {
-                    loop_nodes.insert(n);
+                    loop_nodes.insert(c);
                 }
             }
 
@@ -50,23 +52,31 @@ impl EnrichedCfg {
             }
         }
 
+        let domination_map = Self::domination_tree(&cfg, &node_ordering, entry);
+        let domination_vec = Vec::from_iter(domination_map);
+        let domination = DomTree::from(domination_vec);
+
         Self {
             cfg,
             entry,
             back_edges,
             node_ordering,
+            domination,
             merge_nodes,
             loop_nodes,
             if_nodes,
         }
     }
 
-    pub fn domination_tree(&self, begin: CfgLabel) -> HashMap<CfgLabel, CfgLabel> /* map points from node id to id of its dominator */
-    {
+    pub fn domination_tree(
+        cfg: &Cfg,
+        node_ordering: &NodeOrdering,
+        begin: CfgLabel,
+    ) -> HashMap<CfgLabel, CfgLabel> /* map points from node id to id of its dominator */ {
         let mut result = HashMap::<CfgLabel, CfgLabel>::new();
         let mut bfs = VecDeque::<CfgLabel>::new();
         let mut visited = HashSet::<CfgLabel>::new();
-        for &n in self.node_ordering.sequence() {
+        for &n in node_ordering.sequence() {
             result.insert(n, begin);
         }
         bfs.push_back(begin); // should be next. upd: i dont think so
@@ -78,10 +88,10 @@ impl EnrichedCfg {
             let &cur_id = bfs.front().unwrap();
             visited.insert(cur_id);
             bfs.pop_front().unwrap();
-            self.update_dominators(cur_id, begin, &mut result);
-            for id in &self.cfg.children(cur_id) {
-                if !visited.contains(id) {
-                    bfs.push_back(*id);
+            Self::update_dominators(cfg, node_ordering, cur_id, begin, &mut result);
+            for id in cfg.children(cur_id) {
+                if !visited.contains(&id) {
+                    bfs.push_back(id);
                 }
             }
         }
@@ -89,18 +99,19 @@ impl EnrichedCfg {
     }
 
     fn update_dominators(
-        &self,
+        cfg: &Cfg,
+        node_ordering: &NodeOrdering,
         cur_id: CfgLabel,
         origin: CfgLabel,
         result: &mut HashMap<CfgLabel, CfgLabel>,
-    ) -> () {
+    ) {
         let mut reachable_set = HashSet::<CfgLabel>::default();
-        for &node in self.node_ordering.sequence() {
+        for &node in node_ordering.sequence() {
             reachable_set.insert(node);
         }
 
         let reached = Dfs::start_from(origin, |&n| {
-            let mut ch = self.cfg.children(n);
+            let mut ch = cfg.children(n);
             ch.remove(&cur_id);
             ch
         });
@@ -119,43 +130,60 @@ impl EnrichedCfg {
         }
     }
 
-    // pub fn gen_dot(&self, graphname: &str) -> () {
-    //     let mut res = format!("digraph {graphname} {{ \n");
-    //     for i in self.cfg.nodes() {
-    //         let s = format!("    N{i}[label=\"N{i}\"];\n");
-    //         res.push_str(&s);
-    //     }
-    //     for (from, node) in &self.id2node {
-    //         for to in &node.succ {
-    //             let s = format!("    N{from} -> N{to}[label=\"\"];\n");
-    //             res.push_str(&s);
-    //         }
-    //     }
-    //     res.push_str("}\n");
-    //     let mut file = File::create(format!("dots/{graphname}.dot")).unwrap();
-    //     file.write_all(res.as_bytes()).unwrap();
-    // }
-}
+    fn labels(&self, n: CfgLabel) -> String {
+        let mut res = "".to_string();
+        if self.loop_nodes.contains(&n) {
+            res += "l";
+        }
+        if self.if_nodes.contains(&n) {
+            res += "i";
+        }
+        if self.merge_nodes.contains(&n) {
+            res += "m";
+        }
 
-// pub fn read_graph(filepath: &str) -> EnrichedCfg {
-//     println!("{}:", filepath);
-//     let mut fullpath = "test/".to_owned();
-//     fullpath.push_str(filepath);
-//     let data = fs::read_to_string(fullpath).unwrap();
-//     let lines = data.split("\n").collect::<Vec<&str>>();
-//     let mut result = EnrichedCfg::new();
-//     let size = lines[0].parse::<CfgLabel>().unwrap();
-//     for _ in 0..size {
-//         result.add_vertex(Block::new());
-//     }
-//     for line in lines {
-//         if line.contains(" ") {
-//             let nums = line.split(" ").collect::<Vec<&str>>();
-//             result.add_edge(
-//                 nums[0].parse::<CfgLabel>().unwrap(),
-//                 nums[1].parse::<CfgLabel>().unwrap(),
-//             )
-//         }
-//     }
-//     return result;
-// }
+        res
+    }
+
+    pub fn to_dot(&self) -> String {
+        let mut lines: Vec<String> = Vec::new();
+        lines.push("digraph res {".to_string());
+        lines.push("subgraph cluster_cfg { label=\"cfg\";".to_string());
+        lines.push("nstart[label=\"start\"]".to_string());
+        lines.push("nend[label=\"end\"]".to_string());
+
+        let mut edges: Vec<String> = Vec::new();
+        for n in self.cfg.nodes() {
+            lines.push(format!("n{n}[label=\"{n} {}\"];", self.labels(n)));
+            match self.cfg.edge(n) {
+                CfgEdge::Uncond(u) => {
+                    edges.push(format!("n{n} -> n{u};"));
+                }
+                CfgEdge::Cond(t, f) => {
+                    edges.push(format!("n{n} -> n{t}[style=\"dashed\"];"));
+                    edges.push(format!("n{n} -> n{f};"));
+                }
+                CfgEdge::Terminal => {
+                    edges.push(format!("n{n} -> nend;"));
+                }
+            }
+        }
+        lines.push(format!("nstart -> n{}", self.entry));
+        lines.extend(edges);
+        lines.push("}".to_string());
+        lines.push(String::new());
+
+        lines.push("subgraph cluster_dom { label=\"dom\"; edge [dir=\"back\"];".to_string());
+        for n in self.cfg.nodes() {
+            lines.push(format!("d{n}[label=\"{n}\"];"));
+        }
+        for (&n, &d) in &self.domination.dominated {
+            lines.push(format!("d{d} -> d{n};"));
+        }
+        lines.push("}".to_string());
+        lines.push(String::new());
+
+        lines.push("}".to_string());
+        lines.join("\n")
+    }
+}

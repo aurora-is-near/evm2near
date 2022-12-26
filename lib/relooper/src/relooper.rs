@@ -32,9 +32,9 @@ impl ReSeq {
 }
 
 #[derive(Default)]
-struct DomTree {
+pub struct DomTree {
     dominates: HashMap<CfgLabel, HashSet<CfgLabel>>,
-    dominated: HashMap<CfgLabel, CfgLabel>,
+    pub(crate) dominated: HashMap<CfgLabel, CfgLabel>,
 }
 
 impl From<Vec<(CfgLabel, CfgLabel)>> for DomTree {
@@ -78,7 +78,7 @@ impl NodeOrdering {
         self.idx
             .get(&from)
             .zip(self.idx.get(&to))
-            .map(|(&f, &t)| f < t)
+            .map(|(&f, &t)| f > t)
             .unwrap()
     }
 
