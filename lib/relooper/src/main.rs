@@ -24,6 +24,8 @@ pub fn main() {
 
     let e_graph = EnrichedCfg::new(graph, 0);
     std::fs::write("out.dot", e_graph.to_dot()).expect("fs error");
+    let relooped = e_graph.reloop();
+    println!("{:?}", relooped);
 
     // reloop(&graph, 0);
 }

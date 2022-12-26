@@ -1,12 +1,11 @@
-use crate::graph::cfg::{Cfg, CfgEdge::*, CfgLabel};
-use crate::graph::enrichments::{DomTree, NodeOrdering};
+use crate::graph::cfg::{CfgEdge::*, CfgLabel};
 use crate::graph::relooper::ReBlock::*;
-use crate::traversal::graph;
-use crate::traversal::graph::dfs::dfs_post;
-use std::collections::{HashMap, HashSet};
+use crate::graph::EnrichedCfg;
 
+#[derive(Debug)]
 pub struct ReSeq(pub Vec<ReBlock>);
 
+#[derive(Debug)]
 pub enum ReBlock {
     Block(ReSeq),
     Loop(ReSeq),
@@ -38,26 +37,15 @@ enum Context {
     BlockHeadedBy(CfgLabel),
 }
 
-struct Relooper<'a> {
-    cfg: &'a Cfg,
-    entry: CfgLabel,
-    // reachability: HashMap<CfgLabel, HashSet<CfgLabel>>,
-    ordering: NodeOrdering,
-    domitation: DomTree,
-    ifs: HashSet<CfgLabel>,
-    loops: HashSet<CfgLabel>,
-    merges: HashSet<CfgLabel>,
-}
-
-impl<'a> Relooper<'a> {
+impl EnrichedCfg {
     fn children_ord(&self, label: CfgLabel) -> Vec<CfgLabel> {
         let mut res = self
-            .domitation
+            .domination
             .immediately_dominated_by(label)
             .into_iter()
             .collect::<Vec<_>>();
         res.sort_by_key(|n| {
-            self.ordering
+            self.node_ordering
                 .idx
                 .get(n)
                 .expect("every node should have postorder numbering")
@@ -65,8 +53,8 @@ impl<'a> Relooper<'a> {
         res
     }
 
-    fn do_branch(&mut self, from: CfgLabel, to: CfgLabel, context: &Vec<Context>) -> ReSeq {
-        if self.ordering.is_backward(from, to) || self.merges.contains(&to) {
+    fn do_branch(&self, from: CfgLabel, to: CfgLabel, context: &Vec<Context>) -> ReSeq {
+        if self.node_ordering.is_backward(from, to) || self.merge_nodes.contains(&to) {
             let idx_coll = context
                 .iter()
                 .enumerate()
@@ -90,12 +78,7 @@ impl<'a> Relooper<'a> {
         }
     }
 
-    fn node_within(
-        &mut self,
-        node: CfgLabel,
-        merges: &Vec<CfgLabel>,
-        context: &Vec<Context>,
-    ) -> ReSeq {
+    fn node_within(&self, node: CfgLabel, merges: &Vec<CfgLabel>, context: &Vec<Context>) -> ReSeq {
         let mut current_merges = merges.clone();
         match current_merges.pop() {
             Some(merge) => {
@@ -125,17 +108,17 @@ impl<'a> Relooper<'a> {
         }
     }
 
-    fn gen_node(&mut self, node: CfgLabel, context: &Vec<Context>) -> ReSeq {
+    fn gen_node(&self, node: CfgLabel, context: &Vec<Context>) -> ReSeq {
         let merge_children: Vec<CfgLabel> = self
             .children_ord(node)
             .into_iter()
-            .filter(|n| self.merges.contains(n))
+            .filter(|n| self.merge_nodes.contains(n))
             .collect();
         self.node_within(node, &merge_children, context)
     }
 
-    fn do_tree(&mut self, node: CfgLabel, context: &Vec<Context>) -> ReSeq {
-        if self.loops.contains(&node) {
+    fn do_tree(&self, node: CfgLabel, context: &Vec<Context>) -> ReSeq {
+        if self.loop_nodes.contains(&node) {
             let mut ctx = context.clone();
             ctx.push(Context::LoopHeadedBy(node));
             ReSeq::single(Loop(self.gen_node(node, &ctx)))
@@ -143,35 +126,8 @@ impl<'a> Relooper<'a> {
             self.gen_node(node, context)
         }
     }
-}
 
-pub fn reloop(cfg: &Cfg, entry: CfgLabel) -> ReSeq {
-    let nodes = cfg.nodes();
-
-    let reachability: HashMap<CfgLabel, HashSet<CfgLabel>> = nodes
-        .into_iter()
-        .map(|l| {
-            let reachable: HashSet<_> =
-                graph::bfs::Bfs::start_from_except(l, |&l| cfg.children(l).into_iter()).collect();
-            (l, reachable)
-        })
-        .collect();
-
-    let postorder_rev = dfs_post(entry, &mut |x| cfg.children(*x))
-        .into_iter()
-        .enumerate()
-        .map(|(i, n)| (n, i))
-        .collect::<HashMap<_, _>>();
-
-    let mut relooper = Relooper {
-        cfg,
-        entry,
-        ordering: NodeOrdering::new(cfg, entry),
-        domitation: todo!(), //TODO
-        ifs: Default::default(),
-        loops: Default::default(),
-        merges: Default::default(),
-    };
-
-    relooper.do_tree(entry, &Vec::new())
+    pub fn reloop(&self) -> ReSeq {
+        self.do_tree(self.entry, &Vec::new())
+    }
 }
