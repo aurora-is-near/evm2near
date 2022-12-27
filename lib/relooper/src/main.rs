@@ -23,11 +23,19 @@ pub fn main() {
     // let graph = Cfg::from(vec![(0, 1), (0, 2), (1, 3), (1, 4), (1, 5), (2, 6), (6, 7)]);
 
     let e_graph = EnrichedCfg::new(graph, 0);
-    std::fs::write("out.dot", e_graph.to_dot()).expect("fs error");
     let relooped = e_graph.reloop();
-    println!("{:?}", relooped);
 
-    // reloop(&graph, 0);
+    let dot_lines: Vec<String> = vec![
+        "digraph {".to_string(),
+        e_graph.cfg_to_dot(),
+        String::new(),
+        e_graph.dom_to_dot(),
+        String::new(),
+        relooped.to_dot(),
+        "}".to_string(),
+    ];
+
+    std::fs::write("out.dot", dot_lines.join("\n")).expect("fs error");
 }
 
 // extern crate queues;
