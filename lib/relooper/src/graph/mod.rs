@@ -39,7 +39,11 @@ impl EnrichedCfg {
         let mut if_nodes: HashSet<CfgLabel> = HashSet::new();
 
         for n in cfg.nodes() {
-            let back_edges_count = back_edges.get(&n).map_or(0, |v| v.len());
+            let back_edges_count = back_edges.get(&n).map_or(0, |v| {
+                v.iter()
+                    .filter(|&&from| node_ordering.is_forward(from, n))
+                    .count()
+            });
             if back_edges_count > 1 {
                 merge_nodes.insert(n);
             }
