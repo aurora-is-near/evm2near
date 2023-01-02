@@ -1,5 +1,6 @@
 use crate::graph::cfg::CfgLabel;
 use crate::graph::EnrichedCfg;
+use crate::Cfg;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Default, Clone)]
@@ -38,6 +39,14 @@ impl SuperNode {
 }
 
 #[derive(Default)]
+/// This SuperGraph is used as help struct to generate reducable CFG from irreducable one.
+/// Main idea of algorithm:
+/// 1) SuperGraph is graph where each node is group from one or more nodes  of CFG.
+/// 2) Firstly, we make SuperGraph and each node of it contain exactly one CFG node.
+/// 3) Then we do two operations -- merge and split until only one SuperGraph node left.
+///
+/// In process of this operations some CFG nodes will be cloned, and finally all this nodes will represent
+/// equivalent reducable CFG.
 struct SuperGraph {
     id2node: HashMap<SuperNodeId, SuperNode>,
     clone2origin: HashMap<CfgLabel, CfgLabel>, // clone2origin[x] = y means that cfg node with id=x was clonned from cfg node with id=y;
@@ -46,9 +55,9 @@ struct SuperGraph {
 }
 
 impl SuperGraph {
-    // i think here is a mistake
+    // Generate supergraph on given cfg
     pub fn build(mut self, g: &EnrichedCfg) -> SuperGraph {
-        for (&cfg_node) in &g.cfg.nodes() {
+        for &cfg_node in &g.cfg.nodes() {
             let tmp = SuperNode::default();
             // self.id2node.insert(self.next_id, tmp.build(cfg_node.clone(), self.next_id));
             self.id2node
@@ -59,6 +68,9 @@ impl SuperGraph {
         return self;
     }
 
+    /// Tryes make merge or clone operation while supergraph contains at least one node
+    /// Now algorithm is greedy -- while we can merge we merge, if we can't merge but can split we split
+    /// I think it's not optimal way but it works.
     pub fn run(mut self) -> SuperGraph {
         loop {
             if self.can_merge() {
@@ -73,6 +85,7 @@ impl SuperGraph {
         }
     }
 
+    /// Return number of supernode that contain cfg node with given id
     pub fn in_which_supernode(&self, nid: CfgLabel) -> SuperNodeId {
         println!("in which supernode called with nid = {}", nid);
         for (id, node) in &self.id2node {
@@ -89,6 +102,7 @@ impl SuperGraph {
         panic!("No such node");
     }
 
+    /// Checks if there is any mergeble nodes in Supergraph
     pub fn can_merge(&self) -> bool {
         for (_sid, snode) in &self.id2node {
             let mut super_precs: HashSet<SuperNodeId> = HashSet::default();
@@ -104,6 +118,7 @@ impl SuperGraph {
         return false;
     }
 
+    /// Checks if there is any clonable nodes in supergraph
     pub fn can_clone(&self) -> bool {
         for (_sid, snode) in &self.id2node {
             let mut super_precs: HashSet<SuperNodeId> = HashSet::default();
@@ -119,7 +134,7 @@ impl SuperGraph {
         return false;
     }
 
-    // returns two random mergeble nodes in format (master_id, slave_id)
+    /// Returns two random mergeble nodes in format (master_id, slave_id)
     pub fn mergeble_nodes(&self) -> (SuperNodeId, SuperNodeId) {
         for (sid, snode) in &self.id2node {
             let mut super_precs: HashSet<SuperNodeId> = HashSet::default();
@@ -136,7 +151,7 @@ impl SuperGraph {
         panic!("no mergable nodes");
     }
 
-    // returns clonable node with all its precessors in format (masters_ids, slave_id)
+    /// Returns clonable node with all its precessors in format (masters_ids, slave_id)
     pub fn clonable_nodes(&self) -> (HashSet<SuperNodeId>, SuperNodeId) {
         for (sid, snode) in &self.id2node {
             let mut super_precs: HashSet<SuperNodeId> = HashSet::default();
@@ -152,12 +167,18 @@ impl SuperGraph {
         panic!("no clonable nodes");
     }
 
+    /// This method moves all cfg nodes from slave SuperNode to master SuperNode and destroys slave SuperNode
     pub fn merge(&mut self, (master, slave): (SuperNodeId, SuperNodeId)) -> () {
         println!("merge nodes slave : {}, master : {}", slave, master);
         self.make_clone((master, slave));
         self.id2node.remove(&slave);
     }
 
+    /// This method makes next operation for all master nodes
+    /// 1) make a clone of slave node and remove all inedges of cfg nodes in this copy that origin not in this clone or current master
+    /// 2) move all cfg nodes from slave clone to current master and destroy the clone
+    ///
+    /// After all it destroys original slave node
     pub fn split(&mut self, (masters, slave): (HashSet<SuperNodeId>, SuperNodeId)) -> () {
         println!("split nodes slave : {}, masters:", slave);
         for id in &masters {
@@ -169,8 +190,8 @@ impl SuperGraph {
         self.id2node.remove(&slave);
     }
 
-    // this function make a copy of slave supernode, then, node by node move its cfg nodes to master supernode
-    // and remove all inedges of slave node, that are not from master node.
+    /// This function make a copy of slave supernode, then, node by node move its cfg nodes to master supernode
+    /// and remove all inedges of slave node, that are not from master node.
     pub fn make_clone(&mut self, (master, slave): (SuperNodeId, SuperNodeId)) -> () {
         let mut new_cfg_ids: HashMap<CfgLabel, CfgLabel> = HashMap::default(); // old -> new
         for id in &self.id2node.get(&slave).unwrap().cfg_ids {
@@ -208,7 +229,7 @@ impl SuperGraph {
         // };
     }
 
-    // this method copyes node (cfg node) from snode_from to snode_to (super nodes)
+    /// This method copyes node (cfg node) from snode_from to snode_to (super nodes)
     pub fn copy_to_other_supernode(
         &mut self,
         node: Node,
@@ -264,36 +285,45 @@ impl SuperGraph {
 
         *self.id2node.get_mut(&snode_to_id).unwrap() = snode_to;
     }
-
-    pub fn reducable(enriched_cfg: &EnrichedCfg) -> EnrichedCfg {
-        return SuperGraph::default().build(&enriched_cfg).run().cfg();
-    }
 }
 
-// #[test]
-// pub fn test_build() -> () {
-//     for graph_no in 0..1 {
-//         match graph_no {
-//             0 => {
-//                 let g = read_graph("1.txt");
-//                 let sg = SuperGraph::default().build(&g);
-//                 for i in 0..7 {
-//                     assert!(sg.origin2block.contains_key(&i));
-//                 }
-//                 let mut cfg_ids: HashSet<CfgLabel> = HashSet::default();
-//                 for i in 0..7 {
-//                     let node = sg.id2node.get(&i).unwrap();
-//                     assert!(node.super_id == i);
-//                     for id in &node.cfg_ids {
-//                         println!("{}", id);
-//                         cfg_ids.insert(*id);
-//                     }
-//                 }
-//                 for i in 0..7 {
-//                     assert!(cfg_ids.contains(&i));
-//                 }
-//             }
-//             _ => panic!("Test build for graph {} is not implemented!", graph_no),
-//         }
-//     }
-// }
+/// Return reducable equivalent CFG by given CFG.
+pub fn reducable(enriched_cfg: &EnrichedCfg) -> EnrichedCfg {
+    return SuperGraph::default().build(&enriched_cfg).run().cfg();
+}
+
+#[test]
+pub fn test_reducer() -> () {
+    println!("test reducer");
+    let graph = Cfg::from(vec![
+        (0, 1, true),
+        (0, 2, false),
+        (1, 3, true),
+        (2, 3, false),
+        (3, 4, false),
+        (1, 5, false),
+        (5, 6, true),
+        (5, 7, false),
+        (6, 8, false),
+        (7, 8, false),
+        (4, 9, false),
+        (8, 9, true),
+        (8, 5, false),
+    ]);
+    // let graph = Cfg::from(vec![(0, 1), (0, 2), (1, 3), (1, 4), (1, 5), (2, 6), (6, 7)]);
+
+    let e_graph = EnrichedCfg::new(graph, 0);
+    let reducable = reducable(&e_graph);
+
+    let dot_lines: Vec<String> = vec![
+        "digraph {".to_string(),
+        e_graph.cfg_to_dot(),
+        String::new(),
+        e_graph.dom_to_dot(),
+        String::new(),
+        reducable.cfg_to_dot(),
+        "}".to_string(),
+    ];
+
+    std::fs::write("reduced.dot", dot_lines.join("\n")).expect("fs error");
+}
