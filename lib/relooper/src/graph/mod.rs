@@ -125,12 +125,6 @@ impl EnrichedCfg {
             ch.remove(&cur_id);
             ch
         });
-
-        // let mut reached = Vec::<CfgLabel>::default();
-        // let mut visited = HashSet::<CfgLabel>::default();
-        // visited.insert(cur_id);
-        // self.dfs(origin, &mut reached, &mut visited);
-
         for id in reached {
             reachable_set.remove(&id);
         }

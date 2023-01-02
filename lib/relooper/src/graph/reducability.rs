@@ -1,13 +1,22 @@
+use crate::graph::cfg::CfgEdge;
 use crate::graph::cfg::CfgLabel;
-use crate::graph::EnrichedCfg;
 use crate::Cfg;
 use std::collections::{HashMap, HashSet};
+pub type SuperNodeId = usize;
+
+#[derive(Eq, Hash, PartialEq, Copy, Clone)]
+/// (from, to)
+pub enum ProperEdge {
+    Uncond(CfgLabel, CfgLabel),
+    Cond(CfgLabel, CfgLabel),
+    Terminal,
+}
 
 #[derive(Default, Clone)]
-pub struct Node {
+struct Node {
     pub id: CfgLabel,
-    pub succ: HashSet<CfgLabel>,
-    pub prec: HashSet<CfgLabel>,
+    pub succ: HashSet<ProperEdge>,
+    pub prec: HashSet<ProperEdge>,
 }
 
 impl Node {
@@ -20,7 +29,141 @@ impl Node {
     }
 }
 
-pub type SuperNodeId = usize;
+// TODO: set begin = 0 as default
+#[derive(Default)]
+pub struct Graph {
+    id2node: HashMap<CfgLabel, Node>,
+    next_id: CfgLabel,
+}
+
+impl Graph {
+    pub fn new() -> Self {
+        Graph {
+            id2node: HashMap::new(),
+            next_id: 0,
+        }
+    }
+
+    pub fn build_from(&mut self, cfg: &Cfg) -> &Graph {
+        for (label, edge) in cfg.out_edges {
+            if label >= self.next_id {
+                self.next_id = label;
+            }
+            self.id2node.insert(label, Node::new(label));
+            match edge {
+                CfgEdge::Cond(to_cond, to_ucond) => {
+                    self.id2node
+                        .get_mut(&label)
+                        .unwrap()
+                        .succ
+                        .insert(ProperEdge::Cond(label, to_cond));
+                    self.id2node
+                        .get_mut(&label)
+                        .unwrap()
+                        .succ
+                        .insert(ProperEdge::Uncond(label, to_ucond));
+                    self.id2node
+                        .get_mut(&to_cond)
+                        .unwrap()
+                        .prec
+                        .insert(ProperEdge::Cond(label, to_cond));
+                    self.id2node
+                        .get_mut(&to_ucond)
+                        .unwrap()
+                        .prec
+                        .insert(ProperEdge::Uncond(label, to_ucond));
+                }
+                CfgEdge::Uncond(to_uncond) => {
+                    self.id2node
+                        .get_mut(&label)
+                        .unwrap()
+                        .succ
+                        .insert(ProperEdge::Uncond(label, to_uncond));
+                    self.id2node
+                        .get_mut(&to_uncond)
+                        .unwrap()
+                        .prec
+                        .insert(ProperEdge::Uncond(label, to_uncond));
+                }
+                CfgEdge::Terminal => {
+                    self.id2node
+                        .get_mut(&label)
+                        .unwrap()
+                        .succ
+                        .insert(ProperEdge::Terminal);
+                }
+            }
+        }
+        return self;
+    }
+
+    pub fn cfg(&self) -> Cfg {
+        let mut out_edges: HashMap<CfgLabel, CfgEdge> = HashMap::default();
+        for (id, node) in self.id2node {
+            if node.succ.len() == 1 {
+                match &node.succ.iter().next().unwrap() {
+                    ProperEdge::Uncond(from, to) => {
+                        out_edges.insert(id, CfgEdge::Uncond(*to));
+                    }
+                    ProperEdge::Terminal => {
+                        out_edges.insert(id, CfgEdge::Terminal);
+                    }
+                }
+            } else {
+                let mut cond_to: CfgLabel;
+                let mut ucond_to: CfgLabel;
+                for edge in node.succ {
+                    match edge {
+                        ProperEdge::Cond(from, to) => {
+                            cond_to = to;
+                        }
+                        ProperEdge::Uncond(from, to) => {
+                            ucond_to = to;
+                        }
+                        ProperEdge::Terminal => {
+                            panic!("Here should not be terminal")
+                        }
+                    }
+                }
+                out_edges.insert(id, CfgEdge::Cond(cond_to, ucond_to));
+            }
+        }
+        return Cfg { out_edges };
+    }
+
+    pub fn add_vertex(&mut self, id: CfgLabel) -> () {
+        self.id2node.insert(id, Node::new(id));
+        if self.next_id <= id {
+            self.next_id = id + 1;
+        }
+    }
+
+    pub fn add_edge(&mut self, edge: ProperEdge) -> () {
+        match edge {
+            ProperEdge::Uncond(from, to) => {
+                self.id2node
+                    .get_mut(&from)
+                    .unwrap()
+                    .succ
+                    .insert(edge.clone());
+                self.id2node.get_mut(&to).unwrap().prec.insert(edge.clone());
+            }
+            ProperEdge::Cond(from, to) => {
+                self.id2node
+                    .get_mut(&from)
+                    .unwrap()
+                    .succ
+                    .insert(edge.clone());
+                self.id2node.get_mut(&to).unwrap().prec.insert(edge.clone());
+            }
+            ProperEdge::Terminal => {}
+        }
+    }
+}
+
+pub fn reducable(g: &Cfg) -> Cfg {
+    return Supergraph::default().build(&g).run().cfg();
+}
 
 #[derive(Default, Clone)]
 struct SuperNode {
@@ -39,39 +182,31 @@ impl SuperNode {
 }
 
 #[derive(Default)]
-/// This SuperGraph is used as help struct to generate reducable CFG from irreducable one.
-/// Main idea of algorithm:
-/// 1) SuperGraph is graph where each node is group from one or more nodes  of CFG.
-/// 2) Firstly, we make SuperGraph and each node of it contain exactly one CFG node.
-/// 3) Then we do two operations -- merge and split until only one SuperGraph node left.
-///
-/// In process of this operations some CFG nodes will be cloned, and finally all this nodes will represent
-/// equivalent reducable CFG.
-struct SuperGraph {
+struct Supergraph {
     id2node: HashMap<SuperNodeId, SuperNode>,
     clone2origin: HashMap<CfgLabel, CfgLabel>, // clone2origin[x] = y means that cfg node with id=x was clonned from cfg node with id=y;
     next_id: SuperNodeId,
     next_cfg_id: CfgLabel,
 }
 
-impl SuperGraph {
-    // Generate supergraph on given cfg
-    pub fn build(mut self, g: &EnrichedCfg) -> SuperGraph {
-        for &cfg_node in &g.cfg.nodes() {
+impl Supergraph {
+    // i think here is a mistake
+    pub fn build(mut self, c: &Cfg) -> Supergraph {
+        let g = Graph::new().build_from(c);
+        println!("len g.id2node = {}", g.id2node.len());
+
+        for (_id, cfg_node) in &g.id2node {
             let tmp = SuperNode::default();
-            // self.id2node.insert(self.next_id, tmp.build(cfg_node.clone(), self.next_id));
             self.id2node
-                .insert(self.next_id, tmp.build(Node::new(cfg_node), self.next_id));
+                .insert(self.next_id, tmp.build(cfg_node.clone(), self.next_id));
             self.next_id += 1;
         }
+        self.next_cfg_id = g.next_id;
         // TODO: make superedges;
         return self;
     }
 
-    /// Tryes make merge or clone operation while supergraph contains at least one node
-    /// Now algorithm is greedy -- while we can merge we merge, if we can't merge but can split we split
-    /// I think it's not optimal way but it works.
-    pub fn run(mut self) -> SuperGraph {
+    pub fn run(mut self) -> Supergraph {
         loop {
             if self.can_merge() {
                 self.merge(self.mergeble_nodes());
@@ -85,7 +220,6 @@ impl SuperGraph {
         }
     }
 
-    /// Return number of supernode that contain cfg node with given id
     pub fn in_which_supernode(&self, nid: CfgLabel) -> SuperNodeId {
         println!("in which supernode called with nid = {}", nid);
         for (id, node) in &self.id2node {
@@ -102,13 +236,20 @@ impl SuperGraph {
         panic!("No such node");
     }
 
-    /// Checks if there is any mergeble nodes in Supergraph
     pub fn can_merge(&self) -> bool {
         for (_sid, snode) in &self.id2node {
             let mut super_precs: HashSet<SuperNodeId> = HashSet::default();
             for (_cfg_id, cfg_node) in &snode.cfg_ids2cfg_nodes {
                 for prec_id in &cfg_node.prec {
-                    super_precs.insert(self.in_which_supernode(*prec_id));
+                    match prec_id {
+                        ProperEdge::Cond(from, to) => {
+                            super_precs.insert(self.in_which_supernode(*from));
+                        }
+                        ProperEdge::Uncond(from, to) => {
+                            super_precs.insert(self.in_which_supernode(*from));
+                        }
+                        ProperEdge::Terminal => {}
+                    }
                 }
             }
             if super_precs.len() == 1 {
@@ -118,13 +259,20 @@ impl SuperGraph {
         return false;
     }
 
-    /// Checks if there is any clonable nodes in supergraph
     pub fn can_clone(&self) -> bool {
         for (_sid, snode) in &self.id2node {
             let mut super_precs: HashSet<SuperNodeId> = HashSet::default();
             for (_cfg_id, cfg_node) in &snode.cfg_ids2cfg_nodes {
                 for prec_id in &cfg_node.prec {
-                    super_precs.insert(self.in_which_supernode(*prec_id));
+                    match prec_id {
+                        ProperEdge::Cond(from, to) => {
+                            super_precs.insert(self.in_which_supernode(*from));
+                        }
+                        ProperEdge::Uncond(from, to) => {
+                            super_precs.insert(self.in_which_supernode(*from));
+                        }
+                        ProperEdge::Terminal => {}
+                    }
                 }
             }
             if super_precs.len() > 1 {
@@ -134,13 +282,21 @@ impl SuperGraph {
         return false;
     }
 
-    /// Returns two random mergeble nodes in format (master_id, slave_id)
+    // returns two random mergeble nodes in format (master_id, slave_id)
     pub fn mergeble_nodes(&self) -> (SuperNodeId, SuperNodeId) {
         for (sid, snode) in &self.id2node {
             let mut super_precs: HashSet<SuperNodeId> = HashSet::default();
             for (_cfg_id, cfg_node) in &snode.cfg_ids2cfg_nodes {
                 for prec_id in &cfg_node.prec {
-                    super_precs.insert(self.in_which_supernode(*prec_id));
+                    match prec_id {
+                        ProperEdge::Cond(from, to) => {
+                            super_precs.insert(self.in_which_supernode(*from));
+                        }
+                        ProperEdge::Uncond(from, to) => {
+                            super_precs.insert(self.in_which_supernode(*from));
+                        }
+                        ProperEdge::Terminal => {}
+                    }
                 }
             }
             if super_precs.len() == 1 {
@@ -151,13 +307,21 @@ impl SuperGraph {
         panic!("no mergable nodes");
     }
 
-    /// Returns clonable node with all its precessors in format (masters_ids, slave_id)
+    // returns clonable node with all its precessors in format (masters_ids, slave_id)
     pub fn clonable_nodes(&self) -> (HashSet<SuperNodeId>, SuperNodeId) {
         for (sid, snode) in &self.id2node {
             let mut super_precs: HashSet<SuperNodeId> = HashSet::default();
             for (_cfg_id, cfg_node) in &snode.cfg_ids2cfg_nodes {
                 for prec_id in &cfg_node.prec {
-                    super_precs.insert(self.in_which_supernode(*prec_id));
+                    match prec_id {
+                        ProperEdge::Cond(from, to) => {
+                            super_precs.insert(self.in_which_supernode(*from));
+                        }
+                        ProperEdge::Uncond(from, to) => {
+                            super_precs.insert(self.in_which_supernode(*from));
+                        }
+                        ProperEdge::Terminal => {}
+                    }
                 }
             }
             if super_precs.len() == 1 {
@@ -167,18 +331,12 @@ impl SuperGraph {
         panic!("no clonable nodes");
     }
 
-    /// This method moves all cfg nodes from slave SuperNode to master SuperNode and destroys slave SuperNode
     pub fn merge(&mut self, (master, slave): (SuperNodeId, SuperNodeId)) -> () {
         println!("merge nodes slave : {}, master : {}", slave, master);
         self.make_clone((master, slave));
         self.id2node.remove(&slave);
     }
 
-    /// This method makes next operation for all master nodes
-    /// 1) make a clone of slave node and remove all inedges of cfg nodes in this copy that origin not in this clone or current master
-    /// 2) move all cfg nodes from slave clone to current master and destroy the clone
-    ///
-    /// After all it destroys original slave node
     pub fn split(&mut self, (masters, slave): (HashSet<SuperNodeId>, SuperNodeId)) -> () {
         println!("split nodes slave : {}, masters:", slave);
         for id in &masters {
@@ -190,12 +348,13 @@ impl SuperGraph {
         self.id2node.remove(&slave);
     }
 
-    /// This function make a copy of slave supernode, then, node by node move its cfg nodes to master supernode
-    /// and remove all inedges of slave node, that are not from master node.
+    // this function make a copy of slave supernode, then, node by node move its cfg nodes to master supernode
+    // and remove all inedges of slave node, that are not from master node.
     pub fn make_clone(&mut self, (master, slave): (SuperNodeId, SuperNodeId)) -> () {
         let mut new_cfg_ids: HashMap<CfgLabel, CfgLabel> = HashMap::default(); // old -> new
         for id in &self.id2node.get(&slave).unwrap().cfg_ids {
             new_cfg_ids.insert(*id, self.next_id);
+            self.next_cfg_id += 1;
         }
         for (old, _new) in &new_cfg_ids {
             let mut node = self
@@ -213,23 +372,22 @@ impl SuperGraph {
         }
     }
 
-    pub fn cfg(self) -> EnrichedCfg {
+    pub fn cfg(self) -> Cfg {
         let mut id2n: HashMap<CfgLabel, Node> = HashMap::default();
         for (_sid, snode) in self.id2node {
             for (cid, cnode) in snode.cfg_ids2cfg_nodes {
                 id2n.insert(cid, cnode);
             }
         }
-        todo!()
-        // return EnrichedCfg {
-        //     id2node: (id2n),
-        //     merge_nodes: (HashSet::default()),
-        //     loop_nodes: (HashSet::default()),
-        //     if_nodes: (HashSet::default()),
-        // };
+
+        return Graph {
+            id2node: (id2n),
+            next_id: (self.next_cfg_id),
+        }
+        .cfg();
     }
 
-    /// This method copyes node (cfg node) from snode_from to snode_to (super nodes)
+    // this method copyes node (cfg node) from snode_from to snode_to (super nodes)
     pub fn copy_to_other_supernode(
         &mut self,
         node: Node,
@@ -285,45 +443,6 @@ impl SuperGraph {
 
         *self.id2node.get_mut(&snode_to_id).unwrap() = snode_to;
     }
-}
 
-/// Return reducable equivalent CFG by given CFG.
-pub fn reducable(enriched_cfg: &EnrichedCfg) -> EnrichedCfg {
-    return SuperGraph::default().build(&enriched_cfg).run().cfg();
-}
-
-#[test]
-pub fn test_reducer() -> () {
-    println!("test reducer");
-    let graph = Cfg::from(vec![
-        (0, 1, true),
-        (0, 2, false),
-        (1, 3, true),
-        (2, 3, false),
-        (3, 4, false),
-        (1, 5, false),
-        (5, 6, true),
-        (5, 7, false),
-        (6, 8, false),
-        (7, 8, false),
-        (4, 9, false),
-        (8, 9, true),
-        (8, 5, false),
-    ]);
-    // let graph = Cfg::from(vec![(0, 1), (0, 2), (1, 3), (1, 4), (1, 5), (2, 6), (6, 7)]);
-
-    let e_graph = EnrichedCfg::new(graph, 0);
-    let reducable = reducable(&e_graph);
-
-    let dot_lines: Vec<String> = vec![
-        "digraph {".to_string(),
-        e_graph.cfg_to_dot(),
-        String::new(),
-        e_graph.dom_to_dot(),
-        String::new(),
-        reducable.cfg_to_dot(),
-        "}".to_string(),
-    ];
-
-    std::fs::write("reduced.dot", dot_lines.join("\n")).expect("fs error");
+    pub fn remove_foreighn_edges(cfg_id: CfgLabel, from_id: SuperNodeId, to_id: SuperNodeId) {}
 }
