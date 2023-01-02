@@ -3,6 +3,22 @@ use crate::traversal::graph::dfs::dfs_post;
 use std::collections::{HashMap, HashSet};
 
 #[derive(Default)]
+/// Node A dominate node B if you can't reach B without visiting A. For example, entry node dominates all nodes.
+/// Each node have set of dominators. If B_set is set of node B dominators, node A will called Immediate Dominator of B
+/// if it is in B_set AND NOT dominate any other nodes from B_set.
+/// Each node have exactly one immediate dominator. Each node can be immediate dominator for any amount of nodes.
+///  
+/// Domination tree is a graph with nodes of CFG, but edges only from dominator to dominated nodes.
+/// Domination tree uniquely specified by given CFG
+///
+/// We build domination tree next way:
+/// 1) make an array of results (hash_map (dominated -> dominator)) and initialize it with entry node as dominator for every node.
+/// 2) Than we iterate in nodes in reverse postorder(?) and make next operation for each node:
+///   2.1) remove this node and all its edges from graph, go throw graph with dfs, and find all nodes unreachable without this nodes
+///   2.2) update immediate dominator for all unreachable nodes
+///
+/// Thanks to reverse postorder we will find immediate dominator for all nodes.
+///
 pub struct DomTree {
     dominates: HashMap<CfgLabel, HashSet<CfgLabel>>,
     pub(crate) dominated: HashMap<CfgLabel, CfgLabel>,
