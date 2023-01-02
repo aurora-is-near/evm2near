@@ -97,7 +97,9 @@ impl ReSeq {
                         let mut back = back_branches.clone();
                         back.push(current_id);
 
-                        res.push(format!("r{current_id}[label=\"If {current_id}\"];"));
+                        res.push(format!(
+                            "r{current_id}[label=\"If {current_id}\", shape=diamond];"
+                        ));
 
                         let t_ch_id = current_id + 1;
                         let (t_id, t_str) = t.to_dot_inner(t_ch_id, &back);

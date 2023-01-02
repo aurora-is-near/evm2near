@@ -100,7 +100,7 @@ impl EnrichedCfg {
                         let true_branch = self.do_branch(node, true_label, &if_context);
                         let false_branch = self.do_branch(node, false_label, &if_context);
 
-                        ReSeq(vec![Actions(node), If(true_branch, false_branch)])
+                        ReSeq(vec![If(true_branch, false_branch)])
                     }
                     Terminal => ReSeq(vec![Return]),
                 }
@@ -121,7 +121,7 @@ impl EnrichedCfg {
         if self.loop_nodes.contains(&node) {
             let mut ctx = context.clone();
             ctx.push(Context::LoopHeadedBy(node));
-            ReSeq::single(Loop(Actions(node).concat(self.gen_node(node, &ctx))))
+            ReSeq::single(Loop(self.gen_node(node, &ctx)))
         } else {
             self.gen_node(node, context)
         }
