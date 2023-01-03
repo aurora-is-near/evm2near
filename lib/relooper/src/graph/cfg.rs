@@ -1,21 +1,28 @@
 use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
+use crate::graph::cfg::CfgLabel::{Simple, Special};
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 use std::iter::once;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Default, Debug)]
-pub struct CfgLabel(usize);
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+pub enum CfgLabel {
+    Simple(usize),
+    Special(usize),
+}
 
 impl Display for CfgLabel {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{}", self.0))
+        match self {
+            Simple(l) => f.write_fmt(format_args!("{}", l)),
+            Special(l) => f.write_fmt(format_args!("{}'", l)),
+        }
     }
 }
 
 impl CfgLabel {
     fn try_parse(str: &str) -> Result<CfgLabel, String> {
         str.parse::<usize>()
-            .map(CfgLabel)
+            .map(Simple)
             .map_err(|err| err.to_string())
     }
 }
