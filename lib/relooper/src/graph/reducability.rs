@@ -1,6 +1,7 @@
 use crate::graph::cfg::CfgEdge;
 use crate::graph::cfg::CfgLabel;
 use crate::Cfg;
+use crate::EnrichedCfg;
 use std::collections::{HashMap, HashSet};
 pub type SuperNodeId = usize;
 
@@ -45,45 +46,45 @@ impl Graph {
     }
 
     pub fn build_from(&mut self, cfg: &Cfg) -> &Graph {
-        for (label, edge) in cfg.out_edges {
-            if label >= self.next_id {
-                self.next_id = label;
+        for (label, edge) in &cfg.out_edges {
+            if label >= &self.next_id {
+                self.next_id = *label;
             }
-            self.id2node.insert(label, Node::new(label));
+            self.id2node.insert(*label, Node::new(*label));
             match edge {
                 CfgEdge::Cond(to_cond, to_ucond) => {
                     self.id2node
                         .get_mut(&label)
                         .unwrap()
                         .succ
-                        .insert(ProperEdge::Cond(label, to_cond));
+                        .insert(ProperEdge::Cond(*label, *to_cond));
                     self.id2node
                         .get_mut(&label)
                         .unwrap()
                         .succ
-                        .insert(ProperEdge::Uncond(label, to_ucond));
+                        .insert(ProperEdge::Uncond(*label, *to_ucond));
                     self.id2node
                         .get_mut(&to_cond)
                         .unwrap()
                         .prec
-                        .insert(ProperEdge::Cond(label, to_cond));
+                        .insert(ProperEdge::Cond(*label, *to_cond));
                     self.id2node
                         .get_mut(&to_ucond)
                         .unwrap()
                         .prec
-                        .insert(ProperEdge::Uncond(label, to_ucond));
+                        .insert(ProperEdge::Uncond(*label, *to_ucond));
                 }
                 CfgEdge::Uncond(to_uncond) => {
                     self.id2node
                         .get_mut(&label)
                         .unwrap()
                         .succ
-                        .insert(ProperEdge::Uncond(label, to_uncond));
+                        .insert(ProperEdge::Uncond(*label, *to_uncond));
                     self.id2node
                         .get_mut(&to_uncond)
                         .unwrap()
                         .prec
-                        .insert(ProperEdge::Uncond(label, to_uncond));
+                        .insert(ProperEdge::Uncond(*label, *to_uncond));
                 }
                 CfgEdge::Terminal => {
                     self.id2node
@@ -99,33 +100,36 @@ impl Graph {
 
     pub fn cfg(&self) -> Cfg {
         let mut out_edges: HashMap<CfgLabel, CfgEdge> = HashMap::default();
-        for (id, node) in self.id2node {
+        for (id, node) in &self.id2node {
             if node.succ.len() == 1 {
                 match &node.succ.iter().next().unwrap() {
                     ProperEdge::Uncond(from, to) => {
-                        out_edges.insert(id, CfgEdge::Uncond(*to));
+                        out_edges.insert(*id, CfgEdge::Uncond(*to));
                     }
                     ProperEdge::Terminal => {
-                        out_edges.insert(id, CfgEdge::Terminal);
+                        out_edges.insert(*id, CfgEdge::Terminal);
+                    }
+                    ProperEdge::Cond(from, to) => {
+                        panic!("Here should not be a cond node!");
                     }
                 }
             } else {
-                let mut cond_to: CfgLabel;
-                let mut ucond_to: CfgLabel;
-                for edge in node.succ {
+                let mut cond_to: CfgLabel = usize::MAX;
+                let mut ucond_to: CfgLabel = usize::MAX;
+                for edge in &node.succ {
                     match edge {
                         ProperEdge::Cond(from, to) => {
-                            cond_to = to;
+                            cond_to = *to;
                         }
                         ProperEdge::Uncond(from, to) => {
-                            ucond_to = to;
+                            ucond_to = *to;
                         }
                         ProperEdge::Terminal => {
                             panic!("Here should not be terminal")
                         }
                     }
                 }
-                out_edges.insert(id, CfgEdge::Cond(cond_to, ucond_to));
+                out_edges.insert(*id, CfgEdge::Cond(cond_to, ucond_to));
             }
         }
         return Cfg { out_edges };
@@ -182,6 +186,14 @@ impl SuperNode {
 }
 
 #[derive(Default)]
+/// This SuperGraph is used as help struct to generate reducable CFG from irreducable one.
+/// Main idea of algorithm:
+/// 1) SuperGraph is graph where each node is group from one or more nodes  of CFG.
+/// 2) Firstly, we make SuperGraph and each node of it contain exactly one CFG node.
+/// 3) Then we do two operations -- merge and split until only one SuperGraph node left.
+///
+/// In process of this operations some CFG nodes will be cloned, and finally all this nodes will represent
+/// equivalent reducable CFG.
 struct Supergraph {
     id2node: HashMap<SuperNodeId, SuperNode>,
     clone2origin: HashMap<CfgLabel, CfgLabel>, // clone2origin[x] = y means that cfg node with id=x was clonned from cfg node with id=y;
@@ -190,11 +202,9 @@ struct Supergraph {
 }
 
 impl Supergraph {
-    // i think here is a mistake
     pub fn build(mut self, c: &Cfg) -> Supergraph {
-        let g = Graph::new().build_from(c);
-        println!("len g.id2node = {}", g.id2node.len());
-
+        let mut g = Graph::new();
+        g.build_from(c);
         for (_id, cfg_node) in &g.id2node {
             let tmp = SuperNode::default();
             self.id2node
@@ -202,7 +212,6 @@ impl Supergraph {
             self.next_id += 1;
         }
         self.next_cfg_id = g.next_id;
-        // TODO: make superedges;
         return self;
     }
 
@@ -221,19 +230,12 @@ impl Supergraph {
     }
 
     pub fn in_which_supernode(&self, nid: CfgLabel) -> SuperNodeId {
-        println!("in which supernode called with nid = {}", nid);
         for (id, node) in &self.id2node {
-            format!("super id {}\n", id);
-            for sid in &node.cfg_ids {
-                print!("\tsub id {}\n", sid);
-            }
             if node.cfg_ids.contains(&nid) {
                 return *id;
             }
         }
-        println!("BBBBBBBBBBBBBBBBBB");
-        println!("len id2node = {}", &self.id2node.len());
-        panic!("No such node");
+        panic!("No such node!");
     }
 
     pub fn can_merge(&self) -> bool {
@@ -334,7 +336,7 @@ impl Supergraph {
     pub fn merge(&mut self, (master, slave): (SuperNodeId, SuperNodeId)) -> () {
         println!("merge nodes slave : {}, master : {}", slave, master);
         self.make_clone((master, slave));
-        self.id2node.remove(&slave);
+        self.delete_snode(slave);
     }
 
     pub fn split(&mut self, (masters, slave): (HashSet<SuperNodeId>, SuperNodeId)) -> () {
@@ -345,18 +347,51 @@ impl Supergraph {
         for master in masters {
             self.make_clone((master, slave));
         }
-        self.id2node.remove(&slave);
+        self.delete_snode(slave);
     }
 
-    // this function make a copy of slave supernode, then, node by node move its cfg nodes to master supernode
-    // and remove all inedges of slave node, that are not from master node.
+    /// This method deletes supernode from supergraph with all its inedges and outedges
+    pub fn delete_snode(&mut self, node_id: SuperNodeId) -> () {
+        for (id, cfg_node) in &self.id2node.get_mut(&node_id).unwrap().cfg_ids2cfg_nodes {
+            for edge in &cfg_node.prec {
+                match edge {
+                    ProperEdge::Cond(from, to) => {
+                        self.delete_edge(*from, *to, edge.clone());
+                    }
+                    ProperEdge::Uncond(from, to) => {
+                        self.delete_edge(*from, *to, edge.clone());
+                    }
+                    ProperEdge::Terminal => {
+                        panic!("Here should not be a terminal edge!");
+                    }
+                }
+            }
+            for edge in &cfg_node.succ {
+                match edge {
+                    ProperEdge::Cond(from, to) => {
+                        self.delete_edge(*from, *to, edge.clone());
+                    }
+                    ProperEdge::Uncond(from, to) => {
+                        self.delete_edge(*from, *to, edge.clone());
+                    }
+                    ProperEdge::Terminal => {
+                        panic!("Here should not be a terminal edge!");
+                    }
+                }
+            }
+        }
+        self.id2node.remove(&node_id);
+    }
+
+    /// This function node by node copy slave cfg nodes to master supernode
     pub fn make_clone(&mut self, (master, slave): (SuperNodeId, SuperNodeId)) -> () {
         let mut new_cfg_ids: HashMap<CfgLabel, CfgLabel> = HashMap::default(); // old -> new
         for id in &self.id2node.get(&slave).unwrap().cfg_ids {
             new_cfg_ids.insert(*id, self.next_id);
+            self.clone2origin.insert(self.next_cfg_id, *id);
             self.next_cfg_id += 1;
         }
-        for (old, _new) in &new_cfg_ids {
+        for (old, new) in &new_cfg_ids {
             let mut node = self
                 .id2node
                 .get(&slave)
@@ -365,10 +400,7 @@ impl Supergraph {
                 .get(&old)
                 .unwrap()
                 .clone();
-
-            let new_id = *new_cfg_ids.get(&node.id).unwrap();
-            // node.id = new_id;
-            self.copy_to_other_supernode(node.clone(), slave, master, new_id);
+            self.copy_to_other_supernode(node, slave, master, *new);
         }
     }
 
@@ -379,7 +411,6 @@ impl Supergraph {
                 id2n.insert(cid, cnode);
             }
         }
-
         return Graph {
             id2node: (id2n),
             next_id: (self.next_cfg_id),
@@ -387,7 +418,19 @@ impl Supergraph {
         .cfg();
     }
 
-    // this method copyes node (cfg node) from snode_from to snode_to (super nodes)
+    pub fn delete_edge(&mut self, from: CfgLabel, to: CfgLabel, edge: ProperEdge) -> () {
+        self.id2node
+            .get_mut(&self.in_which_supernode(from))
+            .unwrap()
+            .cfg_ids2cfg_nodes
+            .get_mut(&from)
+            .unwrap()
+            .succ
+            .remove(&edge);
+    }
+
+    /// This method copyes one node (cfg node) from snode_from to snode_to (super nodes)
+    /// This method copyes this cfg node with only edges, that have origin in from node or in to node
     pub fn copy_to_other_supernode(
         &mut self,
         node: Node,
@@ -397,52 +440,59 @@ impl Supergraph {
     ) -> () {
         let snode_from = self.id2node.get(&snode_from_id).unwrap().clone();
         let mut snode_to = self.id2node.get(&snode_to_id).unwrap().clone();
-        snode_to.cfg_ids.insert(new_id);
-        snode_to.cfg_ids2cfg_nodes.insert(new_id, node.clone()); // cut precs of this node
-
-        snode_to
-            .cfg_ids2cfg_nodes
-            .get_mut(&new_id)
-            .unwrap()
-            .prec
-            .retain(|prec_id: &CfgLabel| -> bool {
-                snode_from.cfg_ids.contains(&prec_id) || snode_to.cfg_ids.contains(&prec_id)
-            });
-
-        let is_foreighn = |prec_id: &CfgLabel| -> bool {
-            !snode_from.cfg_ids.contains(&prec_id) && !snode_to.cfg_ids.contains(&prec_id)
-            // maybe wrong predicate ? maybe fixed
-        };
-
-        let mut foreighn_precs: HashSet<(CfgLabel, CfgLabel)> = HashSet::default();
-        for id in &snode_from.cfg_ids2cfg_nodes.get(&node.id).unwrap().prec {
-            // here should be other id. Maybe i fix it ?
-            if is_foreighn(id) {
-                foreighn_precs.insert((*id, node.id));
+        for edge in &node.prec {
+            match edge {
+                ProperEdge::Cond(from, to) => {
+                    if !(snode_from.cfg_ids.contains(&from) || snode_to.cfg_ids.contains(&from)) {
+                        self.delete_edge(*from, *to, edge.clone());
+                    }
+                }
+                ProperEdge::Uncond(from, to) => {
+                    if !(snode_from.cfg_ids.contains(&from) || snode_to.cfg_ids.contains(&from)) {
+                        self.delete_edge(*from, *to, edge.clone());
+                    }
+                }
+                ProperEdge::Terminal => {
+                    panic!("Here should not be a terminal edge!");
+                }
             }
         }
-        for (from, to) in foreighn_precs {
-            let origin = self.in_which_supernode(from);
-            self.id2node
-                .get_mut(&origin)
-                .unwrap()
-                .cfg_ids2cfg_nodes
-                .get_mut(&from)
-                .unwrap()
-                .succ
-                .remove(&to);
-
-            // ????
-            snode_to
-                .cfg_ids2cfg_nodes
-                .get_mut(&to)
-                .unwrap()
-                .prec
-                .remove(&from);
-        }
-
+        snode_to.cfg_ids.insert(new_id);
+        snode_to.cfg_ids2cfg_nodes.insert(new_id, node.clone());
         *self.id2node.get_mut(&snode_to_id).unwrap() = snode_to;
     }
+}
 
-    pub fn remove_foreighn_edges(cfg_id: CfgLabel, from_id: SuperNodeId, to_id: SuperNodeId) {}
+#[test]
+pub fn test_reducer() -> () {
+    println!("test reducer");
+    let graph = Cfg::from(vec![
+        (0, 1, true),
+        (0, 2, false),
+        (1, 3, true),
+        (2, 3, false),
+        (3, 4, false),
+        (1, 5, false),
+        (5, 6, true),
+        (5, 7, false),
+        (6, 8, false),
+        (7, 8, false),
+        (4, 9, false),
+        (8, 9, true),
+        (8, 5, false),
+    ]);
+    let e_graph = Cfg::from(graph);
+    let reducable = reducable(&e_graph);
+    let enriched = EnrichedCfg::new(reducable, 0);
+    let enriched_irr = EnrichedCfg::new(e_graph, 0);
+    let dot_lines: Vec<String> = vec![
+        "digraph {".to_string(),
+        enriched_irr.cfg_to_dot(),
+        String::new(),
+        enriched.dom_to_dot(),
+        String::new(),
+        enriched.cfg_to_dot(),
+        "}".to_string(),
+    ];
+    std::fs::write("reduced.dot", dot_lines.join("\n")).expect("fs error");
 }
