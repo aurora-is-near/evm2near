@@ -42,7 +42,7 @@ impl EnrichedCfg {
                 }
             }
         }
-        lines.push(format!("nstart -> n{}", self.entry));
+        lines.push(format!("nstart -> n{}", self.cfg.entry));
         lines.extend(edges);
         lines.push("}".to_string());
 

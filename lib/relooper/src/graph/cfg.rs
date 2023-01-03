@@ -22,38 +22,60 @@ impl CfgEdge {
 
 pub struct Cfg {
     pub(crate) out_edges: HashMap<CfgLabel, CfgEdge>,
-}
-
-impl From<Vec<(CfgLabel, CfgLabel, bool)>> for Cfg {
-    fn from(edges: Vec<(CfgLabel, CfgLabel, bool)>) -> Self {
-        let mut temp_edges: HashMap<CfgLabel, Vec<(CfgLabel, bool)>> = HashMap::new();
-        for &(from, to, is_conditional) in &edges {
-            temp_edges
-                .entry(from)
-                .or_default()
-                .push((to, is_conditional));
-        }
-
-        let mut out_edges = HashMap::new();
-        for node in edges.iter().flat_map(|(f, t, _)| vec![f, t]) {
-            let edge = temp_edges.get(node).map_or(
-                Terminal, // assuming that every non-terminal node from input graph has edge out and every terminal node doesnt
-                |to| match to[..] {
-                    [(uncond, false)] => Uncond(uncond),
-                    [(true_br, true), (false_br, false)] | [(false_br, false), (true_br, true)] => {
-                        Cond(true_br, false_br)
-                    }
-                    _ => panic!("unexpected edges configuration"),
-                },
-            );
-            out_edges.insert(*node, edge);
-        }
-
-        Cfg { out_edges }
-    }
+    pub(crate) entry: CfgLabel,
 }
 
 impl Cfg {
+    fn from_edges(edges: Vec<(CfgLabel, CfgEdge)>, entry: CfgLabel) -> Result<Self, &'static str> {
+        let mut out_edges = HashMap::new();
+        let mut nodes = HashSet::new();
+        for (from, edge) in edges {
+            let old_val = out_edges.insert(from, edge);
+            if old_val.is_some() {
+                return Err("repeating source node");
+            }
+            nodes.insert(from);
+            nodes.extend(edge.to_vec());
+        }
+
+        for n in nodes {
+            out_edges.entry(n).or_insert(Terminal);
+        }
+
+        Ok(Self { out_edges, entry })
+    }
+
+    pub fn from_strings(strings: Vec<String>) -> Result<Self, &'static str> {
+        let entry = strings
+            .get(0)
+            .ok_or("no entry line specified")
+            .and_then(|e_str| e_str.parse::<usize>().map_err(|x| "invalid entry format"))?;
+        let edges: Vec<_> = strings
+            .iter()
+            .skip(1)
+            .map(|s| {
+                let split: Vec<_> = s.split(" ").map(|s| s.parse::<usize>()).collect();
+                let split_r: Result<Vec<_>, _> = split.into_iter().collect();
+
+                split_r
+                    .map_err(|_err| "usize parse error")
+                    .and_then(|split_v| {
+                        let from = split_v[0];
+
+                        let edge = match split_v[1..] {
+                            [to] => Ok(Uncond(to)),
+                            [t, f] => Ok(Cond(t, f)),
+                            _ => Err("invalid edge description"),
+                        };
+                        edge.map(|e| (from, e))
+                    })
+            })
+            .collect();
+        let edges_result: Result<Vec<(CfgLabel, CfgEdge)>, _> = edges.into_iter().collect();
+
+        edges_result.and_then(|edges| Self::from_edges(edges, entry))
+    }
+
     pub fn nodes(&self) -> HashSet<CfgLabel> {
         self.out_edges
             .iter()

@@ -13,7 +13,6 @@ pub(crate) mod relooper;
 
 pub struct EnrichedCfg {
     cfg: Cfg,
-    entry: CfgLabel,
     back_edges: HashMap<CfgLabel, Vec<CfgLabel>>,
     node_ordering: NodeOrdering,
     domination: DomTree,
@@ -23,7 +22,7 @@ pub struct EnrichedCfg {
 }
 
 impl EnrichedCfg {
-    pub fn new(cfg: Cfg, entry: CfgLabel) -> Self {
+    pub fn new(cfg: Cfg) -> Self {
         let mut back_edges: HashMap<CfgLabel, Vec<CfgLabel>> = HashMap::default();
 
         for (&from, &to_edge) in &cfg.out_edges {
@@ -32,7 +31,7 @@ impl EnrichedCfg {
             }
         }
 
-        let node_ordering = NodeOrdering::new(&cfg, entry);
+        let node_ordering = NodeOrdering::new(&cfg, cfg.entry);
 
         let mut merge_nodes: HashSet<CfgLabel> = HashSet::new();
         let mut loop_nodes: HashSet<CfgLabel> = HashSet::new();
@@ -61,13 +60,12 @@ impl EnrichedCfg {
             }
         }
 
-        let domination_map = Self::domination_tree(&cfg, &node_ordering, entry);
+        let domination_map = Self::domination_tree(&cfg, &node_ordering, cfg.entry);
         let domination_vec = Vec::from_iter(domination_map);
         let domination = DomTree::from(domination_vec);
 
         Self {
             cfg,
-            entry,
             back_edges,
             node_ordering,
             domination,

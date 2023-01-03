@@ -128,6 +128,6 @@ impl EnrichedCfg {
     }
 
     pub fn reloop(&self) -> ReSeq {
-        self.do_tree(self.entry, &Vec::new())
+        self.do_tree(self.cfg.entry, &Vec::new())
     }
 }
