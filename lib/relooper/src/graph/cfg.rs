@@ -26,7 +26,10 @@ pub struct Cfg {
 }
 
 impl Cfg {
-    fn from_edges(edges: Vec<(CfgLabel, CfgEdge)>, entry: CfgLabel) -> Result<Self, &'static str> {
+    pub fn from_edges(
+        edges: Vec<(CfgLabel, CfgEdge)>,
+        entry: CfgLabel,
+    ) -> Result<Self, &'static str> {
         let mut out_edges = HashMap::new();
         let mut nodes = HashSet::new();
         for (from, edge) in edges {
