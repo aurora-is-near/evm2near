@@ -35,6 +35,7 @@ impl Node {
 pub struct Graph {
     id2node: HashMap<CfgLabel, Node>,
     next_id: CfgLabel,
+    terminal: CfgLabel,
 }
 
 impl Graph {
@@ -42,6 +43,7 @@ impl Graph {
         Graph {
             id2node: HashMap::new(),
             next_id: 0,
+            terminal: 0,
         }
     }
 
@@ -53,6 +55,8 @@ impl Graph {
             self.id2node.insert(*label, Node::new(*label));
             match edge {
                 CfgEdge::Cond(to_cond, to_ucond) => {
+                    self.id2node.insert(*to_cond, Node::new(*to_cond));
+                    self.id2node.insert(*to_ucond, Node::new(*to_ucond));
                     self.id2node
                         .get_mut(&label)
                         .unwrap()
@@ -75,6 +79,7 @@ impl Graph {
                         .insert(ProperEdge::Uncond(*label, *to_ucond));
                 }
                 CfgEdge::Uncond(to_uncond) => {
+                    self.id2node.insert(*to_uncond, Node::new(*to_uncond));
                     self.id2node
                         .get_mut(&label)
                         .unwrap()
@@ -87,11 +92,12 @@ impl Graph {
                         .insert(ProperEdge::Uncond(*label, *to_uncond));
                 }
                 CfgEdge::Terminal => {
-                    self.id2node
-                        .get_mut(&label)
-                        .unwrap()
-                        .succ
-                        .insert(ProperEdge::Terminal);
+                    // self.id2node
+                    //     .get_mut(&label)
+                    //     .unwrap()
+                    //     .succ
+                    //     .insert(ProperEdge::Terminal);
+                    self.terminal = *label;
                 }
             }
         }
@@ -132,6 +138,7 @@ impl Graph {
                 out_edges.insert(*id, CfgEdge::Cond(cond_to, ucond_to));
             }
         }
+        out_edges.insert(self.terminal, CfgEdge::Terminal);
         return Cfg { out_edges };
     }
 
@@ -199,12 +206,14 @@ struct Supergraph {
     clone2origin: HashMap<CfgLabel, CfgLabel>, // clone2origin[x] = y means that cfg node with id=x was clonned from cfg node with id=y;
     next_id: SuperNodeId,
     next_cfg_id: CfgLabel,
+    terminal: CfgLabel,
 }
 
 impl Supergraph {
     pub fn build(mut self, c: &Cfg) -> Supergraph {
         let mut g = Graph::new();
         g.build_from(c);
+        self.terminal = g.terminal;
         for (_id, cfg_node) in &g.id2node {
             let tmp = SuperNode::default();
             self.id2node
@@ -418,6 +427,7 @@ impl Supergraph {
         return Graph {
             id2node: (id2n),
             next_id: (self.next_cfg_id),
+            terminal: self.terminal,
         }
         .cfg();
     }
