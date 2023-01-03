@@ -352,14 +352,15 @@ impl Supergraph {
 
     /// This method deletes supernode from supergraph with all its inedges and outedges
     pub fn delete_snode(&mut self, node_id: SuperNodeId) -> () {
+        let mut edges_to_del: HashSet<(CfgLabel, CfgLabel, ProperEdge)> = HashSet::default();
         for (id, cfg_node) in &self.id2node.get_mut(&node_id).unwrap().cfg_ids2cfg_nodes {
             for edge in &cfg_node.prec {
                 match edge {
                     ProperEdge::Cond(from, to) => {
-                        self.delete_edge(*from, *to, edge.clone());
+                        edges_to_del.insert((*from, *to, edge.clone()));
                     }
                     ProperEdge::Uncond(from, to) => {
-                        self.delete_edge(*from, *to, edge.clone());
+                        edges_to_del.insert((*from, *to, edge.clone()));
                     }
                     ProperEdge::Terminal => {
                         panic!("Here should not be a terminal edge!");
@@ -369,16 +370,19 @@ impl Supergraph {
             for edge in &cfg_node.succ {
                 match edge {
                     ProperEdge::Cond(from, to) => {
-                        self.delete_edge(*from, *to, edge.clone());
+                        edges_to_del.insert((*from, *to, edge.clone()));
                     }
                     ProperEdge::Uncond(from, to) => {
-                        self.delete_edge(*from, *to, edge.clone());
+                        edges_to_del.insert((*from, *to, edge.clone()));
                     }
                     ProperEdge::Terminal => {
                         panic!("Here should not be a terminal edge!");
                     }
                 }
             }
+        }
+        for (from, to, edge) in edges_to_del {
+            &self.delete_edge(from, to, edge);
         }
         self.id2node.remove(&node_id);
     }
