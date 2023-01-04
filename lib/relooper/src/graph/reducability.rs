@@ -490,29 +490,93 @@ impl Supergraph {
     ) -> () {
         let snode_from = self.id2node.get(&snode_from_id).unwrap().clone();
         let mut snode_to = self.id2node.get(&snode_to_id).unwrap().clone();
-
         let mut cfg_node = Node::new(new_id);
+        for succ in node.succ {
+            match succ {
+                ProperEdge::Cond(from, to) => {
+                    cfg_node.succ.insert(ProperEdge::Cond(new_id, to));
+                    self.id2node
+                        .get_mut(&self.in_which_supernode(to))
+                        .unwrap()
+                        .cfg_ids2cfg_nodes
+                        .get_mut(&to)
+                        .unwrap()
+                        .prec
+                        .insert(ProperEdge::Cond(new_id, to));
+                }
+                ProperEdge::Uncond(from, to) => {
+                    cfg_node.succ.insert(ProperEdge::Uncond(new_id, to));
+                    self.id2node
+                        .get_mut(&self.in_which_supernode(to))
+                        .unwrap()
+                        .cfg_ids2cfg_nodes
+                        .get_mut(&to)
+                        .unwrap()
+                        .prec
+                        .insert(ProperEdge::Uncond(new_id, to));
+                }
+                ProperEdge::Terminal => {
+                    panic!("Here should not be a terminal edge!");
+                }
+            }
+        }
+        for prec in node.prec {
+            match prec {
+                ProperEdge::Cond(from, to) => {
+                    if self.in_which_supernode(from) != snode_from_id
+                        && self.in_which_supernode(from) != snode_to_id
+                    {
+                        continue;
+                    }
+                    cfg_node.prec.insert(ProperEdge::Cond(from, new_id));
+                    self.id2node
+                        .get_mut(&self.in_which_supernode(from))
+                        .unwrap()
+                        .cfg_ids2cfg_nodes
+                        .get_mut(&from)
+                        .unwrap()
+                        .succ
+                        .insert(ProperEdge::Cond(from, new_id));
+                }
+                ProperEdge::Uncond(from, to) => {
+                    if self.in_which_supernode(from) != snode_from_id
+                        && self.in_which_supernode(from) != snode_to_id
+                    {
+                        continue;
+                    }
+                    cfg_node.prec.insert(ProperEdge::Uncond(from, new_id));
+                    self.id2node
+                        .get_mut(&self.in_which_supernode(from))
+                        .unwrap()
+                        .cfg_ids2cfg_nodes
+                        .get_mut(&from)
+                        .unwrap()
+                        .succ
+                        .insert(ProperEdge::Uncond(from, new_id));
+                }
+                ProperEdge::Terminal => {
+                    panic!("Here should not be a terminal edge!");
+                }
+            }
+        }
 
-        // for pr in &node.prec {
-        //     match pr {
-        //         ProperEdge::Cond(from, to) => {
-
-        //             cfg_node.prec.insert(ProperEdge::Cond(*from, new_id));
-        //             self.id2node.get_mut(from).unwrap()
-        //         }
-        //     }
-        // }
-
-        // BUG!!!
-        // solution :
-        // here i should not delete any edges from global graph, just from clonned node.
-        // all edges in cloned node should have proper (from, to). When i make simple clone them are wrong
-        // i should add this edges to other nodes of this edges
+        // prev bug fixed but now there is some issues with links...
 
         snode_to.cfg_ids.insert(new_id);
-        snode_to.cfg_ids2cfg_nodes.insert(new_id, node.clone());
-        *self.id2node.get_mut(&snode_to_id).unwrap() = snode_to;
+        snode_to.cfg_ids2cfg_nodes.insert(new_id, cfg_node.clone());
+        self.id2node.entry(snode_to_id).or_insert(snode_to);
+
+        println!(
+            "copy_to_other_supernode; snode_to id = {}; cfg ids in it:",
+            snode_to_id
+        );
+        for id in &self.id2node.get_mut(&snode_to_id).unwrap().cfg_ids {
+            print!("{}, ", id);
+        }
+        print!("\n");
     }
+
+    pub fn full_log(&self) {}
 }
 
 #[test]
