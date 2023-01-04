@@ -78,12 +78,13 @@ impl ReSeq {
                         let mut back = back_branches.clone();
                         back.push(current_id);
 
-                        let bstr = if let ReBlock::Block(_) = block {
-                            "Block".to_string()
+                        if let ReBlock::Block(_) = block {
+                            res.push(format!(
+                                "r{current_id}[label=\"Block {current_id}\",shape=\"rectangle\"];"
+                            ));
                         } else {
-                            "Loop".to_string()
+                            res.push(format!("r{current_id}[label=\"Loop {current_id}\"];"));
                         };
-                        res.push(format!("r{current_id}[label=\"{bstr} {current_id}\"];"));
 
                         let ch_id = current_id + 1;
                         let (ch_last_id, ch_str) = next.to_dot_inner(ch_id, &back);
@@ -127,7 +128,9 @@ impl ReSeq {
                         let branch_to = back_branches
                             .get(back_branches.len() - 1 - jmp)
                             .expect("unexpected branch");
-                        res.push(format!("r{current_id} -> r{branch_to}[constraint=false]"));
+                        res.push(format!(
+                            "r{current_id} -> r{branch_to}[constraint=false,color=\"blue\"]"
+                        ));
 
                         (current_id + 1, None)
                     }
@@ -139,7 +142,9 @@ impl ReSeq {
                 };
 
                 if let Some(last_id) = prev_block {
-                    res.push(format!("r{last_id} -> r{current_id}[style=\"bold\"];"));
+                    res.push(format!(
+                        "r{last_id} -> r{current_id}[style=\"bold\",color=\"red\"];"
+                    ));
                 }
 
                 next_id
