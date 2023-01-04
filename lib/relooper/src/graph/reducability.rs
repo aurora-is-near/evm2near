@@ -140,6 +140,9 @@ impl Graph {
                         }
                     }
                 }
+                if cond_to == usize::MAX || ucond_to == usize::MAX {
+                    panic!("Unitialized variable!");
+                }
                 out_edges.insert(*id, CfgEdge::Cond(cond_to, ucond_to));
             } else {
                 if node.id != self.terminal || true {
@@ -217,7 +220,6 @@ impl SuperNode {
 struct Supergraph {
     id2node: HashMap<SuperNodeId, SuperNode>,
     clone2origin: HashMap<CfgLabel, CfgLabel>, // clone2origin[x] = y means that cfg node with id=x was clonned from cfg node with id=y;
-    next_id: SuperNodeId,
     next_cfg_id: CfgLabel,
     entry: CfgLabel,
     terminal: CfgLabel,
@@ -225,6 +227,7 @@ struct Supergraph {
 
 impl Supergraph {
     pub fn build(mut self, c: &Cfg) -> Supergraph {
+        let mut next_id = 0;
         let mut g = Graph::new();
         g.build_from(c);
         self.entry = g.entry;
@@ -232,10 +235,20 @@ impl Supergraph {
         for (_id, cfg_node) in &g.id2node {
             let tmp = SuperNode::default();
             self.id2node
-                .insert(self.next_id, tmp.build(cfg_node.clone(), self.next_id));
-            self.next_id += 1;
+                .insert(next_id, tmp.build(cfg_node.clone(), next_id));
+            next_id += 1;
         }
         self.next_cfg_id = g.next_id;
+
+        println!("BUILD RESULTS:");
+        for (id, node) in &self.id2node {
+            println!("supernode {} with cfg node:", id);
+            for idd in &node.cfg_ids {
+                print!("{}, ", idd);
+            }
+            print!("\n");
+        }
+
         return self;
     }
 
@@ -249,6 +262,8 @@ impl Supergraph {
                 self.split(self.clonable_nodes());
                 continue;
             }
+
+            println!("RUN FINISHED");
             return self;
         }
     }
@@ -286,6 +301,11 @@ impl Supergraph {
             if super_precs.contains(sid) {
                 super_precs.remove(sid);
             }
+            println!(
+                "NODE {} HAVE {} PRECS, TRYING TO MERGE",
+                sid,
+                super_precs.len()
+            );
             if super_precs.len() == 1 {
                 return true;
             }
@@ -312,6 +332,11 @@ impl Supergraph {
             if super_precs.contains(sid) {
                 super_precs.remove(sid);
             }
+            println!(
+                "NODE {} HAVE {} PRECS, TRYING TO SPLIT",
+                sid,
+                super_precs.len()
+            );
             if super_precs.len() > 1 {
                 return true;
             }
@@ -377,9 +402,14 @@ impl Supergraph {
     }
 
     pub fn merge(&mut self, (master, slave): (SuperNodeId, SuperNodeId)) -> () {
-        println!("merge nodes slave : {}, master : {}", slave, master);
+        println!("MERGE nodes slave : {}, master : {}", slave, master);
         self.make_clone((master, slave));
         self.delete_snode(slave);
+        println!("REMAIN SIDS AFTER MERGE {} TO {}:", slave, master);
+        for (id, node) in &self.id2node {
+            print!("{}, ", id);
+        }
+        print!("\n");
     }
 
     pub fn split(&mut self, (masters, slave): (HashSet<SuperNodeId>, SuperNodeId)) -> () {
@@ -387,14 +417,26 @@ impl Supergraph {
         for id in &masters {
             println!("{},", id)
         }
-        for master in masters {
-            self.make_clone((master, slave));
+        for master in &masters {
+            self.make_clone((*master, slave));
         }
+        println!("SPLIT WITH SLAVE = {}; MASTERS:", slave);
+        for master in &masters {
+            println!("{}, ", master);
+        }
+        println!("\n");
         self.delete_snode(slave);
+        println!("REMAIN SIDS AFTER SPLIT OF {}:", slave);
+        for (id, node) in &self.id2node {
+            print!("{}, ", id);
+        }
+        print!("\n");
     }
 
     /// This method deletes supernode from supergraph with all its inedges and outedges
     pub fn delete_snode(&mut self, node_id: SuperNodeId) -> () {
+        // here we don't delete all links to prev node!!!
+        println!("SNODE {} DELETING", node_id);
         let mut edges_to_del: HashSet<(CfgLabel, CfgLabel, ProperEdge)> = HashSet::default();
         for (id, cfg_node) in &self.id2node.get_mut(&node_id).unwrap().cfg_ids2cfg_nodes {
             for edge in &cfg_node.prec {
@@ -410,6 +452,7 @@ impl Supergraph {
                     }
                 }
             }
+
             for edge in &cfg_node.succ {
                 match edge {
                     ProperEdge::Cond(from, to) => {
@@ -434,10 +477,11 @@ impl Supergraph {
     pub fn make_clone(&mut self, (master, slave): (SuperNodeId, SuperNodeId)) -> () {
         let mut new_cfg_ids: HashMap<CfgLabel, CfgLabel> = HashMap::default(); // old -> new
         for id in &self.id2node.get(&slave).unwrap().cfg_ids {
-            new_cfg_ids.insert(*id, self.next_id);
+            new_cfg_ids.insert(*id, self.next_cfg_id);
             self.clone2origin.insert(self.next_cfg_id, *id);
             self.next_cfg_id += 1;
         }
+
         for (old, new) in &new_cfg_ids {
             let mut node = self
                 .id2node
@@ -476,6 +520,15 @@ impl Supergraph {
             .unwrap()
             .succ
             .remove(&edge);
+
+        self.id2node
+            .get_mut(&self.in_which_supernode(to))
+            .unwrap()
+            .cfg_ids2cfg_nodes
+            .get_mut(&to)
+            .unwrap()
+            .prec
+            .remove(&edge);
     }
 
     /// This method copyes one node (cfg node) from snode_from to snode_to (super nodes)
@@ -490,7 +543,9 @@ impl Supergraph {
     ) -> () {
         let snode_from = self.id2node.get(&snode_from_id).unwrap().clone();
         let mut snode_to = self.id2node.get(&snode_to_id).unwrap().clone();
+
         let mut cfg_node = Node::new(new_id);
+
         for succ in node.succ {
             match succ {
                 ProperEdge::Cond(from, to) => {
@@ -562,15 +617,26 @@ impl Supergraph {
 
         // prev bug fixed but now there is some issues with links...
 
+        println!(
+            "pre_copy_to_other_supernode; snode_to id = {}; cfg ids in it:",
+            snode_to_id
+        );
+        for id in &self.id2node.get(&snode_to_id).unwrap().cfg_ids {
+            print!("{}, ", id);
+        }
+        print!("\n");
+        println!("new id = {}", new_id);
+
         snode_to.cfg_ids.insert(new_id);
         snode_to.cfg_ids2cfg_nodes.insert(new_id, cfg_node.clone());
-        self.id2node.entry(snode_to_id).or_insert(snode_to);
+
+        self.id2node.insert(snode_to_id, snode_to);
 
         println!(
             "copy_to_other_supernode; snode_to id = {}; cfg ids in it:",
             snode_to_id
         );
-        for id in &self.id2node.get_mut(&snode_to_id).unwrap().cfg_ids {
+        for id in &self.id2node.get(&snode_to_id).unwrap().cfg_ids {
             print!("{}, ", id);
         }
         print!("\n");
