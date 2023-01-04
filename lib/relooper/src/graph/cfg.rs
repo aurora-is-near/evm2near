@@ -1,31 +1,9 @@
 use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
-use crate::graph::cfg::CfgLabel::{Simple, Special};
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 use std::iter::once;
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
-pub enum CfgLabel {
-    Simple(usize),
-    Special(usize),
-}
-
-impl Display for CfgLabel {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Simple(l) => f.write_fmt(format_args!("{}", l)),
-            Special(l) => f.write_fmt(format_args!("{}'", l)),
-        }
-    }
-}
-
-impl CfgLabel {
-    fn try_parse(str: &str) -> Result<CfgLabel, String> {
-        str.parse::<usize>()
-            .map(Simple)
-            .map_err(|err| err.to_string())
-    }
-}
+pub type CfgLabel = usize;
 
 #[derive(Copy, Clone)]
 pub enum CfgEdge {
@@ -38,9 +16,9 @@ impl CfgEdge {
     fn try_parse(str: &str) -> Result<CfgEdge, String> {
         let split_v = str.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();
         match &split_v[..] {
-            [to] => CfgLabel::try_parse(to).map(Uncond),
+            [to] => Cfg::try_parse_label(to).map(Uncond),
             [t, f] => {
-                CfgLabel::try_parse(t).and_then(|t| CfgLabel::try_parse(f).map(|f| Cond(t, f)))
+                Cfg::try_parse_label(t).and_then(|t| Cfg::try_parse_label(f).map(|f| Cond(t, f)))
             }
             _ => Err("invalid edge description".to_string()),
         }
@@ -63,6 +41,10 @@ pub struct Cfg {
 }
 
 impl Cfg {
+    fn try_parse_label(str: &str) -> Result<CfgLabel, String> {
+        str.parse::<usize>().map_err(|err| err.to_string())
+    }
+
     pub fn from_edges(edges: Vec<(CfgLabel, CfgEdge)>, entry: CfgLabel) -> Result<Self, String> {
         let mut out_edges = HashMap::new();
         let mut nodes = HashSet::new();
@@ -85,14 +67,14 @@ impl Cfg {
     pub fn from_strings(strings: Vec<String>) -> Result<Self, String> {
         match &strings[..] {
             [entry, edges @ ..] => {
-                let entry = CfgLabel::try_parse(entry)?;
+                let entry = Self::try_parse_label(entry)?;
                 let edges_vec_res: Vec<_> = edges
                     .iter()
                     .map(|s| {
                         s.split_once(' ')
                             .ok_or_else(|| "invalid label-edge format".to_string())
                             .and_then(|(from, edge)| {
-                                CfgLabel::try_parse(from)
+                                Self::try_parse_label(from)
                                     .and_then(|f| CfgEdge::try_parse(edge).map(|e| (f, e)))
                             })
                     })
