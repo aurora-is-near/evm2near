@@ -91,8 +91,8 @@ impl EnrichedCfg {
             }
             None => {
                 let actions = Actions(node);
-                match *self.cfg.edge(node) {
-                    Uncond(u) => actions.concat(self.do_branch(node, u, context)),
+                let other = match *self.cfg.edge(node) {
+                    Uncond(u) => self.do_branch(node, u, context),
                     Cond(true_label, false_label) => {
                         let mut if_context = context.clone();
                         if_context.push(Context::If);
@@ -103,7 +103,8 @@ impl EnrichedCfg {
                         ReSeq(vec![If(true_branch, false_branch)])
                     }
                     Terminal => ReSeq(vec![Return]),
-                }
+                };
+                actions.concat(other)
             }
         }
     }
