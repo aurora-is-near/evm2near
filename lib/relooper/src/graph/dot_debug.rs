@@ -1,8 +1,6 @@
 use crate::graph::cfg::{CfgEdge, CfgLabel};
 use crate::graph::relooper::{ReBlock, ReSeq};
 use crate::graph::EnrichedCfg;
-use std::fmt::format;
-use std::thread::current;
 
 impl EnrichedCfg {
     fn labels(&self, n: CfgLabel) -> String {

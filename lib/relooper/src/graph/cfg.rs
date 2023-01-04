@@ -1,6 +1,5 @@
 use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
 use std::collections::{HashMap, HashSet};
-use std::fmt::{Display, Formatter};
 use std::iter::once;
 
 pub type CfgLabel = usize;
