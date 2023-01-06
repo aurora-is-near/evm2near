@@ -1,31 +1,20 @@
 use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
 use std::collections::{HashMap, HashSet};
+use std::fmt::{Debug, Display, Formatter};
+use std::hash::Hash;
 use std::iter::once;
 
-pub type CfgLabel = usize;
+pub trait CfgLabel: Copy + Hash + Eq + Ord + Display + Debug {}
 
 #[derive(Copy, Clone, PartialEq, Debug)]
-pub enum CfgEdge {
-    Uncond(CfgLabel),
-    Cond(CfgLabel, CfgLabel),
+pub enum CfgEdge<TLabel: CfgLabel> {
+    Uncond(TLabel),
+    Cond(TLabel, TLabel),
     Terminal,
 }
 
-impl CfgEdge {
-    fn try_parse(str: &str) -> Result<CfgEdge, String> {
-        let split_v = str.split(' ').map(|s| s.to_string()).collect::<Vec<_>>();
-        match &split_v[..] {
-            [to] => Cfg::try_parse_label(to).map(Uncond),
-            [t, f] => {
-                Cfg::try_parse_label(t).and_then(|t| Cfg::try_parse_label(f).map(|f| Cond(t, f)))
-            }
-            _ => Err("invalid edge description".to_string()),
-        }
-    }
-}
-
-impl CfgEdge {
-    pub fn to_vec(&self) -> Vec<CfgLabel> {
+impl<TLabel: CfgLabel> CfgEdge<TLabel> {
+    pub fn to_vec(&self) -> Vec<TLabel> {
         match self {
             Uncond(u) => vec![*u],
             Cond(cond, fallthrough) => vec![*cond, *fallthrough],
@@ -35,17 +24,16 @@ impl CfgEdge {
 }
 
 #[derive(Clone)]
-pub struct Cfg {
-    pub(crate) out_edges: HashMap<CfgLabel, CfgEdge>,
-    pub(crate) entry: CfgLabel,
+pub struct Cfg<TLabel: CfgLabel> {
+    pub(crate) entry: TLabel,
+    pub(crate) out_edges: HashMap<TLabel, CfgEdge<TLabel>>,
 }
 
-impl Cfg {
-    fn try_parse_label(str: &str) -> Result<CfgLabel, String> {
-        str.parse::<usize>().map_err(|err| err.to_string())
-    }
-
-    pub fn from_edges(edges: Vec<(CfgLabel, CfgEdge)>, entry: CfgLabel) -> Result<Self, String> {
+impl<TLabel: CfgLabel> Cfg<TLabel> {
+    pub fn from_edges(
+        edges: Vec<(TLabel, CfgEdge<TLabel>)>,
+        entry: TLabel,
+    ) -> Result<Self, String> {
         let mut out_edges = HashMap::new();
         let mut nodes = HashSet::new();
         for (from, edge) in edges {
@@ -64,43 +52,39 @@ impl Cfg {
         Ok(Self { out_edges, entry })
     }
 
-    pub fn from_strings(strings: Vec<String>) -> Result<Self, String> {
-        match &strings[..] {
-            [entry, edges @ ..] => {
-                let entry = Self::try_parse_label(entry)?;
-                let edges_vec_res: Vec<_> = edges
-                    .iter()
-                    .map(|s| {
-                        s.split_once(' ')
-                            .ok_or_else(|| "invalid label-edge format".to_string())
-                            .and_then(|(from, edge)| {
-                                Self::try_parse_label(from)
-                                    .and_then(|f| CfgEdge::try_parse(edge).map(|e| (f, e)))
-                            })
-                    })
-                    .collect();
-                //TODO this is too obscure and ugly. the only purpose is to convert Vec<Res<>> to Res<Vec<>>
-                let edges_res_vec: Result<Vec<_>, _> = edges_vec_res.into_iter().collect();
-                edges_res_vec.and_then(|edges| Cfg::from_edges(edges, entry))
-            }
-            _ => Err("well-formed cfg should contain entry line and at least one edge".to_string()),
-        }
+    pub fn out_edges(&self) -> HashMap<TLabel, Vec<TLabel>> {
+        self.out_edges
+            .iter()
+            .map(|(&f, e)| (f, e.to_vec()))
+            .collect()
     }
 
-    pub fn nodes(&self) -> HashSet<CfgLabel> {
+    pub fn in_edges(&self) -> HashMap<TLabel, Vec<TLabel>> {
+        let mut back_edges: HashMap<TLabel, Vec<TLabel>> = HashMap::default();
+
+        for (&from, &to_edge) in &self.out_edges {
+            for to in to_edge.to_vec() {
+                back_edges.entry(to).or_default().push(from);
+            }
+        }
+
+        back_edges
+    }
+
+    pub fn nodes(&self) -> HashSet<TLabel> {
         self.out_edges
             .iter()
             .flat_map(|(&from, &to)| once(from).chain(to.to_vec()))
             .collect()
     }
 
-    pub fn edge(&self, label: CfgLabel) -> &CfgEdge {
+    pub fn edge(&self, label: TLabel) -> &CfgEdge<TLabel> {
         self.out_edges
             .get(&label)
             .expect("any node should have outgoing edges")
     }
 
-    pub fn children(&self, label: CfgLabel) -> HashSet<CfgLabel> {
+    pub fn children(&self, label: TLabel) -> HashSet<TLabel> {
         self.out_edges
             .get(&label)
             .into_iter()

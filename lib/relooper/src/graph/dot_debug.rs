@@ -1,9 +1,40 @@
-use crate::graph::cfg::{CfgEdge, CfgLabel};
+use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel};
 use crate::graph::relooper::{ReBlock, ReSeq};
 use crate::graph::EnrichedCfg;
 
-impl EnrichedCfg {
-    fn labels(&self, n: CfgLabel) -> String {
+impl<TLabel: CfgLabel> Cfg<TLabel> {
+    pub fn cfg_to_dot(&self, name: &str) -> String {
+        let mut lines: Vec<String> = Vec::new();
+        lines.push(format!("subgraph cluster_{name} {{ label=\"{name}\";"));
+        lines.push(format!("{name}_nstart[label=\"start\"]"));
+        lines.push(format!("{name}_nend[label=\"end\"]"));
+
+        let mut edges: Vec<String> = Vec::new();
+        for n in self.nodes() {
+            lines.push(format!("{name}_n{n}[label=\"{n}\"];"));
+            match self.edge(n) {
+                CfgEdge::Uncond(u) => {
+                    edges.push(format!("{name}_n{n} -> {name}_n{u};"));
+                }
+                CfgEdge::Cond(t, f) => {
+                    edges.push(format!("{name}_n{n} -> {name}_n{t}[style=\"dashed\"];"));
+                    edges.push(format!("{name}_n{n} -> {name}_n{f};"));
+                }
+                CfgEdge::Terminal => {
+                    edges.push(format!("{name}_n{n} -> {name}_nend;"));
+                }
+            }
+        }
+        lines.push(format!("{name}_nstart -> {name}_n{}", self.entry));
+        lines.extend(edges);
+        lines.push("}".to_string());
+
+        lines.join("\n")
+    }
+}
+
+impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
+    fn labels(&self, n: TLabel) -> String {
         let mut res = "".to_string();
         if self.loop_nodes.contains(&n) {
             res += "l";
@@ -18,29 +49,29 @@ impl EnrichedCfg {
         res
     }
 
-    pub fn cfg_to_dot(&self) -> String {
+    pub fn cfg_to_dot(&self, name: &str) -> String {
         let mut lines: Vec<String> = Vec::new();
-        lines.push("subgraph cluster_cfg { label=\"cfg\";".to_string());
-        lines.push("nstart[label=\"start\"]".to_string());
-        lines.push("nend[label=\"end\"]".to_string());
+        lines.push(format!("subgraph cluster_{name} {{ label=\"{name}\";"));
+        lines.push(format!("{name}_nstart[label=\"start\"]"));
+        lines.push(format!("{name}_nend[label=\"end\"]"));
 
         let mut edges: Vec<String> = Vec::new();
         for n in self.cfg.nodes() {
-            lines.push(format!("n{n}[label=\"{n} {}\"];", self.labels(n)));
+            lines.push(format!("{name}_n{n}[label=\"{n} {}\"];", self.labels(n)));
             match self.cfg.edge(n) {
                 CfgEdge::Uncond(u) => {
-                    edges.push(format!("n{n} -> n{u};"));
+                    edges.push(format!("{name}_n{n} -> {name}_n{u};"));
                 }
                 CfgEdge::Cond(t, f) => {
-                    edges.push(format!("n{n} -> n{t}[style=\"dashed\"];"));
-                    edges.push(format!("n{n} -> n{f};"));
+                    edges.push(format!("{name}_n{n} -> {name}_n{t}[style=\"dashed\"];"));
+                    edges.push(format!("{name}_n{n} -> {name}_n{f};"));
                 }
                 CfgEdge::Terminal => {
-                    edges.push(format!("n{n} -> nend;"));
+                    edges.push(format!("{name}_n{n} -> {name}_nend;"));
                 }
             }
         }
-        lines.push(format!("nstart -> n{}", self.cfg.entry));
+        lines.push(format!("{name}_nstart -> {name}_n{}", self.cfg.entry));
         lines.extend(edges);
         lines.push("}".to_string());
 
@@ -63,7 +94,7 @@ impl EnrichedCfg {
     }
 }
 
-impl ReSeq {
+impl<TLabel: CfgLabel> ReSeq<TLabel> {
     fn to_dot_inner(&self, current_id: usize, back_branches: &Vec<usize>) -> (usize, Vec<String>) {
         let mut res: Vec<String> = Vec::new();
 

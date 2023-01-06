@@ -19,15 +19,15 @@ use std::collections::{HashMap, HashSet};
 ///
 /// Thanks to reverse postorder we will find immediate dominator for all nodes.
 ///
-pub struct DomTree {
-    dominates: HashMap<CfgLabel, HashSet<CfgLabel>>,
-    pub(crate) dominated: HashMap<CfgLabel, CfgLabel>,
+pub struct DomTree<TLabel: CfgLabel> {
+    dominates: HashMap<TLabel, HashSet<TLabel>>,
+    pub(crate) dominated: HashMap<TLabel, TLabel>,
 }
 
-impl From<Vec<(CfgLabel, CfgLabel)>> for DomTree {
-    fn from(edges: Vec<(CfgLabel, CfgLabel)>) -> Self {
+impl<TLabel: CfgLabel> From<Vec<(TLabel, TLabel)>> for DomTree<TLabel> {
+    fn from(edges: Vec<(TLabel, TLabel)>) -> Self {
         let dominated = HashMap::from_iter(edges.iter().copied());
-        let mut dominates: HashMap<CfgLabel, HashSet<CfgLabel>> = HashMap::new();
+        let mut dominates: HashMap<TLabel, HashSet<TLabel>> = HashMap::new();
 
         for (dominated, dominator) in edges {
             dominates.entry(dominator).or_default().insert(dominated);
@@ -40,8 +40,8 @@ impl From<Vec<(CfgLabel, CfgLabel)>> for DomTree {
     }
 }
 
-impl DomTree {
-    pub(crate) fn immediately_dominated_by(&self, label: CfgLabel) -> HashSet<CfgLabel> {
+impl<TLabel: CfgLabel> DomTree<TLabel> {
+    pub(crate) fn immediately_dominated_by(&self, label: TLabel) -> HashSet<TLabel> {
         self.dominates
             .get(&label)
             .unwrap_or(&HashSet::new())
@@ -49,19 +49,19 @@ impl DomTree {
     }
 }
 
-pub struct NodeOrdering {
-    pub(crate) idx: HashMap<CfgLabel, usize>,
-    vec: Vec<CfgLabel>,
+pub struct NodeOrdering<TLabel: CfgLabel> {
+    pub(crate) idx: HashMap<TLabel, usize>,
+    vec: Vec<TLabel>,
 }
 
-impl NodeOrdering {
-    pub fn new(cfg: &Cfg, entry: CfgLabel) -> Self {
+impl<TLabel: CfgLabel> NodeOrdering<TLabel> {
+    pub fn new(cfg: &Cfg<TLabel>, entry: TLabel) -> Self {
         let vec = dfs_post(entry, &mut |x| cfg.children(*x));
-        let idx: HashMap<CfgLabel, usize> = vec.iter().enumerate().map(|(i, &n)| (n, i)).collect();
+        let idx: HashMap<TLabel, usize> = vec.iter().enumerate().map(|(i, &n)| (n, i)).collect();
         Self { vec, idx }
     }
 
-    pub fn is_backward(&self, from: CfgLabel, to: CfgLabel) -> bool {
+    pub fn is_backward(&self, from: TLabel, to: TLabel) -> bool {
         self.idx
             .get(&from)
             .zip(self.idx.get(&to))
@@ -69,11 +69,11 @@ impl NodeOrdering {
             .unwrap()
     }
 
-    pub fn is_forward(&self, from: CfgLabel, to: CfgLabel) -> bool {
+    pub fn is_forward(&self, from: TLabel, to: TLabel) -> bool {
         !self.is_backward(from, to)
     }
 
-    pub fn sequence(&self) -> &Vec<CfgLabel> {
+    pub fn sequence(&self) -> &Vec<TLabel> {
         &self.vec
     }
 }
