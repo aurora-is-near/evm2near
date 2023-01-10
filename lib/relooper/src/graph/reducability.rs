@@ -59,7 +59,6 @@ impl ColoredCfg {
     }
 
     pub fn merge(&mut self, master: Color, slave: Color) -> () {
-        println!("MERGE master = {}, slave = {}", master, slave);
         for (_label, mut color) in &mut self.colors {
             if *color == slave {
                 *color = master;
@@ -68,11 +67,6 @@ impl ColoredCfg {
     }
 
     pub fn split(&mut self, mut masters: BTreeSet<Color>, slave: Color) -> () {
-        println!("SPLIT slave = {}, masters:", slave);
-        for master in &masters {
-            print!("{}, ", master);
-        }
-        print!("\n");
         // first delete one random master
         let random = masters.iter().next().unwrap().clone();
         masters.remove(&random);
@@ -92,21 +86,8 @@ impl ColoredCfg {
                     masternodes.insert(*label);
                 }
             }
-            println!("SLAVES AND MASTERS");
-            println!("Masternodes (mastercolor = {}):", master);
-            for node in &masternodes {
-                print!("{}, ", node);
-            }
-            print!("\n");
-            println!("Slavenodes (slavecolor = {}):", slave);
-            for node in &slaves {
-                print!("{}, ", node);
-            }
-            print!("\n");
-
             // make a copy of all nodes with color = slave for this master
             // with all outedges
-            // BUG!!! Outedges between same color should be different
             let mut origin2clone: BTreeMap<CfgLabel, CfgLabel> = BTreeMap::default();
             let mut clones: BTreeSet<CfgLabel> = BTreeSet::default();
             for slave_node in &slaves {
@@ -118,11 +99,6 @@ impl ColoredCfg {
                 let edge = self.cfg.out_edges.get(&slave_node).unwrap().clone();
                 self.cfg.out_edges.insert(copy_label, edge);
             }
-            println!("Origin to clone:");
-            for (origin, clone) in &origin2clone {
-                println!("Origign = {}, clone = {}", origin, clone);
-            }
-            print!("\n");
             // fix edges between slave nodes
             for node in &clones {
                 let edge = self.cfg.out_edges.get_mut(&node).unwrap();
@@ -180,22 +156,6 @@ impl ColoredCfg {
                     CfgEdge::Terminal => {}
                 }
             }
-            println!("GRAPH RESULT AFTER EDGE SWITCHING:");
-            for (node, outedge) in &self.cfg.out_edges {
-                match outedge {
-                    CfgEdge::Cond(cond, uncond) => {
-                        println!("Cond edge from {} to {}", node, cond);
-                        println!("Uncond edge from {} to {}", node, uncond);
-                    }
-                    CfgEdge::Uncond(uncond) => {
-                        println!("Uncond edge from {} to {}", node, uncond);
-                    }
-                    CfgEdge::Terminal => {
-                        println!("Terminal edge from {}", node);
-                    }
-                }
-            }
-            println!("End of graph");
         }
     }
 
@@ -341,7 +301,7 @@ pub fn test_reducable() {
     assert_eq!(different_colors.len(), 1);
 }
 
-// #[test]
+#[test]
 pub fn test_irreducable() {
     let graph = Cfg::from_edges(
         vec![
@@ -354,24 +314,6 @@ pub fn test_irreducable() {
     .unwrap();
     let mut cgraph = ColoredCfg::new(&graph);
     cgraph.reduce_colors();
-
-    println!("GRAPH RESULT:");
-    for (node, outedge) in &cgraph.cfg.out_edges {
-        match outedge {
-            CfgEdge::Cond(cond, uncond) => {
-                println!("Cond edge from {} to {}", node, cond);
-                println!("Uncond edge from {} to {}", node, uncond);
-            }
-            CfgEdge::Uncond(uncond) => {
-                println!("Uncond edge from {} to {}", node, uncond);
-            }
-            CfgEdge::Terminal => {
-                println!("Terminal edge from {}", node);
-            }
-        }
-    }
-    println!("End of graph");
-
     let reduced = cgraph.as_cfg();
     let e_graph = EnrichedCfg::new(reduced);
     let dot_lines: Vec<String> = vec![
@@ -379,5 +321,57 @@ pub fn test_irreducable() {
         e_graph.cfg_to_dot(),
         "}".to_string(),
     ];
-    std::fs::write("relooped.dot", dot_lines.join("\n")).expect("fs error");
+    std::fs::write("reduced.dot", dot_lines.join("\n")).expect("fs error");
+}
+
+#[test]
+pub fn test_irreducable2() {
+    let graph = Cfg::from_edges(
+        vec![
+            (0, CfgEdge::Uncond(1)),
+            (1, CfgEdge::Cond(2, 3)),
+            (2, CfgEdge::Cond(4, 3)),
+            (3, CfgEdge::Cond(2, 5)),
+            (4, CfgEdge::Cond(6, 5)),
+            (5, CfgEdge::Cond(4, 7)),
+        ],
+        0,
+    )
+    .unwrap();
+    let mut cgraph = ColoredCfg::new(&graph);
+    cgraph.reduce_colors();
+    let reduced = cgraph.as_cfg();
+    let e_graph = EnrichedCfg::new(reduced);
+    let dot_lines: Vec<String> = vec![
+        "digraph {".to_string(),
+        e_graph.cfg_to_dot(),
+        "}".to_string(),
+    ];
+    std::fs::write("reduced2.dot", dot_lines.join("\n")).expect("fs error");
+}
+
+#[test]
+pub fn test_irreducable3() {
+    let graph = Cfg::from_edges(
+        vec![
+            (0, CfgEdge::Cond(1, 2)),
+            (1, CfgEdge::Cond(3, 4)),
+            (2, CfgEdge::Cond(4, 5)),
+            (3, CfgEdge::Cond(4, 6)),
+            (4, CfgEdge::Cond(3, 5)),
+            (5, CfgEdge::Cond(4, 7)),
+        ],
+        0,
+    )
+    .unwrap();
+    let mut cgraph = ColoredCfg::new(&graph);
+    cgraph.reduce_colors();
+    let reduced = cgraph.as_cfg();
+    let e_graph = EnrichedCfg::new(reduced);
+    let dot_lines: Vec<String> = vec![
+        "digraph {".to_string(),
+        e_graph.cfg_to_dot(),
+        "}".to_string(),
+    ];
+    std::fs::write("reduced3.dot", dot_lines.join("\n")).expect("fs error");
 }
