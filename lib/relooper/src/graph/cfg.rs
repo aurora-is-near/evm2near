@@ -4,7 +4,7 @@ use std::iter::once;
 
 pub type CfgLabel = usize;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Debug)]
 pub enum CfgEdge {
     Uncond(CfgLabel),
     Cond(CfgLabel, CfgLabel),
@@ -34,6 +34,7 @@ impl CfgEdge {
     }
 }
 
+#[derive(Clone)]
 pub struct Cfg {
     pub(crate) out_edges: HashMap<CfgLabel, CfgEdge>,
     pub(crate) entry: CfgLabel,
