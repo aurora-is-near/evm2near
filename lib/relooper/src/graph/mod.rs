@@ -8,7 +8,7 @@ use std::vec::Vec;
 pub mod cfg;
 mod dot_debug;
 mod enrichments;
-mod reducability;
+pub mod reducability;
 pub(crate) mod relooper;
 
 pub struct EnrichedCfg {

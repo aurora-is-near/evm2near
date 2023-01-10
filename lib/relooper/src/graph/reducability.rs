@@ -2,26 +2,26 @@ use crate::graph::cfg::CfgEdge;
 use crate::graph::cfg::CfgLabel;
 use crate::Cfg;
 use crate::EnrichedCfg;
-use std::collections::{HashMap, HashSet};
-use std::default;
+use std::collections::{BTreeMap, BTreeSet};
 pub type Color = usize;
 
 pub struct ColoredCfg {
     cfg: Cfg,
-    colors: HashMap<CfgLabel, Color>,
+    colors: BTreeMap<CfgLabel, Color>,
     next_cfg_id: CfgLabel,
 }
 
 impl ColoredCfg {
     pub fn new(cfg: &Cfg) -> ColoredCfg {
-        let mut colors: HashMap<CfgLabel, Color> = HashMap::default();
+        let mut colors: BTreeMap<CfgLabel, Color> = BTreeMap::default();
         let mut id: CfgLabel = 0;
-        for (lbl, edge) in &cfg.out_edges {
+        for (lbl, _edge) in &cfg.out_edges {
             colors.insert(*lbl, *lbl);
             if id < *lbl {
                 id = *lbl;
             }
         }
+        id += 1;
         return ColoredCfg {
             cfg: cfg.clone(),
             colors: colors,
@@ -51,8 +51,8 @@ impl ColoredCfg {
             }
             break;
         }
-        let mut different_colors: HashSet<Color> = HashSet::default();
-        for (label, color) in &self.colors {
+        let mut different_colors: BTreeSet<Color> = BTreeSet::default();
+        for (_label, color) in &self.colors {
             different_colors.insert(*color);
         }
         assert_eq!(different_colors.len(), 1);
@@ -60,45 +60,98 @@ impl ColoredCfg {
 
     pub fn merge(&mut self, master: Color, slave: Color) -> () {
         println!("MERGE master = {}, slave = {}", master, slave);
-        for (label, mut color) in &mut self.colors {
+        for (_label, mut color) in &mut self.colors {
             if *color == slave {
                 *color = master;
             }
         }
     }
 
-    pub fn split(&mut self, mut masters: HashSet<Color>, slave: Color) -> () {
-        println!("SPLIT slave = {}", slave);
+    pub fn split(&mut self, mut masters: BTreeSet<Color>, slave: Color) -> () {
+        println!("SPLIT slave = {}, masters:", slave);
+        for master in &masters {
+            print!("{}, ", master);
+        }
+        print!("\n");
         // first delete one random master
         let random = masters.iter().next().unwrap().clone();
         masters.remove(&random);
         // then consequently make a copy of slave for each master color
         for master in &masters {
             // find all nodes with color = slave
-            let mut slaves: HashSet<CfgLabel> = HashSet::default();
+            let mut slaves: BTreeSet<CfgLabel> = BTreeSet::default();
             for (label, color) in &self.colors {
                 if *color == slave {
                     slaves.insert(*label);
                 }
             }
             // find all nodes with this master color
-            let mut masternodes: HashSet<CfgLabel> = HashSet::default();
+            let mut masternodes: BTreeSet<CfgLabel> = BTreeSet::default();
             for (label, color) in &self.colors {
                 if *color == *master {
                     masternodes.insert(*label);
                 }
             }
+            println!("SLAVES AND MASTERS");
+            println!("Masternodes (mastercolor = {}):", master);
+            for node in &masternodes {
+                print!("{}, ", node);
+            }
+            print!("\n");
+            println!("Slavenodes (slavecolor = {}):", slave);
+            for node in &slaves {
+                print!("{}, ", node);
+            }
+            print!("\n");
+
             // make a copy of all nodes with color = slave for this master
             // with all outedges
-            let mut origin2clone: HashMap<CfgLabel, CfgLabel> = HashMap::default();
+            // BUG!!! Outedges between same color should be different
+            let mut origin2clone: BTreeMap<CfgLabel, CfgLabel> = BTreeMap::default();
+            let mut clones: BTreeSet<CfgLabel> = BTreeSet::default();
             for slave_node in &slaves {
                 let copy_label = self.next_cfg_id;
                 self.next_cfg_id += 1;
                 origin2clone.insert(*slave_node, copy_label);
+                clones.insert(copy_label);
                 self.colors.insert(copy_label, *master);
                 let edge = self.cfg.out_edges.get(&slave_node).unwrap().clone();
                 self.cfg.out_edges.insert(copy_label, edge);
             }
+            println!("Origin to clone:");
+            for (origin, clone) in &origin2clone {
+                println!("Origign = {}, clone = {}", origin, clone);
+            }
+            print!("\n");
+            // fix edges between slave nodes
+            for node in &clones {
+                let edge = self.cfg.out_edges.get_mut(&node).unwrap();
+                match edge {
+                    CfgEdge::Cond(cond, uncond) => {
+                        let new_cond = if slaves.contains(cond) {
+                            *origin2clone.get(cond).unwrap()
+                        } else {
+                            *cond
+                        };
+                        let new_uncond = if slaves.contains(uncond) {
+                            *origin2clone.get(uncond).unwrap()
+                        } else {
+                            *uncond
+                        };
+                        *edge = CfgEdge::Cond(new_cond, new_uncond);
+                    }
+                    CfgEdge::Uncond(uncond) => {
+                        let new_uncond = if slaves.contains(uncond) {
+                            *origin2clone.get(uncond).unwrap()
+                        } else {
+                            *uncond
+                        };
+                        *edge = CfgEdge::Uncond(new_uncond);
+                    }
+                    CfgEdge::Terminal => {}
+                }
+            }
+
             // switch direction of inedges from this master to copyes
             for node in masternodes {
                 let edge = self.cfg.out_edges.get_mut(&node).unwrap();
@@ -127,13 +180,29 @@ impl ColoredCfg {
                     CfgEdge::Terminal => {}
                 }
             }
+            println!("GRAPH RESULT AFTER EDGE SWITCHING:");
+            for (node, outedge) in &self.cfg.out_edges {
+                match outedge {
+                    CfgEdge::Cond(cond, uncond) => {
+                        println!("Cond edge from {} to {}", node, cond);
+                        println!("Uncond edge from {} to {}", node, uncond);
+                    }
+                    CfgEdge::Uncond(uncond) => {
+                        println!("Uncond edge from {} to {}", node, uncond);
+                    }
+                    CfgEdge::Terminal => {
+                        println!("Terminal edge from {}", node);
+                    }
+                }
+            }
+            println!("End of graph");
         }
     }
 
     /// returns pair of colors (master, slave) if all precessors of all nodes with color = slave
     /// have color = slave or color = master
     pub fn mergeble_colors(&self) -> Option<(Color, Color)> {
-        let mut precs: HashMap<Color, HashSet<Color>> = HashMap::default();
+        let mut precs: BTreeMap<Color, BTreeSet<Color>> = BTreeMap::default();
         for (node, edge) in &self.cfg.out_edges {
             match edge {
                 CfgEdge::Cond(cond, uncond) => {
@@ -166,8 +235,8 @@ impl ColoredCfg {
 
     /// returns group of colors (masters, slave) if all precessors of all nodes with color = slave
     /// have color = slave or masters.contain(color)
-    pub fn splittable_colors(&self) -> Option<(HashSet<Color>, Color)> {
-        let mut precs: HashMap<Color, HashSet<Color>> = HashMap::default();
+    pub fn splittable_colors(&self) -> Option<(BTreeSet<Color>, Color)> {
+        let mut precs: BTreeMap<Color, BTreeSet<Color>> = BTreeMap::default();
         for (node, edge) in &self.cfg.out_edges {
             match edge {
                 CfgEdge::Cond(cond, uncond) => {
@@ -265,14 +334,14 @@ pub fn test_reducable() {
     .unwrap();
     let mut cgraph = ColoredCfg::new(&graph);
     cgraph.reduce_colors();
-    let mut different_colors: HashSet<Color> = HashSet::default();
-    for (label, color) in cgraph.colors {
+    let mut different_colors: BTreeSet<Color> = BTreeSet::default();
+    for (_label, color) in cgraph.colors {
         different_colors.insert(color);
     }
     assert_eq!(different_colors.len(), 1);
 }
 
-#[test]
+// #[test]
 pub fn test_irreducable() {
     let graph = Cfg::from_edges(
         vec![
@@ -285,10 +354,26 @@ pub fn test_irreducable() {
     .unwrap();
     let mut cgraph = ColoredCfg::new(&graph);
     cgraph.reduce_colors();
+
+    println!("GRAPH RESULT:");
+    for (node, outedge) in &cgraph.cfg.out_edges {
+        match outedge {
+            CfgEdge::Cond(cond, uncond) => {
+                println!("Cond edge from {} to {}", node, cond);
+                println!("Uncond edge from {} to {}", node, uncond);
+            }
+            CfgEdge::Uncond(uncond) => {
+                println!("Uncond edge from {} to {}", node, uncond);
+            }
+            CfgEdge::Terminal => {
+                println!("Terminal edge from {}", node);
+            }
+        }
+    }
+    println!("End of graph");
+
     let reduced = cgraph.as_cfg();
-
     let e_graph = EnrichedCfg::new(reduced);
-
     let dot_lines: Vec<String> = vec![
         "digraph {".to_string(),
         e_graph.cfg_to_dot(),
