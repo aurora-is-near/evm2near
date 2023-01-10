@@ -8,7 +8,20 @@ pub type Color = usize;
 /// This is struct helper to convert from irreducable graph to
 /// equivalent reducable. Reducable graphs are graphs with single loopheader.
 /// Main idea of algorithm:
-///   1) Lets firstly paint each cfg node to
+///   1) Lets firstly paint each cfg node to different color.
+///   2) Then we will do next two operations (Merge and Split) until only one color left.
+///   3) Merge: if we have one color (will call it slave) and the other (call it master).
+///      and all inedges of all slave nodes are from nodes colored in slave or master color we can do merge.
+///      merge is pretty simple -- we just recolor all nodes colored in slave color to master color
+///   4) Split: if we have one color (slave) and a group of colors (masters) and all inedges of all.
+///      nodes colored in slave color have origin colored in slave color or in one of masters color we can do split.
+///      In split we for each master color make clones of all slave nodes. Also we clone all outedges of all slave nodes.
+///      If we have edge (slave1 -> slave2) we will clone it as (slave1_clonned -> slave2_clonned). NOT as
+///      (slave1_clonned -> slave2). Then we will redirect all inedges of nodes colored in current master color from original
+///      slave nodes to just clonned slave nodes. Finally, we recolor all clones to current master color.
+///   5) Order of merges and splits. Order don't affect on correctness of reducing, there is many equivalent reducable cfg for each
+///      irreducable one. If only one color left we have correct reducable graph. See describtion of pub fn reduce_colors(&mut self) -> ()
+///      for actual details of order implementation.
 pub struct ColoredCfg {
     cfg: Cfg,
     colors: BTreeMap<CfgLabel, Color>,
