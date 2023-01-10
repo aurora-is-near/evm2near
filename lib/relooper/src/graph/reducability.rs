@@ -9,6 +9,7 @@ pub struct ColoredCfg {
     cfg: Cfg,
     colors: BTreeMap<CfgLabel, Color>,
     next_cfg_id: CfgLabel,
+    clone2origin: BTreeMap<CfgLabel, CfgLabel>,
 }
 
 impl ColoredCfg {
@@ -26,6 +27,7 @@ impl ColoredCfg {
             cfg: cfg.clone(),
             colors: colors,
             next_cfg_id: id,
+            clone2origin: BTreeMap::default(),
         };
     }
 
@@ -94,6 +96,7 @@ impl ColoredCfg {
                 let copy_label = self.next_cfg_id;
                 self.next_cfg_id += 1;
                 origin2clone.insert(*slave_node, copy_label);
+                self.clone2origin.insert(copy_label, *slave_node);
                 clones.insert(copy_label);
                 self.colors.insert(copy_label, *master);
                 let edge = self.cfg.out_edges.get(&slave_node).unwrap().clone();
