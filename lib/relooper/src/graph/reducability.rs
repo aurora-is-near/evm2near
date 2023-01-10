@@ -5,6 +5,10 @@ use crate::EnrichedCfg;
 use std::collections::{BTreeMap, BTreeSet};
 pub type Color = usize;
 
+/// This is struct helper to convert from irreducable graph to
+/// equivalent reducable. Reducable graphs are graphs with single loopheader.
+/// Main idea of algorithm:
+///   1) Lets firstly paint each cfg node to
 pub struct ColoredCfg {
     cfg: Cfg,
     colors: BTreeMap<CfgLabel, Color>,
@@ -13,6 +17,7 @@ pub struct ColoredCfg {
 }
 
 impl ColoredCfg {
+    /// Constructor from Cfg
     pub fn new(cfg: &Cfg) -> ColoredCfg {
         let mut colors: BTreeMap<CfgLabel, Color> = BTreeMap::default();
         let mut id: CfgLabel = 0;
@@ -31,10 +36,13 @@ impl ColoredCfg {
         };
     }
 
+    /// This function returns cfg stored by colored graph. (maybe this cfg was previously modified by colored graph)
     pub fn as_cfg(&self) -> Cfg {
         return self.cfg.clone();
     }
 
+    /// This is main function that make graph reducing. Now it works greedy: infinite loop, if can merge -- do merge and to next
+    /// iteration. If can't merge but can split -- do split and to next iteration. If can't both -- return.
     pub fn reduce_colors(&mut self) -> () {
         loop {
             match self.mergeble_colors() {
@@ -53,6 +61,7 @@ impl ColoredCfg {
             }
             break;
         }
+        // Just debug assertation to check algorithms invariant. Can be removed.
         let mut different_colors: BTreeSet<Color> = BTreeSet::default();
         for (_label, color) in &self.colors {
             different_colors.insert(*color);
@@ -60,6 +69,7 @@ impl ColoredCfg {
         assert_eq!(different_colors.len(), 1);
     }
 
+    /// This function merges two colors. It simply recolor all nodes with color = slave to master color.
     pub fn merge(&mut self, master: Color, slave: Color) -> () {
         for (_label, mut color) in &mut self.colors {
             if *color == slave {
@@ -68,6 +78,15 @@ impl ColoredCfg {
         }
     }
 
+    /// Most difficult for understading function in this struct.
+    /// Main idea: lets go throw master colors. For each master color we create
+    /// copyes of all slave nodes. (All slave nodes are cloned with their outedges).
+    /// Than, if there was edge between two slave nodes, now we have edge from clone-slave to origin-slave.
+    /// So, next step is switch such edges to clones-slaves.
+    /// Last step is switch edges of current master nodes from origin-slaves to clones-slaves.
+    ///
+    /// And a nice trick. If we do it for all masters we will need to delete original slaves. Better is just skip
+    /// this operation for one master. This master will have outedges to original slaves (and only this master).
     pub fn split(&mut self, mut masters: BTreeSet<Color>, slave: Color) -> () {
         // first delete one random master
         let random = masters.iter().next().unwrap().clone();
@@ -130,7 +149,6 @@ impl ColoredCfg {
                     CfgEdge::Terminal => {}
                 }
             }
-
             // switch direction of inedges from this master to copyes
             for node in masternodes {
                 let edge = self.cfg.out_edges.get_mut(&node).unwrap();
@@ -162,8 +180,8 @@ impl ColoredCfg {
         }
     }
 
-    /// returns pair of colors (master, slave) if all precessors of all nodes with color = slave
-    /// have color = slave or color = master
+    /// This function returns pair of colors (master, slave) if all precessors of all nodes with color = slave
+    /// have color = slave or color = master. If there is no such nodes function returns None.
     pub fn mergeble_colors(&self) -> Option<(Color, Color)> {
         let mut precs: BTreeMap<Color, BTreeSet<Color>> = BTreeMap::default();
         for (node, edge) in &self.cfg.out_edges {
@@ -196,8 +214,8 @@ impl ColoredCfg {
         return None;
     }
 
-    /// returns group of colors (masters, slave) if all precessors of all nodes with color = slave
-    /// have color = slave or masters.contain(color)
+    /// This function returns group of colors (masters, slave) if all precessors of all nodes with color = slave
+    /// have color = slave or masters.contain(color). If there is no such nodes it return None.
     pub fn splittable_colors(&self) -> Option<(BTreeSet<Color>, Color)> {
         let mut precs: BTreeMap<Color, BTreeSet<Color>> = BTreeMap::default();
         for (node, edge) in &self.cfg.out_edges {
