@@ -69,7 +69,7 @@ pub struct SuperGraph<TLabel: CfgLabel> {
     labels: BTreeMap<TLabel, Vec<SLabel<TLabel>>>,
     nodes: BTreeMap<SLabel<TLabel>, SNode<TLabel>>,
     in_edges: HashMap<SLabel<TLabel>, HashSet<SLabel<TLabel>>>,
-    pub(crate) out_edges: HashMap<SLabel<TLabel>, HashSet<SLabel<TLabel>>>,
+    out_edges: HashMap<SLabel<TLabel>, HashSet<SLabel<TLabel>>>,
     label_location: BTreeMap<SLabel<TLabel>, SLabel<TLabel>>,
 }
 

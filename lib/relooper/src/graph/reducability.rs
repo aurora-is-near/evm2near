@@ -1,8 +1,11 @@
 use crate::graph::cfg::CfgEdge;
-use crate::graph::cfg::CfgLabel;
-use crate::Cfg;
-use crate::EnrichedCfg;
+use crate::graph::EnrichedCfg;
 use std::collections::{BTreeMap, BTreeSet};
+
+impl crate::CfgLabel for usize {}
+
+type CfgLabel = usize;
+type Cfg = crate::Cfg<usize>;
 pub type Color = usize;
 
 /// This is struct helper to convert from irreducable graph to
@@ -352,7 +355,7 @@ pub fn test_irreducable() {
     let e_graph = EnrichedCfg::new(reduced);
     let dot_lines: Vec<String> = vec![
         "digraph {".to_string(),
-        e_graph.cfg_to_dot(),
+        e_graph.cfg_to_dot("reduced"),
         "}".to_string(),
     ];
     std::fs::write("reduced.dot", dot_lines.join("\n")).expect("fs error");
@@ -378,7 +381,7 @@ pub fn test_irreducable2() {
     let e_graph = EnrichedCfg::new(reduced);
     let dot_lines: Vec<String> = vec![
         "digraph {".to_string(),
-        e_graph.cfg_to_dot(),
+        e_graph.cfg_to_dot("reduced"),
         "}".to_string(),
     ];
     std::fs::write("reduced2.dot", dot_lines.join("\n")).expect("fs error");
@@ -404,7 +407,7 @@ pub fn test_irreducable3() {
     let e_graph = EnrichedCfg::new(reduced);
     let dot_lines: Vec<String> = vec![
         "digraph {".to_string(),
-        e_graph.cfg_to_dot(),
+        e_graph.cfg_to_dot("reduced"),
         "}".to_string(),
     ];
     std::fs::write("reduced3.dot", dot_lines.join("\n")).expect("fs error");
