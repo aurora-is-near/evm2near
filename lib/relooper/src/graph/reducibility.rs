@@ -389,3 +389,28 @@ mod reducing_tests {
         std::fs::write("reduced3.dot", dot_lines.join("\n")).expect("fs error");
     }
 }
+
+#[test]
+pub fn test_irreducable4() {
+    let graph = Cfg::from_edges(
+        vec![
+            (0, CfgEdge::Cond(1, 4)),
+            (1, CfgEdge::Cond(2, 3)),
+            (2, CfgEdge::Uncond(3)),
+            (3, CfgEdge::Cond(2, 4)),
+            (4, CfgEdge::Uncond(3)),
+        ],
+        0,
+    )
+    .unwrap();
+    let mut cgraph = ColoredCfg::new(&graph);
+    cgraph.reduce_colors();
+    let reduced = cgraph.as_cfg();
+    let e_graph = EnrichedCfg::new(reduced);
+    let dot_lines: Vec<String> = vec![
+        "digraph {".to_string(),
+        e_graph.cfg_to_dot(),
+        "}".to_string(),
+    ];
+    std::fs::write("reduced4.dot", dot_lines.join("\n")).expect("fs error");
+}
