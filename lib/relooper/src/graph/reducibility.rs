@@ -8,8 +8,8 @@ type CfgLabel = usize;
 type Cfg = crate::Cfg<usize>;
 pub type Color = usize;
 
-/// This is struct helper to convert from irreducable graph to
-/// equivalent reducable. Reducable graphs are graphs with single loopheader.
+/// This is struct helper to convert from irreducible graph to
+/// equivalent reducible. Reducible graphs are graphs with single loopheader.
 /// Main idea of algorithm:
 ///   1) Lets firstly paint each cfg node to different color.
 ///   2) Then we will do next two operations (Merge and Split) until only one color left.
@@ -22,8 +22,8 @@ pub type Color = usize;
 ///      If we have edge (slave1 -> slave2) we will clone it as (slave1_clonned -> slave2_clonned). NOT as
 ///      (slave1_clonned -> slave2). Then we will redirect all inedges of nodes colored in current master color from original
 ///      slave nodes to just clonned slave nodes. Finally, we recolor all clones to current master color.
-///   5) Order of merges and splits. Order don't affect on correctness of reducing, there is many equivalent reducable cfg for each
-///      irreducable one. If only one color left we have correct reducable graph. See describtion of pub fn reduce_colors(&mut self) -> ()
+///   5) Order of merges and splits. Order don't affect on correctness of reducing, there is many equivalent reducible cfg for each
+///      irreducible one. If only one color left we have correct reducible graph. See describtion of pub fn reduce_colors(&mut self) -> ()
 ///      for actual details of order implementation.
 pub struct ColoredCfg {
     cfg: Cfg,
@@ -289,7 +289,7 @@ mod reducing_tests {
     }
 
     #[test]
-    pub fn test_reducable() {
+    pub fn test_reducible() {
         let graph = Cfg::from_edges(
             vec![
                 (0, CfgEdge::Cond(1, 2)),
@@ -315,7 +315,7 @@ mod reducing_tests {
     }
 
     #[test]
-    pub fn test_irreducable() {
+    pub fn test_irreducible() {
         let graph = Cfg::from_edges(
             vec![
                 (0, CfgEdge::Cond(1, 2)),
@@ -338,7 +338,7 @@ mod reducing_tests {
     }
 
     #[test]
-    pub fn test_irreducable2() {
+    pub fn test_irreducible2() {
         let graph = Cfg::from_edges(
             vec![
                 (0, CfgEdge::Uncond(1)),
@@ -364,7 +364,7 @@ mod reducing_tests {
     }
 
     #[test]
-    pub fn test_irreducable3() {
+    pub fn test_irreducible3() {
         let graph = Cfg::from_edges(
             vec![
                 (0, CfgEdge::Cond(1, 2)),

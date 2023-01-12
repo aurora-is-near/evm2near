@@ -10,7 +10,7 @@ mod cfg_mut;
 mod cfg_parsing;
 mod dot_debug;
 mod enrichments;
-pub mod reducability;
+pub mod reducibility;
 pub(crate) mod relooper;
 pub(crate) mod supergraph;
 
