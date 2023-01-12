@@ -27,6 +27,7 @@ impl<TLabel: CfgLabel> CfgEdge<TLabel> {
 pub struct Cfg<TLabel: CfgLabel> {
     pub(crate) entry: TLabel,
     pub(crate) out_edges: HashMap<TLabel, CfgEdge<TLabel>>,
+    pub(crate) in_edges: HashMap<TLabel, Vec<TLabel>>,
 }
 
 impl<TLabel: CfgLabel> Cfg<TLabel> {
@@ -49,7 +50,19 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
             out_edges.entry(n).or_insert(Terminal);
         }
 
-        Ok(Self { out_edges, entry })
+        let mut in_edges: HashMap<TLabel, Vec<TLabel>> = HashMap::default();
+
+        for (&from, to_edge) in &out_edges {
+            for to in to_edge.to_vec() {
+                in_edges.entry(to).or_default().push(from);
+            }
+        }
+
+        Ok(Self {
+            entry,
+            out_edges,
+            in_edges,
+        })
     }
 
     pub fn out_edges(&self) -> HashMap<TLabel, Vec<TLabel>> {
@@ -59,16 +72,8 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
             .collect()
     }
 
-    pub fn in_edges(&self) -> HashMap<TLabel, Vec<TLabel>> {
-        let mut back_edges: HashMap<TLabel, Vec<TLabel>> = HashMap::default();
-
-        for (&from, &to_edge) in &self.out_edges {
-            for to in to_edge.to_vec() {
-                back_edges.entry(to).or_default().push(from);
-            }
-        }
-
-        back_edges
+    pub fn in_edges(&self) -> &HashMap<TLabel, Vec<TLabel>> {
+        &self.in_edges
     }
 
     pub fn nodes(&self) -> HashSet<TLabel> {

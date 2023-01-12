@@ -111,7 +111,7 @@ impl<TLabel: CfgLabel> SuperGraph<TLabel> {
             .collect();
 
         let in_edges = cfg
-            .in_edges()
+            .in_edges
             .iter()
             .map(|(&t, v_f)| {
                 (
