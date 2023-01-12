@@ -180,8 +180,8 @@ impl ColoredCfg {
         }
     }
 
-    /// This function returns HashMap<Color, HashSet<Color>>
-    /// count_precessors.get(x).unwrap().contains(y) if and
+    /// This function returns HashMap<Color, HashSet<Color>>.
+    /// Count_precessors.get(x).unwrap().contains(y) if and
     /// only if there is node Y colored in y and node X colored in x
     /// and there is an edge from Y to X.
     pub fn count_precessors(&self) -> HashMap<Color, HashSet<Color>> {
