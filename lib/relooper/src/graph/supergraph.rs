@@ -65,11 +65,11 @@ impl<TLabel: CfgLabel> SNode<TLabel> {
 }
 
 pub struct SuperGraph<TLabel: CfgLabel> {
-    entry: SLabel<TLabel>,
+    cfg: Cfg<SLabel<TLabel>>,
+    out_edges: HashMap<SLabel<TLabel>, HashSet<SLabel<TLabel>>>,
+    in_edges: HashMap<SLabel<TLabel>, HashSet<SLabel<TLabel>>>,
     labels: BTreeMap<TLabel, Vec<SLabel<TLabel>>>,
     nodes: BTreeMap<SLabel<TLabel>, SNode<TLabel>>,
-    in_edges: HashMap<SLabel<TLabel>, HashSet<SLabel<TLabel>>>,
-    out_edges: HashMap<SLabel<TLabel>, HashSet<SLabel<TLabel>>>,
     label_location: BTreeMap<SLabel<TLabel>, SLabel<TLabel>>,
 }
 
@@ -121,8 +121,10 @@ impl<TLabel: CfgLabel> SuperGraph<TLabel> {
             })
             .collect();
 
+        let new_cfg: Cfg<SLabel<TLabel>> = Cfg::new(cfg.entry.into());
+
         Self {
-            entry: cfg.entry.into(),
+            cfg: new_cfg,
             labels,
             nodes,
             out_edges,
@@ -235,7 +237,7 @@ impl<TLabel: CfgLabel> SuperGraph<TLabel> {
     }
 
     fn snode_order(&self) -> Vec<SLabel<TLabel>> {
-        let start = self.nodes.get(&self.entry).unwrap().clone();
+        let start = self.nodes.get(&self.cfg.entry).unwrap().clone();
         let res: Vec<_> = dfs_post_ord(start.head, &mut |slabel| {
             let snode = self.nodes.get(slabel).unwrap();
             self.outgoing_edges(snode)
@@ -420,5 +422,5 @@ pub fn reduce<TLabel: CfgLabel>(cfg: &Cfg<TLabel>) -> Cfg<SLabel<TLabel>> {
         })
         .collect();
 
-    Cfg::from_edges(out_edges, super_graph.entry).unwrap()
+    Cfg::from_edges(out_edges, super_graph.cfg.entry).unwrap()
 }
