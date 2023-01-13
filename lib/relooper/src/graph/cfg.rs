@@ -1,4 +1,5 @@
 use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
+use anyhow::ensure;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
@@ -23,7 +24,7 @@ impl<TLabel: CfgLabel> CfgEdge<TLabel> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Cfg<TLabel: CfgLabel> {
     pub(crate) entry: TLabel,
     pub(crate) out_edges: HashMap<TLabel, CfgEdge<TLabel>>,
@@ -34,14 +35,14 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
     pub fn from_edges(
         edges: Vec<(TLabel, CfgEdge<TLabel>)>,
         entry: TLabel,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, anyhow::Error> {
         let mut out_edges = HashMap::new();
         let mut nodes = HashSet::new();
         for (from, edge) in edges {
             let old_val = out_edges.insert(from, edge);
-            if old_val.is_some() {
-                return Err("repeating source node".to_string());
-            }
+
+            ensure!(old_val.is_none(), "repeating source node");
+
             nodes.insert(from);
             nodes.extend(edge.to_vec());
         }

@@ -27,13 +27,11 @@ impl Display for UsizeLabel {
 
 impl CfgLabel for UsizeLabel {}
 impl TryFrom<&str> for UsizeLabel {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
-        value
-            .parse::<usize>()
-            .map_err(|err| "usize parsing error".to_string())
-            .map(UsizeLabel)
+        let result = value.parse::<usize>().map(UsizeLabel)?;
+        Ok(result)
     }
 }
 

@@ -1,8 +1,11 @@
 use crate::graph::cfg::CfgEdge::{Cond, Uncond};
 use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel};
+use anyhow::{ensure, format_err};
 
-impl<'a, TLabel: CfgLabel + TryFrom<&'a str, Error = String>> TryFrom<&'a str> for CfgEdge<TLabel> {
-    type Error = String;
+impl<'a, TLabel: CfgLabel + TryFrom<&'a str, Error = anyhow::Error>> TryFrom<&'a str>
+    for CfgEdge<TLabel>
+{
+    type Error = anyhow::Error;
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         let (first_str, maybe_second) = {
@@ -21,15 +24,16 @@ impl<'a, TLabel: CfgLabel + TryFrom<&'a str, Error = String>> TryFrom<&'a str> f
     }
 }
 
-impl<'a, TLabel: CfgLabel + TryFrom<&'a str, Error = String>> TryFrom<&'a Vec<String>>
+impl<'a, TLabel: CfgLabel + TryFrom<&'a str, Error = anyhow::Error>> TryFrom<&'a Vec<String>>
     for Cfg<TLabel>
 {
-    type Error = String;
+    type Error = anyhow::Error;
 
     fn try_from(strings: &'a Vec<String>) -> Result<Self, Self::Error> {
-        if strings.len() < 2 {
-            Err("well-formed cfg should contain entry line and at least one edge".to_string())?
-        }
+        ensure!(
+            strings.len() >= 2,
+            "well-formed cfg should contain entry line and at least one edge"
+        );
 
         let entry_str = strings.first().unwrap();
         let entry = TLabel::try_from(entry_str)?;
@@ -39,7 +43,7 @@ impl<'a, TLabel: CfgLabel + TryFrom<&'a str, Error = String>> TryFrom<&'a Vec<St
         for edge_str in &strings[1..] {
             let (from, edge) = edge_str
                 .split_once(' ')
-                .ok_or_else(|| "invalid label-edge format".to_string())?;
+                .ok_or_else(|| format_err!("invalid label-edge format".to_string()))?;
             let from = TLabel::try_from(from)?;
             let edge = CfgEdge::try_from(edge)?;
             edges.push((from, edge));
