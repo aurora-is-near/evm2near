@@ -8,5 +8,4 @@ commit_text = parser.parse_args().commit
 os.system("cargo fmt")
 os.system("git add *")
 os.system(f"git commit -m {commit_text}")
-os.system("git push")
-os.system("echo $GITHUB_TOKEN")
+os.system("echo $GITHUB_TOKEN | git push")
