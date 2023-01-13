@@ -1,11 +1,21 @@
 use crate::graph::cfg::CfgEdge;
 use crate::graph::EnrichedCfg;
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}, fmt::Display};
 
 impl crate::CfgLabel for usize {}
 
+#[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Hash, Clone, Copy)]
+pub struct PairedLabel(usize, usize);                      // (unique_label, origin_label)
+impl Display for PairedLabel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}_{}", self.0, self.1)
+    }
+}
+
+impl crate::CfgLabel for PairedLabel {}
 type CfgLabel = usize;
-type Cfg = crate::Cfg<usize>;
+pub type LabeledCfg = crate::Cfg<PairedLabel>; 
+type Cfg = crate::Cfg<CfgLabel>;
 pub type Color = usize;
 
 /// This is struct helper to convert from irreducible graph to
@@ -234,6 +244,35 @@ impl ColoredCfg {
             }
         }
         None
+    }
+
+    pub fn paired_label(&self, cfg_label : CfgLabel) -> PairedLabel {
+        match self.clone2origin.get(&cfg_label) {
+            Some(origin) => {
+                PairedLabel(*origin, cfg_label)
+            }
+            None => {
+                PairedLabel(cfg_label, cfg_label)
+            }
+        }
+    }
+
+    pub fn as_labeled_cfg(&self) -> LabeledCfg {
+        let mut edges : Vec<(PairedLabel, CfgEdge<PairedLabel>)> = Vec::default();
+        for (node, edge) in &self.cfg.out_edges {
+            match edge {
+                CfgEdge::Cond(cond, uncond) => {
+                    edges.push((self.paired_label(*node), CfgEdge::Cond(self.paired_label(*cond), self.paired_label(*uncond))));
+                }
+                CfgEdge::Uncond(uncond) => {
+                    edges.push((self.paired_label(*node), CfgEdge::Uncond(self.paired_label(*uncond))));
+                }
+                CfgEdge::Terminal => {
+                    edges.push((self.paired_label(*node), CfgEdge::<PairedLabel>::Terminal));
+                }
+            }
+        }
+        LabeledCfg::from_edges(edges, self.paired_label(self.cfg.entry)).unwrap()
     }
 }
 
