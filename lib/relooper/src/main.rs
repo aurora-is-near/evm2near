@@ -3,37 +3,13 @@ extern crate core;
 mod graph;
 mod traversal;
 
-use crate::graph::cfg::{Cfg, CfgLabel};
-use crate::graph::supergraph::SuperGraph;
+use crate::graph::cfg::{Cfg, CfgDescr, CfgLabel};
 use crate::graph::{supergraph, EnrichedCfg};
 use std::env;
 use std::fmt::{Debug, Display, Formatter};
 use std::path::Path;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Copy, Clone, Hash)]
-struct UsizeLabel(usize);
-
-impl Debug for UsizeLabel {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl Display for UsizeLabel {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl CfgLabel for UsizeLabel {}
-impl TryFrom<&str> for UsizeLabel {
-    type Error = anyhow::Error;
-
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        let result = value.parse::<usize>().map(UsizeLabel)?;
-        Ok(result)
-    }
-}
+impl CfgLabel for &String {}
 
 pub fn main() {
     let args: Vec<String> = env::args().collect();
@@ -46,16 +22,18 @@ pub fn main() {
     let input = std::fs::read_to_string(input_path).expect("unable to read input file");
     let lines: Vec<String> = input.split("\n").map(|x| x.to_string()).collect();
 
-    let graph: Cfg<UsizeLabel> = Cfg::try_from(&lines).expect("invalid input formatting");
+    let cfg_descr: CfgDescr<String> = CfgDescr::try_from(&lines).expect("invalud input formatting");
+    let borowed_descr = cfg_descr.to_borrowed();
+    let cfg: Cfg<&String> = Cfg::from_descr(&borowed_descr).expect("invalid edges configuration");
 
-    let reduced_graph = supergraph::reduce(&graph);
+    let reduced_graph = supergraph::reduce(&cfg);
 
     let e_graph = EnrichedCfg::new(reduced_graph);
     let relooped = e_graph.reloop();
 
     let dot_lines: Vec<String> = vec![
         "digraph {".to_string(),
-        graph.cfg_to_dot("cfg"),
+        cfg.cfg_to_dot("cfg"),
         String::new(),
         e_graph.cfg_to_dot("reduced"),
         String::new(),

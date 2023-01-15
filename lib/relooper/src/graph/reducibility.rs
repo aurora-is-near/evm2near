@@ -277,7 +277,7 @@ impl ColoredCfg {
                 }
             }
         }
-        LabeledCfg::from_edges(edges, self.paired_label(self.cfg.entry)).unwrap()
+        LabeledCfg::from_edges(self.paired_label(self.cfg.entry), &edges).unwrap()
     }
 }
 
@@ -288,7 +288,8 @@ mod reducing_tests {
     #[test]
     pub fn test_create() {
         let graph = Cfg::from_edges(
-            vec![
+            0,
+            &vec![
                 (0, CfgEdge::Cond(1, 2)),
                 (1, CfgEdge::Cond(3, 5)),
                 (2, CfgEdge::Uncond(3)),
@@ -299,7 +300,6 @@ mod reducing_tests {
                 (4, CfgEdge::Uncond(9)),
                 (8, CfgEdge::Cond(9, 5)),
             ],
-            0,
         )
         .unwrap();
         let cgraph = ColoredCfg::new(&graph);
@@ -311,7 +311,8 @@ mod reducing_tests {
     #[test]
     pub fn test_merge() {
         let graph = Cfg::from_edges(
-            vec![
+            0,
+            &vec![
                 (0, CfgEdge::Cond(1, 2)),
                 (1, CfgEdge::Cond(3, 5)),
                 (2, CfgEdge::Uncond(3)),
@@ -322,7 +323,6 @@ mod reducing_tests {
                 (4, CfgEdge::Uncond(9)),
                 (8, CfgEdge::Cond(9, 5)),
             ],
-            0,
         )
         .unwrap();
         let mut cgraph = ColoredCfg::new(&graph);
@@ -335,7 +335,8 @@ mod reducing_tests {
     #[test]
     pub fn test_reducible() {
         let graph = Cfg::from_edges(
-            vec![
+            0,
+            &vec![
                 (0, CfgEdge::Cond(1, 2)),
                 (1, CfgEdge::Cond(3, 5)),
                 (2, CfgEdge::Uncond(3)),
@@ -346,7 +347,6 @@ mod reducing_tests {
                 (4, CfgEdge::Uncond(9)),
                 (8, CfgEdge::Cond(9, 5)),
             ],
-            0,
         )
         .unwrap();
         let mut cgraph = ColoredCfg::new(&graph);
@@ -361,12 +361,12 @@ mod reducing_tests {
     #[test]
     pub fn test_as_labeled_cfg() {
         let graph = Cfg::from_edges(
-            vec![
+            0,
+            &vec![
                 (0, CfgEdge::Cond(1, 2)),
                 (1, CfgEdge::Cond(2, 3)),
                 (2, CfgEdge::Uncond(1)),
             ],
-            0,
         )
         .unwrap();
         let mut cgraph = ColoredCfg::new(&graph);
@@ -384,7 +384,8 @@ mod reducing_tests {
     #[test]
     pub fn test_irreducible2() {
         let graph = Cfg::from_edges(
-            vec![
+            0,
+            &vec![
                 (0, CfgEdge::Uncond(1)),
                 (1, CfgEdge::Cond(2, 3)),
                 (2, CfgEdge::Cond(4, 3)),
@@ -392,7 +393,6 @@ mod reducing_tests {
                 (4, CfgEdge::Cond(6, 5)),
                 (5, CfgEdge::Cond(4, 7)),
             ],
-            0,
         )
         .unwrap();
         let mut cgraph = ColoredCfg::new(&graph);
@@ -410,7 +410,8 @@ mod reducing_tests {
     #[test]
     pub fn test_irreducible3() {
         let graph = Cfg::from_edges(
-            vec![
+            0,
+            &vec![
                 (0, CfgEdge::Cond(1, 2)),
                 (1, CfgEdge::Cond(3, 4)),
                 (2, CfgEdge::Cond(4, 5)),
@@ -418,7 +419,6 @@ mod reducing_tests {
                 (4, CfgEdge::Cond(3, 5)),
                 (5, CfgEdge::Cond(4, 7)),
             ],
-            0,
         )
         .unwrap();
         let mut cgraph = ColoredCfg::new(&graph);
@@ -437,14 +437,14 @@ mod reducing_tests {
 #[test]
 pub fn test_irreducable4() {
     let graph = Cfg::from_edges(
-        vec![
+        0,
+        &vec![
             (0, CfgEdge::Cond(1, 4)),
             (1, CfgEdge::Cond(2, 3)),
             (2, CfgEdge::Uncond(3)),
             (3, CfgEdge::Cond(2, 4)),
             (4, CfgEdge::Uncond(3)),
         ],
-        0,
     )
     .unwrap();
     let mut cgraph = ColoredCfg::new(&graph);

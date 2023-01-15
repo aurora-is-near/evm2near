@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::vec::Vec;
 
 pub mod cfg;
-// mod cfg_mut;
+mod cfg_mut;
 mod cfg_parsing;
 mod dot_debug;
 mod enrichments;

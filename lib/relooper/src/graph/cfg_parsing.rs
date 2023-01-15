@@ -1,42 +1,47 @@
-use crate::graph::cfg::CfgEdge::{Cond, Uncond};
-use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel};
+use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
+use crate::graph::cfg::{Cfg, CfgDescr, CfgEdge, CfgLabel};
 use anyhow::{ensure, format_err};
+use std::str::FromStr;
 
-impl<'a, TLabel: CfgLabel + TryFrom<&'a str, Error = anyhow::Error>> TryFrom<&'a str>
-    for CfgEdge<TLabel>
-{
-    type Error = anyhow::Error;
+impl<TLabel: FromStr> FromStr for CfgEdge<TLabel> {
+    type Err = anyhow::Error;
 
-    fn try_from(value: &'a str) -> Result<Self, Self::Error> {
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
         let (first_str, maybe_second) = {
             let mut split_i = value.split(' ');
             (split_i.next().unwrap(), split_i.next())
         };
 
         match maybe_second {
-            None => TLabel::try_from(first_str).map(Uncond),
+            None => {
+                let a = TLabel::from_str(first_str)
+                    .map(Uncond)
+                    .map_err(|_e| anyhow::Error::msg("label parsing error")); //TODO unable to find solution for non-std-err conversion to anyhow error
+                a
+            }
             Some(uncond_str) => {
-                let cond = TLabel::try_from(first_str)?;
-                let uncond = TLabel::try_from(uncond_str)?;
+                let cond = TLabel::from_str(first_str)
+                    .map_err(|_e| anyhow::Error::msg("label parsing error"))?;
+                let uncond = TLabel::from_str(uncond_str)
+                    .map_err(|_e| anyhow::Error::msg("label parsing error"))?;
                 Ok(Cond(cond, uncond))
             }
         }
     }
 }
 
-impl<'a, TLabel: CfgLabel + TryFrom<&'a str, Error = anyhow::Error>> TryFrom<&'a Vec<String>>
-    for Cfg<TLabel>
-{
+impl<TLabel: FromStr> TryFrom<&Vec<String>> for CfgDescr<TLabel> {
     type Error = anyhow::Error;
 
-    fn try_from(strings: &'a Vec<String>) -> Result<Self, Self::Error> {
+    fn try_from(strings: &Vec<String>) -> Result<Self, Self::Error> {
         ensure!(
             strings.len() >= 2,
             "well-formed cfg should contain entry line and at least one edge"
         );
 
         let entry_str = strings.first().unwrap();
-        let entry = TLabel::try_from(entry_str)?;
+        let entry =
+            TLabel::from_str(entry_str).map_err(|e| anyhow::Error::msg("label parsing error"))?;
 
         let mut edges = Vec::with_capacity(strings.len() - 1);
 
@@ -44,10 +49,12 @@ impl<'a, TLabel: CfgLabel + TryFrom<&'a str, Error = anyhow::Error>> TryFrom<&'a
             let (from, edge) = edge_str
                 .split_once(' ')
                 .ok_or_else(|| format_err!("invalid label-edge format".to_string()))?;
-            let from = TLabel::try_from(from)?;
-            let edge = CfgEdge::try_from(edge)?;
+            let from =
+                TLabel::from_str(from).map_err(|e| anyhow::Error::msg("label parsing error"))?;
+            let edge = CfgEdge::from_str(edge)?;
             edges.push((from, edge));
         }
-        Cfg::from_edges(edges, entry)
+
+        Ok(Self { entry, edges })
     }
 }

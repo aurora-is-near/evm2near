@@ -15,7 +15,7 @@ pub struct SLabel<TLabel: CfgLabel> {
 
 impl<TLabel: CfgLabel> Display for SLabel<TLabel> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}_{}", self.origin, self.version)
+        write!(f, "{}_{}", self.origin, self.version)
     }
 }
 
@@ -422,5 +422,5 @@ pub fn reduce<TLabel: CfgLabel>(cfg: &Cfg<TLabel>) -> Cfg<SLabel<TLabel>> {
         })
         .collect();
 
-    Cfg::from_edges(out_edges, super_graph.cfg.entry).unwrap()
+    Cfg::from_edges(super_graph.cfg.entry, &out_edges).unwrap()
 }
