@@ -80,7 +80,7 @@ enum NodeAction<TLabel: CfgLabel> {
 
 impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
     pub(crate) fn new(cfg: &Cfg<TLabel>) -> Self {
-        let cfg_descr = cfg.descr().map_label(|&l| SLabel::new(l, 0));
+        let cfg_descr = cfg.descr().map_label(|&l| SLabel::from(l));
         let new_cfg: Cfg<SLabel<TLabel>> = Cfg::from_descr(&cfg_descr).unwrap();
 
         let nodes: BTreeMap<SLabel<TLabel>, SNode<TLabel>> = new_cfg
@@ -215,7 +215,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
             .filter_map(|&inner| {
                 self.out_edges.get(&inner).and_then(|to_set| {
                     let to: Vec<SLabel<TLabel>> = to_set
-                        .into_iter()
+                        .iter()
                         .filter(|points_to| snode_to.contained.contains(points_to))
                         .copied()
                         .collect();
@@ -277,9 +277,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
                     .get(inner)
                     .into_iter()
                     .flatten()
-                    .filter(|&to| {
-                        self.label_location.get(to).unwrap().to_owned().to_owned() != node_label
-                    })
+                    .filter(|&to| *self.label_location.get(to).unwrap() != node_label)
                     .map(|&to| (*inner, to))
                     .collect::<Vec<_>>()
             })
@@ -336,7 +334,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
             self.remove_node(i_from);
             self.remove_node(i_to);
         }
-        for (i_from, o_to) in outgoing_edges {
+        for (i_from, _o_to) in outgoing_edges {
             self.remove_node(i_from);
         }
     }
@@ -349,7 +347,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
             // TODO switch to maps and flattens to get rid of `Option`?
             for snode_label in order {
                 let n = self.nodes.get(&snode_label).unwrap();
-                match self.node_action(&n) {
+                match self.node_action(n) {
                     None => {}
                     Some(SplitFor(split)) => splits.push((n.head, split)),
                     Some(MergeInto(to)) => {
