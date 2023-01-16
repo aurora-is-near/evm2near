@@ -30,10 +30,7 @@ impl<TLabel: CfgLabel> CfgLabel for SLabel<TLabel> {}
 
 impl<TLabel: CfgLabel> From<TLabel> for SLabel<TLabel> {
     fn from(origin: TLabel) -> Self {
-        Self {
-            origin, //todo rename to origin
-            version: 0,
-        }
+        Self { origin, version: 0 }
     }
 }
 
@@ -75,6 +72,7 @@ pub struct SuperGraph<TLabel: CfgLabel> {
 
 type SplitInto<TLabel> = Vec<SLabel<TLabel>>;
 
+#[derive(Debug)]
 enum NodeAction<TLabel: CfgLabel> {
     MergeInto(SLabel<TLabel>),
     SplitFor(SplitInto<TLabel>),
