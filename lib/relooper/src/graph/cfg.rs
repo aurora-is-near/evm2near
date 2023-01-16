@@ -5,9 +5,9 @@ use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::iter::once;
 
-pub trait CfgLabel: Copy + Hash + Eq + Ord + Display + Debug + Sized {}
+pub trait CfgLabel: Copy + Hash + Eq + Ord + Sized {}
 
-#[derive(Copy, Clone, PartialEq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum CfgEdge<TLabel> {
     Uncond(TLabel),
     Cond(TLabel, TLabel),
@@ -31,12 +31,39 @@ impl<TLabel: CfgLabel> CfgEdge<TLabel> {
 /// (while `T` can not impl `Copy` or other traits). The main motivation is `String` labels so far.
 pub struct CfgDescr<TLabel> {
     pub(crate) entry: TLabel,
-    pub(crate) edges: Vec<(TLabel, CfgEdge<TLabel>)>,
+    pub(crate) edges: HashMap<TLabel, CfgEdge<TLabel>>,
 }
 
-impl<T> CfgDescr<T> {
+impl<T: Eq + Hash> CfgDescr<T> {
+    //TODO duplication with next one, cant simplify due to lifetime bounds =(
+    pub fn map_label<M, U: Eq + Hash>(&self, mapping: M) -> CfgDescr<U>
+    where
+        M: Fn(&T) -> U,
+    {
+        let edges: HashMap<U, CfgEdge<U>> = self
+            .edges
+            .iter()
+            .map(|(from, e)| {
+                (
+                    mapping(from),
+                    //TODO is there any simpler way of transforming `&CfgEdge<T>` to `CfgEdge<&T>`?
+                    match e {
+                        Uncond(t) => Uncond(mapping(t)),
+                        Cond(t, f) => Cond(mapping(t), mapping(f)),
+                        Terminal => Terminal,
+                    },
+                )
+            })
+            .collect();
+
+        CfgDescr {
+            entry: mapping(&self.entry),
+            edges,
+        }
+    }
+
     pub fn to_borrowed(&self) -> CfgDescr<&T> {
-        let edges: Vec<(&T, CfgEdge<&T>)> = self
+        let edges: HashMap<&T, CfgEdge<&T>> = self
             .edges
             .iter()
             .map(|(from, e)| {
@@ -71,13 +98,20 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
         Self::from_edges(descr.entry, &descr.edges)
     }
 
+    pub fn descr(&self) -> CfgDescr<TLabel> {
+        CfgDescr {
+            entry: self.entry,
+            edges: self.out_edges.clone(),
+        }
+    }
+
     pub fn from_edges(
         entry: TLabel,
-        edges: &Vec<(TLabel, CfgEdge<TLabel>)>,
+        edges: &HashMap<TLabel, CfgEdge<TLabel>>,
     ) -> Result<Self, anyhow::Error> {
         let mut out_edges = HashMap::new();
         let mut nodes = HashSet::new();
-        for &(from, edge) in edges {
+        for (&from, &edge) in edges.iter() {
             let old_val = out_edges.insert(from, edge);
 
             ensure!(old_val.is_none(), "repeating source node");
@@ -103,6 +137,14 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
             out_edges,
             in_edges,
         })
+    }
+
+    pub fn from_vec(
+        entry: TLabel,
+        edges: &Vec<(TLabel, CfgEdge<TLabel>)>,
+    ) -> Result<Self, anyhow::Error> {
+        let edges_map: HashMap<TLabel, CfgEdge<TLabel>> = edges.into_iter().copied().collect();
+        Self::from_edges(entry, &edges_map)
     }
 
     pub fn out_edges(&self) -> HashMap<TLabel, Vec<TLabel>> {

@@ -13,13 +13,13 @@ pub struct SLabel<TLabel: CfgLabel> {
     version: SVersion,
 }
 
-impl<TLabel: CfgLabel> Display for SLabel<TLabel> {
+impl<TLabel: CfgLabel + Display> Display for SLabel<TLabel> {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}_{}", self.origin, self.version)
     }
 }
 
-impl<TLabel: CfgLabel> Debug for SLabel<TLabel> {
+impl<TLabel: CfgLabel + Debug> Debug for SLabel<TLabel> {
     // why debug isnt automatically derived from display?
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}_{}", self.origin, self.version)
@@ -61,7 +61,7 @@ impl<TLabel: CfgLabel> SNode<TLabel> {
     }
 }
 
-pub struct SuperGraph<TLabel: CfgLabel> {
+pub struct SuperGraph<TLabel: CfgLabel + Debug> {
     cfg: Cfg<SLabel<TLabel>>,
     out_edges: HashMap<SLabel<TLabel>, HashSet<SLabel<TLabel>>>,
     in_edges: HashMap<SLabel<TLabel>, HashSet<SLabel<TLabel>>>,
@@ -78,15 +78,15 @@ enum NodeAction<TLabel: CfgLabel> {
     SplitFor(SplitInto<TLabel>),
 }
 
-impl<TLabel: CfgLabel> SuperGraph<TLabel> {
+impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
     pub(crate) fn new(cfg: &Cfg<TLabel>) -> Self {
-        let nodes: BTreeMap<SLabel<TLabel>, SNode<TLabel>> = cfg
+        let cfg_descr = cfg.descr().map_label(|&l| SLabel::new(l, 0));
+        let new_cfg: Cfg<SLabel<TLabel>> = Cfg::from_descr(&cfg_descr).unwrap();
+
+        let nodes: BTreeMap<SLabel<TLabel>, SNode<TLabel>> = new_cfg
             .nodes()
             .iter()
-            .map(|&n| {
-                let label = SLabel::from(n);
-                (label, SNode::from(label))
-            })
+            .map(|&l| (l, SNode::from(l)))
             .collect();
 
         let label_location: BTreeMap<SLabel<TLabel>, SLabel<TLabel>> =
@@ -118,8 +118,6 @@ impl<TLabel: CfgLabel> SuperGraph<TLabel> {
                 )
             })
             .collect();
-
-        let new_cfg: Cfg<SLabel<TLabel>> = Cfg::new(cfg.entry.into());
 
         Self {
             cfg: new_cfg,
@@ -382,11 +380,11 @@ impl<TLabel: CfgLabel> SuperGraph<TLabel> {
     }
 }
 
-pub fn reduce<TLabel: CfgLabel>(cfg: &Cfg<TLabel>) -> Cfg<SLabel<TLabel>> {
+pub fn reduce<TLabel: CfgLabel + Debug>(cfg: &Cfg<TLabel>) -> Cfg<SLabel<TLabel>> {
     let mut super_graph = SuperGraph::new(cfg);
     super_graph.reduce();
     let super_out_edges = super_graph.out_edges;
-    let out_edges: Vec<(SLabel<TLabel>, CfgEdge<SLabel<TLabel>>)> = super_out_edges
+    let out_edges: HashMap<SLabel<TLabel>, CfgEdge<SLabel<TLabel>>> = super_out_edges
         .into_iter()
         .filter_map(|(slabel, points_to)| {
             let edge_opt = match cfg.out_edges.get(&slabel.origin).unwrap().to_owned() {
