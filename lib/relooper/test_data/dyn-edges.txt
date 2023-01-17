@@ -1,4 +1,5 @@
-0
+entry
+entry 0
 0 12 16
 12 exit
 16 26 43
