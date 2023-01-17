@@ -5,6 +5,7 @@ use crate::traversal::graph::dfs::Dfs;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::vec::Vec;
 
+pub mod caterpillar;
 pub mod cfg;
 mod dot_debug;
 mod enrichments;
