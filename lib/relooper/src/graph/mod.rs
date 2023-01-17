@@ -30,8 +30,10 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
         let mut loop_nodes: HashSet<TLabel> = HashSet::new();
         let mut if_nodes: HashSet<TLabel> = HashSet::new();
 
+        let in_edges = cfg.in_edges();
+
         for n in cfg.nodes() {
-            let in_edges_count = cfg.in_edges.get(&n).map_or(0, |v| {
+            let in_edges_count = in_edges.get(&n).map_or(0, |v| {
                 v.iter()
                     .filter(|&&from| node_ordering.is_forward(from, n))
                     .count()

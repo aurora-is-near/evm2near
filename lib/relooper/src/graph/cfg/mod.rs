@@ -93,7 +93,6 @@ impl<T: Eq + Hash> CfgDescr<T> {
 pub struct Cfg<TLabel: CfgLabel> {
     pub(crate) entry: TLabel,
     pub(crate) out_edges: HashMap<TLabel, CfgEdge<TLabel>>,
-    pub(crate) in_edges: HashMap<TLabel, HashSet<TLabel>>,
 }
 
 impl<TLabel: CfgLabel> Cfg<TLabel> {
@@ -127,19 +126,7 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
             out_edges.entry(n).or_insert(Terminal);
         }
 
-        let mut in_edges: HashMap<TLabel, HashSet<TLabel>> = HashMap::default();
-
-        for (&from, to_edge) in &out_edges {
-            for to in to_edge.to_vec() {
-                in_edges.entry(to).or_default().insert(from);
-            }
-        }
-
-        Ok(Self {
-            entry,
-            out_edges,
-            in_edges,
-        })
+        Ok(Self { entry, out_edges })
     }
 
     pub fn from_vec(
@@ -170,5 +157,17 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
             .into_iter()
             .flat_map(|edge| edge.to_vec())
             .collect()
+    }
+
+    pub fn in_edges(&self) -> HashMap<TLabel, HashSet<TLabel>> {
+        let mut in_edges: HashMap<TLabel, HashSet<TLabel>> = HashMap::default();
+
+        for (&from, to_edge) in &self.out_edges {
+            for to in to_edge.to_vec() {
+                in_edges.entry(to).or_default().insert(from);
+            }
+        }
+
+        in_edges
     }
 }

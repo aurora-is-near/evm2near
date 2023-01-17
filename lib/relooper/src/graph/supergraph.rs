@@ -134,10 +134,12 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
         res
     }
 
-    fn node_action(&self, node: &SNode<TLabel>) -> Option<NodeAction<TLabel>> {
-        let mut incoming: BTreeSet<&SNode<TLabel>> = self
-            .cfg
-            .in_edges
+    fn node_action(
+        &self,
+        node: &SNode<TLabel>,
+        cfg_in_edges: &HashMap<SLabel<TLabel>, HashSet<SLabel<TLabel>>>,
+    ) -> Option<NodeAction<TLabel>> {
+        let mut incoming: BTreeSet<&SNode<TLabel>> = cfg_in_edges
             .get(&node.head)
             .into_iter()
             .flatten()
@@ -224,6 +226,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
     }
 
     pub fn reduce(&mut self) {
+        let mut in_edges: Option<HashMap<SLabel<TLabel>, HashSet<SLabel<TLabel>>>> = None;
         'outer: loop {
             let order: Vec<SLabel<TLabel>> = self.snode_order();
 
@@ -231,7 +234,8 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
             // TODO switch to maps and flattens to get rid of `Option`?
             for snode_label in order {
                 let n = self.nodes.get(&snode_label).unwrap();
-                match self.node_action(n) {
+                let in_edges = in_edges.get_or_insert_with(|| self.cfg.in_edges());
+                match self.node_action(n, in_edges) {
                     None => {}
                     Some(SplitFor(split)) => splits.push((n.head, split)),
                     Some(MergeInto(to)) => {
@@ -252,6 +256,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
                 let (n, split) = biggest_splits.first().unwrap(); // TODO select by internal node count?
 
                 self.split(*n, split);
+                in_edges = None;
 
                 continue;
             } else {
