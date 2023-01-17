@@ -147,13 +147,6 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
         Self::from_edges(entry, &edges_map)
     }
 
-    pub fn out_edges(&self) -> HashMap<TLabel, Vec<TLabel>> {
-        self.out_edges
-            .iter()
-            .map(|(&f, e)| (f, e.to_vec()))
-            .collect()
-    }
-
     pub fn nodes(&self) -> HashSet<TLabel> {
         self.out_edges
             .iter()
