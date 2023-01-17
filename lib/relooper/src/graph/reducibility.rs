@@ -285,9 +285,8 @@ impl ColoredCfg {
 mod reducing_tests {
     use super::*;
 
-    #[test]
-    pub fn test_create() {
-        let graph = Cfg::from_vec(
+    fn simple_graph() -> Cfg {
+        Cfg::from_vec(
             0,
             &vec![
                 (0, CfgEdge::Cond(1, 2)),
@@ -301,7 +300,12 @@ mod reducing_tests {
                 (8, CfgEdge::Cond(9, 5)),
             ],
         )
-        .unwrap();
+        .unwrap()
+    }
+
+    #[test]
+    pub fn test_create() {
+        let graph = simple_graph();
         let cgraph = ColoredCfg::new(&graph);
         let graph2 = cgraph.as_cfg();
         assert_eq!(graph.out_edges, graph2.out_edges);
@@ -310,21 +314,7 @@ mod reducing_tests {
 
     #[test]
     pub fn test_merge() {
-        let graph = Cfg::from_vec(
-            0,
-            &vec![
-                (0, CfgEdge::Cond(1, 2)),
-                (1, CfgEdge::Cond(3, 5)),
-                (2, CfgEdge::Uncond(3)),
-                (3, CfgEdge::Uncond(4)),
-                (5, CfgEdge::Cond(6, 7)),
-                (6, CfgEdge::Uncond(8)),
-                (7, CfgEdge::Uncond(8)),
-                (4, CfgEdge::Uncond(9)),
-                (8, CfgEdge::Cond(9, 5)),
-            ],
-        )
-        .unwrap();
+        let graph = simple_graph();
         let mut cgraph = ColoredCfg::new(&graph);
         cgraph.merge(6, 7);
         assert_eq!(*cgraph.colors.get(&7).unwrap(), 6);
@@ -334,21 +324,7 @@ mod reducing_tests {
 
     #[test]
     pub fn test_reducible() {
-        let graph = Cfg::from_vec(
-            0,
-            &vec![
-                (0, CfgEdge::Cond(1, 2)),
-                (1, CfgEdge::Cond(3, 5)),
-                (2, CfgEdge::Uncond(3)),
-                (3, CfgEdge::Uncond(4)),
-                (5, CfgEdge::Cond(6, 7)),
-                (6, CfgEdge::Uncond(8)),
-                (7, CfgEdge::Uncond(8)),
-                (4, CfgEdge::Uncond(9)),
-                (8, CfgEdge::Cond(9, 5)),
-            ],
-        )
-        .unwrap();
+        let graph = simple_graph();
         let mut cgraph = ColoredCfg::new(&graph);
         cgraph.reduce_colors();
         let mut different_colors: HashSet<Color> = HashSet::default();
@@ -432,29 +408,29 @@ mod reducing_tests {
         ];
         std::fs::write("reduced3.dot", dot_lines.join("\n")).expect("fs error");
     }
-}
 
-#[test]
-pub fn test_irreducible4() {
-    let graph = Cfg::from_vec(
-        0,
-        &vec![
-            (0, CfgEdge::Cond(1, 4)),
-            (1, CfgEdge::Cond(2, 3)),
-            (2, CfgEdge::Uncond(3)),
-            (3, CfgEdge::Cond(2, 4)),
-            (4, CfgEdge::Uncond(3)),
-        ],
-    )
-    .unwrap();
-    let mut cgraph = ColoredCfg::new(&graph);
-    cgraph.reduce_colors();
-    let reduced = cgraph.as_cfg();
-    let e_graph = EnrichedCfg::new(reduced);
-    let dot_lines: Vec<String> = vec![
-        "digraph {".to_string(),
-        e_graph.cfg_to_dot("reduced"),
-        "}".to_string(),
-    ];
-    std::fs::write("reduced4.dot", dot_lines.join("\n")).expect("fs error");
+    #[test]
+    pub fn test_irreducible4() {
+        let graph = Cfg::from_vec(
+            0,
+            &vec![
+                (0, CfgEdge::Cond(1, 4)),
+                (1, CfgEdge::Cond(2, 3)),
+                (2, CfgEdge::Uncond(3)),
+                (3, CfgEdge::Cond(2, 4)),
+                (4, CfgEdge::Uncond(3)),
+            ],
+        )
+        .unwrap();
+        let mut cgraph = ColoredCfg::new(&graph);
+        cgraph.reduce_colors();
+        let reduced = cgraph.as_cfg();
+        let e_graph = EnrichedCfg::new(reduced);
+        let dot_lines: Vec<String> = vec![
+            "digraph {".to_string(),
+            e_graph.cfg_to_dot("reduced"),
+            "}".to_string(),
+        ];
+        std::fs::write("reduced4.dot", dot_lines.join("\n")).expect("fs error");
+    }
 }
