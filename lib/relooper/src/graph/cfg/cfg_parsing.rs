@@ -1,5 +1,5 @@
-use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
-use crate::graph::cfg::{Cfg, CfgDescr, CfgEdge, CfgLabel};
+use crate::graph::cfg::CfgEdge::{Cond, Uncond};
+use crate::graph::cfg::{Cfg, CfgEdge};
 use anyhow::{ensure, format_err};
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -32,7 +32,7 @@ impl<TLabel: FromStr> FromStr for CfgEdge<TLabel> {
     }
 }
 
-impl<TLabel: FromStr + Eq + Hash> TryFrom<&Vec<String>> for CfgDescr<TLabel> {
+impl<TLabel: FromStr + Eq + Hash> TryFrom<&Vec<String>> for Cfg<TLabel> {
     type Error = anyhow::Error;
 
     fn try_from(strings: &Vec<String>) -> Result<Self, Self::Error> {
@@ -45,7 +45,8 @@ impl<TLabel: FromStr + Eq + Hash> TryFrom<&Vec<String>> for CfgDescr<TLabel> {
         let entry =
             TLabel::from_str(entry_str).map_err(|e| anyhow::Error::msg("label parsing error"))?;
 
-        let mut edges = HashMap::with_capacity(strings.len() - 1);
+        let mut out_edges: HashMap<TLabel, CfgEdge<TLabel>> =
+            HashMap::with_capacity(strings.len() - 1);
 
         for edge_str in &strings[1..] {
             let (from, edge) = edge_str
@@ -54,9 +55,9 @@ impl<TLabel: FromStr + Eq + Hash> TryFrom<&Vec<String>> for CfgDescr<TLabel> {
             let from =
                 TLabel::from_str(from).map_err(|e| anyhow::Error::msg("label parsing error"))?;
             let edge = CfgEdge::from_str(edge)?;
-            edges.insert(from, edge);
+            out_edges.insert(from, edge);
         }
 
-        Ok(Self { entry, edges })
+        Ok(Self { entry, out_edges })
     }
 }

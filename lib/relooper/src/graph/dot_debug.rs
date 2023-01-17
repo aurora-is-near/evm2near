@@ -35,15 +35,15 @@ impl<TLabel: CfgLabel + Display> Cfg<TLabel> {
 }
 
 impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
-    fn labels(&self, n: TLabel) -> String {
+    fn labels(&self, n: &TLabel) -> String {
         let mut res = "".to_string();
-        if self.loop_nodes.contains(&n) {
+        if self.loop_nodes.contains(n) {
             res += "l";
         }
-        if self.if_nodes.contains(&n) {
+        if self.if_nodes.contains(n) {
             res += "i";
         }
-        if self.merge_nodes.contains(&n) {
+        if self.merge_nodes.contains(n) {
             res += "m";
         }
 
@@ -58,7 +58,7 @@ impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
 
         let mut edges: Vec<String> = Vec::new();
         for n in self.cfg.nodes() {
-            lines.push(format!("{name}_n{n}[label=\"{n} {}\"];", self.labels(n)));
+            lines.push(format!("{name}_n{n}[label=\"{n} {}\"];", self.labels(&n)));
             match self.cfg.edge(n) {
                 CfgEdge::Uncond(u) => {
                     edges.push(format!("{name}_n{n} -> {name}_n{u};"));

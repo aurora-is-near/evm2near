@@ -17,7 +17,7 @@ pub enum CfgEdge<TLabel> {
     Terminal,
 }
 
-impl<TLabel: CfgLabel> CfgEdge<TLabel> {
+impl<TLabel: Copy> CfgEdge<TLabel> {
     pub fn to_vec(&self) -> Vec<TLabel> {
         match self {
             Uncond(u) => vec![*u],
@@ -27,24 +27,20 @@ impl<TLabel: CfgLabel> CfgEdge<TLabel> {
     }
 }
 
-/// This struct is used as `Cfg` assembly description.
-/// The main purpose of its existence is to provide `to_borrowed` function
-/// that allows us to parse lines into that structure (parametrized by `T`, for example)
-/// and re-parameterize that description with `&T` which can be used as CfgLabel afterwards
-/// (while `T` can not impl `Copy` or other traits). The main motivation is `String` labels so far.
-pub struct CfgDescr<TLabel> {
+#[derive(Clone, Debug)]
+pub struct Cfg<TLabel> {
     pub(crate) entry: TLabel,
-    pub(crate) edges: HashMap<TLabel, CfgEdge<TLabel>>,
+    pub(crate) out_edges: HashMap<TLabel, CfgEdge<TLabel>>,
 }
 
-impl<T: Eq + Hash> CfgDescr<T> {
+impl<T: Eq + Hash> Cfg<T> {
     //TODO duplication with next one, cant simplify due to lifetime bounds =(
-    pub fn map_label<M, U: Eq + Hash>(&self, mapping: M) -> CfgDescr<U>
+    pub fn map_label<M, U: Eq + Hash>(&self, mapping: M) -> Cfg<U>
     where
         M: Fn(&T) -> U,
     {
-        let edges: HashMap<U, CfgEdge<U>> = self
-            .edges
+        let out_edges: HashMap<U, CfgEdge<U>> = self
+            .out_edges
             .iter()
             .map(|(from, e)| {
                 (
@@ -59,15 +55,15 @@ impl<T: Eq + Hash> CfgDescr<T> {
             })
             .collect();
 
-        CfgDescr {
+        Cfg {
             entry: mapping(&self.entry),
-            edges,
+            out_edges,
         }
     }
 
-    pub fn to_borrowed(&self) -> CfgDescr<&T> {
-        let edges: HashMap<&T, CfgEdge<&T>> = self
-            .edges
+    pub fn to_borrowed(&self) -> Cfg<&T> {
+        let out_edges: HashMap<&T, CfgEdge<&T>> = self
+            .out_edges
             .iter()
             .map(|(from, e)| {
                 (
@@ -82,31 +78,14 @@ impl<T: Eq + Hash> CfgDescr<T> {
             })
             .collect();
 
-        CfgDescr {
+        Cfg {
             entry: &self.entry,
-            edges,
+            out_edges,
         }
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Cfg<TLabel: CfgLabel> {
-    pub(crate) entry: TLabel,
-    pub(crate) out_edges: HashMap<TLabel, CfgEdge<TLabel>>,
-}
-
-impl<TLabel: CfgLabel> Cfg<TLabel> {
-    pub fn from_descr(descr: &CfgDescr<TLabel>) -> Result<Self, anyhow::Error> {
-        Self::from_edges(descr.entry, &descr.edges)
-    }
-
-    pub fn descr(&self) -> CfgDescr<TLabel> {
-        CfgDescr {
-            entry: self.entry,
-            edges: self.out_edges.clone(),
-        }
-    }
-
+impl<TLabel: Eq + Hash + Copy> Cfg<TLabel> {
     pub fn from_edges(
         entry: TLabel,
         edges: &HashMap<TLabel, CfgEdge<TLabel>>,
@@ -136,7 +115,9 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
         let edges_map: HashMap<TLabel, CfgEdge<TLabel>> = edges.into_iter().copied().collect();
         Self::from_edges(entry, &edges_map)
     }
+}
 
+impl<TLabel: CfgLabel> Cfg<TLabel> {
     pub fn nodes(&self) -> HashSet<TLabel> {
         self.out_edges
             .iter()

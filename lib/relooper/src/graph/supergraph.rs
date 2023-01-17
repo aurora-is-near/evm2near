@@ -93,8 +93,7 @@ impl<TLabel: CfgLabel> CfgEdge<TLabel> {
 
 impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
     pub(crate) fn new(cfg: &Cfg<TLabel>) -> Self {
-        let cfg_descr = cfg.descr().map_label(|&l| SLabel::from(l));
-        let new_cfg: Cfg<SLabel<TLabel>> = Cfg::from_descr(&cfg_descr).unwrap();
+        let new_cfg = cfg.map_label(|&l| SLabel::from(l));
 
         let nodes: BTreeMap<SLabel<TLabel>, SNode<TLabel>> = new_cfg
             .nodes()
@@ -166,6 +165,10 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
 
     fn split(&mut self, node_label: SLabel<TLabel>, split: &SplitInto<TLabel>) {
         let split_snode = self.nodes.get(&node_label).unwrap().to_owned();
+        println!(
+            "label: {:?}, node: {:?}, nodes: {:?}",
+            node_label, split_snode, self.nodes
+        );
 
         let outgoing_edges: HashMap<_, _> = split_snode
             .contained
@@ -230,6 +233,10 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
         'outer: loop {
             let order: Vec<SLabel<TLabel>> = self.snode_order();
 
+            println!("cfg: {:?}", self.cfg);
+            println!("nod: {:?}", self.nodes.values());
+            println!("ord: {:?}", order);
+
             let mut splits: Vec<(SLabel<TLabel>, SplitInto<TLabel>)> = Vec::new();
             // TODO switch to maps and flattens to get rid of `Option`?
             for snode_label in order {
@@ -239,6 +246,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
                     None => {}
                     Some(SplitFor(split)) => splits.push((n.head, split)),
                     Some(MergeInto(to)) => {
+                        println!("merged {:?} to {:?}", n.head, to);
                         self.merge(n.head, to);
                         continue 'outer;
                     }
@@ -255,6 +263,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
             if let Some((_, biggest_splits)) = split_len.last_key_value() {
                 let (n, split) = biggest_splits.first().unwrap(); // TODO select by internal node count?
 
+                println!("split {:?} for {:?}", n, split);
                 self.split(*n, split);
                 in_edges = None;
 
