@@ -158,6 +158,7 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
     }
 
     pub fn edge(&self, label: TLabel) -> &CfgEdge<TLabel> {
+        // TODO to &TLabel
         self.out_edges
             .get(&label)
             .expect("any node should have outgoing edges")
