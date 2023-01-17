@@ -1,6 +1,7 @@
-use std::collections::{HashMap, HashSet};
-
 use super::cfg::{Cfg, CfgEdge, CfgLabel};
+use super::EnrichedCfg;
+use std::collections::{HashMap, HashSet};
+use std::fmt::Display;
 
 #[derive(PartialOrd, PartialEq, Clone, Copy, Hash, Eq, Ord)]
 pub struct EvmLabel {
@@ -18,6 +19,15 @@ pub enum CaterpillarLabel {
 }
 
 impl CfgLabel for CaterpillarLabel {}
+
+impl Display for CaterpillarLabel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            CaterpillarLabel::generated(id, offset) => write!(f, "{}_{}", id, offset),
+            CaterpillarLabel::original(id) => write!(f, "{}", id),
+        }
+    }
+}
 
 pub fn make_caterpillar(cfg: Cfg<EvmLabel>) -> Cfg<CaterpillarLabel> {
     let mut outedges: HashMap<CaterpillarLabel, CfgEdge<CaterpillarLabel>> = HashMap::default();
@@ -98,4 +108,50 @@ pub fn make_caterpillar(cfg: Cfg<EvmLabel>) -> Cfg<CaterpillarLabel> {
     )
     .unwrap();
     res
+}
+
+#[test]
+pub fn test_caterpillar() {
+    let mut nodes: Vec<EvmLabel> = Vec::default();
+    for i in 0..10 {
+        nodes.push(EvmLabel {
+            cfg_label: i,
+            is_dynamic: i % 3 == 0,
+            is_jumpdest: i % 2 == 0,
+        });
+    }
+    nodes[0].is_dynamic = false;
+    let mut edges: HashMap<EvmLabel, CfgEdge<EvmLabel>> = HashMap::default();
+    edges.insert(nodes[0], CfgEdge::Cond(nodes[1], nodes[2]));
+    edges.insert(nodes[1], CfgEdge::Uncond(nodes[3]));
+    edges.insert(nodes[2], CfgEdge::Uncond(nodes[3]));
+    edges.insert(nodes[4], CfgEdge::Cond(nodes[5], nodes[6]));
+    edges.insert(nodes[5], CfgEdge::Uncond(nodes[6]));
+    edges.insert(nodes[8], CfgEdge::Cond(nodes[7], nodes[9]));
+    let cfg = Cfg::from_edges(nodes[0], &edges).unwrap();
+    let caterpillar = make_caterpillar(cfg);
+
+    println!("Caterpillar:");
+    for (label, edge) in &caterpillar.out_edges {
+        match edge {
+            CfgEdge::Cond(cond, uncond) => {
+                println!("CEdge from {}. cond = {}, uncond = {}", label, cond, uncond);
+            }
+            CfgEdge::Uncond(uncond) => {
+                println!("UEdge from {} to {}", label, uncond);
+            }
+            CfgEdge::Terminal => {
+                println!("Terminal edge from {}", label);
+            }
+        }
+    }
+    println!("End of caterpillar");
+
+    let e_graph = EnrichedCfg::new(caterpillar);
+    let dot_lines: Vec<String> = vec![
+        "digraph {".to_string(),
+        e_graph.cfg_to_dot("reduced"),
+        "}".to_string(),
+    ];
+    std::fs::write("caterpillar.dot", dot_lines.join("\n")).expect("fs error");
 }
