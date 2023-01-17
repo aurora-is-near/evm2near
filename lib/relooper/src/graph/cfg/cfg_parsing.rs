@@ -1,8 +1,9 @@
-use crate::graph::cfg::CfgEdge::{Cond, Uncond};
+use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
 use crate::graph::cfg::{Cfg, CfgEdge};
 use anyhow::{ensure, format_err};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
+use std::iter::once;
 use std::str::FromStr;
 
 impl<TLabel: FromStr> FromStr for CfgEdge<TLabel> {
@@ -32,7 +33,7 @@ impl<TLabel: FromStr> FromStr for CfgEdge<TLabel> {
     }
 }
 
-impl<TLabel: FromStr + Eq + Hash> TryFrom<&Vec<String>> for Cfg<TLabel> {
+impl<TLabel: FromStr + Eq + Hash + Clone> TryFrom<&Vec<String>> for Cfg<TLabel> {
     type Error = anyhow::Error;
 
     fn try_from(strings: &Vec<String>) -> Result<Self, Self::Error> {
@@ -55,8 +56,24 @@ impl<TLabel: FromStr + Eq + Hash> TryFrom<&Vec<String>> for Cfg<TLabel> {
             let from =
                 TLabel::from_str(from).map_err(|e| anyhow::Error::msg("label parsing error"))?;
             let edge = CfgEdge::from_str(edge)?;
+            for to in edge.to_vec() {
+                if !out_edges.contains_key(to) {
+                    out_edges.insert(to.clone(), Terminal);
+                }
+            }
             out_edges.insert(from, edge);
         }
+
+        // let nodes: HashSet<_> = out_edges
+        //     .iter()
+        //     .flat_map(|(f, e)| once(f).chain(e.to_vec()))
+        //     .collect();
+        //
+        // for n in nodes {
+        //     if !out_edges.contains_key(n) {
+        //         out_edges.insert(n.clone(), Terminal);
+        //     }
+        // }
 
         Ok(Self { entry, out_edges })
     }

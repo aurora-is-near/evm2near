@@ -98,6 +98,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
         let nodes: BTreeMap<SLabel<TLabel>, SNode<TLabel>> = new_cfg
             .nodes()
             .iter()
+            .copied()
             .map(|&l| (l, SNode::from(l)))
             .collect();
 
@@ -198,9 +199,8 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
             let from_split: HashMap<_, _> = split_for
                 .contained
                 .iter()
-                // .copied()
                 .map(|&l| (l, *self.cfg.edge(l)))
-                .filter(|(_l, e)| e.to_vec().iter().any(|to| *to == split_snode.head))
+                .filter(|(_l, e)| e.to_vec().into_iter().any(|&to| to == split_snode.head))
                 .collect();
 
             for (f, e) in from_split {

@@ -17,11 +17,11 @@ pub enum CfgEdge<TLabel> {
     Terminal,
 }
 
-impl<TLabel: Copy> CfgEdge<TLabel> {
-    pub fn to_vec(&self) -> Vec<TLabel> {
+impl<TLabel> CfgEdge<TLabel> {
+    pub fn to_vec(&self) -> Vec<&TLabel> {
         match self {
-            Uncond(u) => vec![*u],
-            Cond(cond, fallthrough) => vec![*cond, *fallthrough],
+            Uncond(u) => vec![u],
+            Cond(cond, fallthrough) => vec![cond, fallthrough],
             Terminal => vec![],
         }
     }
@@ -118,10 +118,10 @@ impl<TLabel: Eq + Hash + Copy> Cfg<TLabel> {
 }
 
 impl<TLabel: CfgLabel> Cfg<TLabel> {
-    pub fn nodes(&self) -> HashSet<TLabel> {
+    pub fn nodes(&self) -> HashSet<&TLabel> {
         self.out_edges
             .iter()
-            .flat_map(|(&from, &to)| once(from).chain(to.to_vec()))
+            .flat_map(|(from, to)| once(from).chain(to.to_vec()))
             .collect()
     }
 
@@ -132,7 +132,7 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
             .expect("any node should have outgoing edges")
     }
 
-    pub fn children(&self, label: TLabel) -> HashSet<TLabel> {
+    pub fn children(&self, label: TLabel) -> HashSet<&TLabel> {
         self.out_edges
             .get(&label)
             .into_iter()
@@ -144,7 +144,7 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
         let mut in_edges: HashMap<TLabel, HashSet<TLabel>> = HashMap::default();
 
         for (&from, to_edge) in &self.out_edges {
-            for to in to_edge.to_vec() {
+            for &to in to_edge.to_vec() {
                 in_edges.entry(to).or_default().insert(from);
             }
         }

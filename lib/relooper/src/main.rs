@@ -22,9 +22,9 @@ pub fn main() {
     let input = std::fs::read_to_string(input_path).expect("unable to read input file");
     let lines: Vec<String> = input.split("\n").map(|x| x.to_string()).collect();
 
-    // let cfg_descr: Cfg<String> = Cfg::try_from(&lines).expect("invalud input formatting");
-    // let cfg = cfg_descr.to_borrowed();
-    let cfg: Cfg<usize> = Cfg::try_from(&lines).expect("invalud input formatting");
+    let cfg_descr: Cfg<String> = Cfg::try_from(&lines).expect("invalud input formatting");
+    let cfg = cfg_descr.to_borrowed();
+    // let cfg: Cfg<usize> = Cfg::try_from(&lines).expect("invalud input formatting");
 
     let reduced_graph = supergraph::reduce(&cfg);
 
