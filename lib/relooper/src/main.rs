@@ -3,13 +3,10 @@ extern crate core;
 mod graph;
 mod traversal;
 
-use crate::graph::cfg::{Cfg, CfgLabel};
+use crate::graph::cfg::Cfg;
 use crate::graph::{supergraph, EnrichedCfg};
 use std::env;
-use std::fmt::{Debug, Display, Formatter};
 use std::path::Path;
-
-impl CfgLabel for &String {}
 
 pub fn main() {
     let args: Vec<String> = env::args().collect();

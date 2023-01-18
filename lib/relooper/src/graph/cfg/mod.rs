@@ -10,6 +10,8 @@ mod cfg_parsing;
 
 pub trait CfgLabel: Copy + Hash + Eq + Ord + Sized {}
 
+impl<T: Copy + Hash + Eq + Ord + Sized> CfgLabel for T {}
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum CfgEdge<TLabel> {
     Uncond(TLabel),

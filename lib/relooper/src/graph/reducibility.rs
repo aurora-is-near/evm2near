@@ -5,8 +5,6 @@ use std::{
     fmt::Display,
 };
 
-impl crate::CfgLabel for usize {}
-
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Hash, Clone, Copy)]
 pub struct PairedLabel(usize, usize); // (unique_label, origin_label)
 impl Display for PairedLabel {
@@ -15,7 +13,6 @@ impl Display for PairedLabel {
     }
 }
 
-impl crate::CfgLabel for PairedLabel {}
 type CfgLabel = usize;
 pub type LabeledCfg = crate::Cfg<PairedLabel>;
 type Cfg = crate::Cfg<CfgLabel>;

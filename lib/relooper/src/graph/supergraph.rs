@@ -26,8 +26,6 @@ impl<TLabel: CfgLabel + Debug> Debug for SLabel<TLabel> {
     }
 }
 
-impl<TLabel: CfgLabel> CfgLabel for SLabel<TLabel> {}
-
 impl<TLabel: CfgLabel> From<TLabel> for SLabel<TLabel> {
     fn from(origin: TLabel) -> Self {
         Self { origin, version: 0 }
