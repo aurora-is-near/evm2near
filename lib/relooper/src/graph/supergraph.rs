@@ -269,3 +269,39 @@ pub fn reduce<TLabel: CfgLabel + Debug>(cfg: &Cfg<TLabel>) -> Cfg<SLabel<TLabel>
     super_graph.reduce();
     super_graph.cfg
 }
+
+#[cfg(test)]
+mod test {
+    use crate::graph::cfg::CfgEdge::{Cond, Uncond};
+    use crate::graph::cfg::{Cfg, CfgLabel};
+    use crate::graph::supergraph::{reduce, SLabel};
+    use std::collections::{HashMap, HashSet};
+
+    fn test_reduce<TLabel: CfgLabel>(
+        origin_cfg: Cfg<TLabel>,
+        reduced_cfg: Cfg<SLabel<TLabel>>,
+    ) -> bool {
+        let reduced_nodes = reduced_cfg.nodes();
+        let mut origin_mapping: HashMap<TLabel, HashSet<SLabel<TLabel>>> = Default::default();
+        for &x in reduced_nodes.iter() {
+            origin_mapping.entry(x.origin).or_default().insert(*x);
+        }
+
+        origin_cfg.out_edges.iter().all(|(from, &e)| {
+            origin_mapping
+                .get(from)
+                .unwrap()
+                .iter()
+                .all(|&r_from| reduced_cfg.edge(r_from).map(|x| x.origin) == e)
+        })
+    }
+
+    #[test]
+    fn simplest() {
+        let cfg =
+            Cfg::from_vec(0, &vec![(0, Cond(1, 2)), (1, Uncond(2)), (2, Cond(3, 1))]).unwrap();
+        let reduced = reduce(&cfg);
+
+        assert!(test_reduce(cfg, reduced));
+    }
+}

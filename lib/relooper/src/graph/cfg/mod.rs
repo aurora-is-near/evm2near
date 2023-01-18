@@ -36,7 +36,7 @@ impl<TLabel> CfgEdge<TLabel> {
         }
     }
 
-    fn map<U, F: Fn(&TLabel) -> U>(&self, mapping: F) -> CfgEdge<U> {
+    pub(crate) fn map<U, F: Fn(&TLabel) -> U>(&self, mapping: F) -> CfgEdge<U> {
         match self {
             Uncond(t) => Uncond(mapping(t)),
             Cond(t, f) => Cond(mapping(t), mapping(f)),
