@@ -1,12 +1,13 @@
 use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
 use crate::graph::cfg::{Cfg, CfgEdge};
 use anyhow::{ensure, format_err};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::hash::Hash;
-use std::iter::once;
 use std::str::FromStr;
 
-impl<TLabel: FromStr> FromStr for CfgEdge<TLabel> {
+impl<E: std::error::Error + Send + Sync + 'static, TLabel: FromStr<Err = E>> FromStr
+    for CfgEdge<TLabel>
+{
     type Err = anyhow::Error;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
@@ -19,21 +20,23 @@ impl<TLabel: FromStr> FromStr for CfgEdge<TLabel> {
             None => {
                 let a = TLabel::from_str(first_str)
                     .map(Uncond)
-                    .map_err(|_e| anyhow::Error::msg("label parsing error")); //TODO unable to find solution for non-std-err conversion to anyhow error
+                    .map_err(|e| anyhow::Error::new(e)); //TODO unable to find solution for non-std-err conversion to anyhow error
                 a
             }
             Some(uncond_str) => {
-                let cond = TLabel::from_str(first_str)
-                    .map_err(|_e| anyhow::Error::msg("label parsing error"))?;
-                let uncond = TLabel::from_str(uncond_str)
-                    .map_err(|_e| anyhow::Error::msg("label parsing error"))?;
+                let cond = TLabel::from_str(first_str).map_err(|e| anyhow::Error::new(e))?;
+                let uncond = TLabel::from_str(uncond_str).map_err(|e| anyhow::Error::new(e))?;
                 Ok(Cond(cond, uncond))
             }
         }
     }
 }
 
-impl<TLabel: FromStr + Eq + Hash + Clone> TryFrom<&Vec<String>> for Cfg<TLabel> {
+impl<
+        E: std::error::Error + Send + Sync + 'static,
+        TLabel: FromStr<Err = E> + Eq + Hash + Clone,
+    > TryFrom<&Vec<String>> for Cfg<TLabel>
+{
     type Error = anyhow::Error;
 
     fn try_from(strings: &Vec<String>) -> Result<Self, Self::Error> {
@@ -43,8 +46,7 @@ impl<TLabel: FromStr + Eq + Hash + Clone> TryFrom<&Vec<String>> for Cfg<TLabel> 
         );
 
         let entry_str = strings.first().unwrap();
-        let entry =
-            TLabel::from_str(entry_str).map_err(|e| anyhow::Error::msg("label parsing error"))?;
+        let entry = TLabel::from_str(entry_str).map_err(|e| anyhow::Error::new(e))?;
 
         let mut out_edges: HashMap<TLabel, CfgEdge<TLabel>> =
             HashMap::with_capacity(strings.len() - 1);
@@ -53,8 +55,7 @@ impl<TLabel: FromStr + Eq + Hash + Clone> TryFrom<&Vec<String>> for Cfg<TLabel> 
             let (from, edge) = edge_str
                 .split_once(' ')
                 .ok_or_else(|| format_err!("invalid label-edge format".to_string()))?;
-            let from =
-                TLabel::from_str(from).map_err(|e| anyhow::Error::msg("label parsing error"))?;
+            let from = TLabel::from_str(from).map_err(|e| anyhow::Error::new(e))?;
             let edge = CfgEdge::from_str(edge)?;
             for to in edge.to_vec() {
                 if !out_edges.contains_key(to) {
