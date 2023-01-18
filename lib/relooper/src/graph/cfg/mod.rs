@@ -27,6 +27,14 @@ impl<TLabel> CfgEdge<TLabel> {
             Terminal => vec![],
         }
     }
+
+    fn as_ref(&self) -> CfgEdge<&TLabel> {
+        match *self {
+            Uncond(ref to) => Uncond(to),
+            Cond(ref t, ref f) => Cond(t, f),
+            Terminal => Terminal,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -67,17 +75,7 @@ impl<T: Eq + Hash> Cfg<T> {
         let out_edges: HashMap<&T, CfgEdge<&T>> = self
             .out_edges
             .iter()
-            .map(|(from, e)| {
-                (
-                    from,
-                    //TODO is there any simpler way of transforming `&CfgEdge<T>` to `CfgEdge<&T>`?
-                    match e {
-                        Uncond(t) => Uncond(t),
-                        Cond(t, f) => Cond(t, f),
-                        Terminal => Terminal,
-                    },
-                )
-            })
+            .map(|(from, e)| (from, e.as_ref()))
             .collect();
 
         Cfg {
