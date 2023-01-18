@@ -35,6 +35,14 @@ impl<TLabel> CfgEdge<TLabel> {
             Terminal => Terminal,
         }
     }
+
+    fn map<U, F: Fn(&TLabel) -> U>(&self, mapping: F) -> CfgEdge<U> {
+        match self {
+            Uncond(t) => Uncond(mapping(t)),
+            Cond(t, f) => Cond(mapping(t), mapping(f)),
+            Terminal => Terminal,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -56,11 +64,7 @@ impl<T: Eq + Hash> Cfg<T> {
                 (
                     mapping(from),
                     //TODO is there any simpler way of transforming `&CfgEdge<T>` to `CfgEdge<&T>`?
-                    match e {
-                        Uncond(t) => Uncond(mapping(t)),
-                        Cond(t, f) => Cond(mapping(t), mapping(f)),
-                        Terminal => Terminal,
-                    },
+                    e.map(&mapping),
                 )
             })
             .collect();
