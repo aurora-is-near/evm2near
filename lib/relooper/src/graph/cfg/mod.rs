@@ -5,7 +5,6 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::iter::once;
 
-mod cfg_mut;
 mod cfg_parsing;
 
 pub trait CfgLabel: Copy + Hash + Eq + Ord + Sized {}
@@ -144,5 +143,14 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
         }
 
         in_edges
+    }
+
+    pub fn add_edge(&mut self, from: TLabel, edge: CfgEdge<TLabel>) {
+        assert!(self.out_edges.insert(from, edge).is_none());
+    }
+
+    pub fn remove_edge(&mut self, from: TLabel, edge: CfgEdge<TLabel>) {
+        let removed_edge = self.out_edges.remove(&from);
+        assert!(removed_edge == Some(edge));
     }
 }

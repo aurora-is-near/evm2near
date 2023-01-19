@@ -65,17 +65,6 @@ impl<
             out_edges.insert(from, edge);
         }
 
-        // let nodes: HashSet<_> = out_edges
-        //     .iter()
-        //     .flat_map(|(f, e)| once(f).chain(e.to_vec()))
-        //     .collect();
-        //
-        // for n in nodes {
-        //     if !out_edges.contains_key(n) {
-        //         out_edges.insert(n.clone(), Terminal);
-        //     }
-        // }
-
         Ok(Self { entry, out_edges })
     }
 }
