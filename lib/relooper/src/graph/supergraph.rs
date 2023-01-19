@@ -63,7 +63,7 @@ type SNodeLabel<TLabel> = SLabel<TLabel>;
 
 pub struct SuperGraph<TLabel: CfgLabel + Debug> {
     cfg: Cfg<SLabel<TLabel>>,
-    labels: BTreeMap<TLabel, Vec<SLabel<TLabel>>>,
+    versions: BTreeMap<TLabel, usize>,
     nodes: BTreeMap<SNodeLabel<TLabel>, SNode<TLabel>>,
     label_location: BTreeMap<SLabel<TLabel>, SNodeLabel<TLabel>>,
 }
@@ -103,14 +103,12 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
         let label_location: BTreeMap<SLabel<TLabel>, SLabel<TLabel>> =
             nodes.iter().map(|(&l, _n)| (l, l)).collect();
 
-        let labels: BTreeMap<TLabel, Vec<SLabel<TLabel>>> = label_location
-            .iter()
-            .map(|(&l, _)| (l.origin, vec![l]))
-            .collect();
+        let labels: BTreeMap<TLabel, usize> =
+            label_location.iter().map(|(&l, _)| (l.origin, 0)).collect();
 
         Self {
             cfg: new_cfg,
-            labels,
+            versions: labels,
             nodes,
             label_location,
         }
@@ -177,17 +175,21 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
             let split_for = self.nodes.get(split_for_l).unwrap();
             let mut versions_mapping: HashMap<SLabel<TLabel>, SLabel<TLabel>> = Default::default();
             for &inner in split_snode.contained.iter() {
-                self.labels.entry(inner.origin).and_modify(|versions| {
-                    let new_ver = SLabel::new(inner.origin, versions.len());
+                self.versions.entry(inner.origin).and_modify(|version| {
+                    *version += 1;
+                    let a = *version;
+                    let new_ver = SLabel::new(inner.origin, a);
                     versions_mapping.insert(inner, new_ver);
-                    versions.push(new_ver)
                 });
             }
 
             // copy internal & outgoing edges
             for (o_from, &edge) in outgoing_edges.iter() {
                 let curr_from = versions_mapping[o_from];
-                self.cfg.add_edge(curr_from, edge);
+                // in case of internal edge, we should redirect that edge to new copy of internal node
+                let maybe_redirected_edge =
+                    edge.redirect(|l| *versions_mapping.get(&l).unwrap_or(&l));
+                self.cfg.add_edge(curr_from, maybe_redirected_edge);
             }
 
             let from_split: HashMap<_, _> = split_for
@@ -198,10 +200,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
                 .collect();
 
             for (f, e) in from_split {
-                let redirected = e.redirect(|to| match versions_mapping.get(&to) {
-                    Some(redirected_to) => *redirected_to,
-                    None => to,
-                });
+                let redirected = e.redirect(|to| *versions_mapping.get(&to).unwrap_or(&to));
                 self.cfg.remove_edge(f, e);
                 self.cfg.add_edge(f, redirected);
             }
@@ -228,7 +227,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
             let order: Vec<SLabel<TLabel>> = self.snode_order();
 
             let mut splits: Vec<(SLabel<TLabel>, SplitInto<TLabel>)> = Vec::new();
-            // TODO switch to maps and flattens to get rid of `Option`?
+
             for snode_label in order {
                 let n = self.nodes.get(&snode_label).unwrap();
                 let in_edges = in_edges.get_or_insert_with(|| self.cfg.in_edges());
@@ -246,11 +245,13 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
                 BTreeMap::new();
 
             for n_split in splits {
-                split_len.entry(n_split.1.len()).or_default().push(n_split);
+                let (_, split_for) = &n_split;
+                split_len.entry(split_for.len()).or_default().push(n_split);
             }
 
             if let Some((_, biggest_splits)) = split_len.last_key_value() {
-                let (n, split) = biggest_splits.first().unwrap(); // TODO select by internal node count?
+                // let split_internal_nodes = biggest_splits.iter().map(|(n, split_for)|); // TODO select by internal node count?
+                let (n, split) = biggest_splits.first().unwrap();
 
                 self.split(*n, split);
                 in_edges = None;
