@@ -36,7 +36,7 @@ impl<TLabel> CfgEdge<TLabel> {
         }
     }
 
-    pub(crate) fn map<U, F: Fn(&TLabel) -> U>(&self, mapping: F) -> CfgEdge<U> {
+    pub(crate) fn map<'a, U, F: Fn(&'a TLabel) -> U>(&'a self, mapping: F) -> CfgEdge<U> {
         match self {
             Uncond(t) => Uncond(mapping(t)),
             Cond(t, f) => Cond(mapping(t), mapping(f)),
@@ -52,10 +52,9 @@ pub struct Cfg<TLabel> {
 }
 
 impl<T: Eq + Hash> Cfg<T> {
-    //TODO duplication with next one, cant simplify due to lifetime bounds =(
-    pub fn map_label<M, U: Eq + Hash>(&self, mapping: M) -> Cfg<U>
+    pub fn map_label<'a, M, U: Eq + Hash>(&'a self, mapping: M) -> Cfg<U>
     where
-        M: Fn(&T) -> U,
+        M: Fn(&'a T) -> U,
     {
         let out_edges: HashMap<U, CfgEdge<U>> = self
             .out_edges
@@ -76,16 +75,7 @@ impl<T: Eq + Hash> Cfg<T> {
     }
 
     pub fn to_borrowed(&self) -> Cfg<&T> {
-        let out_edges: HashMap<&T, CfgEdge<&T>> = self
-            .out_edges
-            .iter()
-            .map(|(from, e)| (from, e.as_ref()))
-            .collect();
-
-        Cfg {
-            entry: &self.entry,
-            out_edges,
-        }
+        self.map_label(|l| l)
     }
 }
 
