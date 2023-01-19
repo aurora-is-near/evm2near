@@ -304,4 +304,21 @@ mod test {
 
         assert!(test_reduce(cfg, reduced));
     }
+
+    #[test]
+    fn unreducible() {
+        let cfg = Cfg::from_vec(
+            0,
+            &vec![
+                (0, Cond(1, 2)),
+                (1, Uncond(4)),
+                (4, Uncond(2)),
+                (2, Cond(3, 1)),
+            ],
+        )
+        .unwrap();
+        let reduced = reduce(&cfg);
+
+        assert!(test_reduce(cfg, reduced));
+    }
 }
