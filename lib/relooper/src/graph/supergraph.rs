@@ -103,12 +103,12 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
         let label_location: BTreeMap<SLabel<TLabel>, SLabel<TLabel>> =
             nodes.iter().map(|(&l, _n)| (l, l)).collect();
 
-        let labels: BTreeMap<TLabel, usize> =
+        let versions: BTreeMap<TLabel, usize> =
             label_location.iter().map(|(&l, _)| (l.origin, 0)).collect();
 
         Self {
             cfg: new_cfg,
-            versions: labels,
+            versions,
             nodes,
             label_location,
         }
@@ -167,7 +167,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
             .contained
             .iter()
             .copied()
-            .map(|inner| (inner, *self.cfg.edge(inner)))
+            .map(|inner| (inner, *self.cfg.edge(&inner)))
             .collect();
 
         //duplicate every label in that supernode
@@ -195,7 +195,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
             let from_split: HashMap<_, _> = split_for
                 .contained
                 .iter()
-                .map(|&l| (l, *self.cfg.edge(l)))
+                .map(|&l| (l, *self.cfg.edge(&l)))
                 .filter(|(_l, e)| e.to_vec().into_iter().any(|&to| to == split_snode.head))
                 .collect();
 
@@ -293,14 +293,13 @@ mod test {
                 .get(from)
                 .unwrap()
                 .iter()
-                .all(|&r_from| reduced_cfg.edge(r_from).map(|x| x.origin) == e)
+                .all(|&r_from| reduced_cfg.edge(&r_from).map(|x| x.origin) == e)
         })
     }
 
     #[test]
     fn simplest() {
-        let cfg =
-            Cfg::from_vec(0, &vec![(0, Cond(1, 2)), (1, Uncond(2)), (2, Cond(3, 1))]).unwrap();
+        let cfg = Cfg::from_vec(0, &[(0, Cond(1, 2)), (1, Uncond(2)), (2, Cond(3, 1))]).unwrap();
         let reduced = reduce(&cfg);
 
         assert!(test_reduce(cfg, reduced));
@@ -310,7 +309,7 @@ mod test {
     fn unreducible() {
         let cfg = Cfg::from_vec(
             0,
-            &vec![
+            &[
                 (0, Cond(1, 2)),
                 (1, Uncond(4)),
                 (4, Uncond(2)),

@@ -17,12 +17,9 @@ impl<E: std::error::Error + Send + Sync + 'static, TLabel: FromStr<Err = E>> Fro
         };
 
         match maybe_second {
-            None => {
-                let a = TLabel::from_str(first_str)
-                    .map(Uncond)
-                    .map_err(|e| anyhow::Error::new(e)); //TODO unable to find solution for non-std-err conversion to anyhow error
-                a
-            }
+            None => TLabel::from_str(first_str)
+                .map(Uncond)
+                .map_err(|e| anyhow::Error::new(e)),
             Some(uncond_str) => {
                 let cond = TLabel::from_str(first_str).map_err(|e| anyhow::Error::new(e))?;
                 let uncond = TLabel::from_str(uncond_str).map_err(|e| anyhow::Error::new(e))?;
@@ -32,10 +29,10 @@ impl<E: std::error::Error + Send + Sync + 'static, TLabel: FromStr<Err = E>> Fro
     }
 }
 
-impl<
-        E: std::error::Error + Send + Sync + 'static,
-        TLabel: FromStr<Err = E> + Eq + Hash + Clone,
-    > TryFrom<&Vec<String>> for Cfg<TLabel>
+impl<E, TLabel> TryFrom<&Vec<String>> for Cfg<TLabel>
+where
+    E: std::error::Error + Send + Sync + 'static,
+    TLabel: FromStr<Err = E> + Eq + Hash + Clone,
 {
     type Error = anyhow::Error;
 
@@ -46,7 +43,7 @@ impl<
         );
 
         let entry_str = strings.first().unwrap();
-        let entry = TLabel::from_str(entry_str).map_err(|e| anyhow::Error::new(e))?;
+        let entry = TLabel::from_str(entry_str)?;
 
         let mut out_edges: HashMap<TLabel, CfgEdge<TLabel>> =
             HashMap::with_capacity(strings.len() - 1);
@@ -55,7 +52,7 @@ impl<
             let (from, edge) = edge_str
                 .split_once(' ')
                 .ok_or_else(|| format_err!("invalid label-edge format".to_string()))?;
-            let from = TLabel::from_str(from).map_err(|e| anyhow::Error::new(e))?;
+            let from = TLabel::from_str(from)?;
             let edge = CfgEdge::from_str(edge)?;
             for to in edge.to_vec() {
                 if !out_edges.contains_key(to) {

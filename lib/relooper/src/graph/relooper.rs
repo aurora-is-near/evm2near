@@ -96,7 +96,7 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
             }
             None => {
                 let actions = Actions(node);
-                let other = match *self.cfg.edge(node) {
+                let other = match *self.cfg.edge(&node) {
                     Uncond(u) => self.do_branch(node, u, context),
                     Cond(true_label, false_label) => {
                         let mut if_context = context.clone();

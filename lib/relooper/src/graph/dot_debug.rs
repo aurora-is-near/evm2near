@@ -13,7 +13,7 @@ impl<TLabel: CfgLabel + Display> Cfg<TLabel> {
         let mut edges: Vec<String> = Vec::new();
         for &n in self.nodes() {
             lines.push(format!("{name}_n{n}[label=\"{n}\"];"));
-            match self.edge(n) {
+            match self.edge(&n) {
                 CfgEdge::Uncond(u) => {
                     edges.push(format!("{name}_n{n} -> {name}_n{u};"));
                 }
@@ -59,7 +59,7 @@ impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
         let mut edges: Vec<String> = Vec::new();
         for &n in self.cfg.nodes() {
             lines.push(format!("{name}_n{n}[label=\"{n} {}\"];", self.labels(&n)));
-            match self.cfg.edge(n) {
+            match self.cfg.edge(&n) {
                 CfgEdge::Uncond(u) => {
                     edges.push(format!("{name}_n{n} -> {name}_n{u};"));
                 }

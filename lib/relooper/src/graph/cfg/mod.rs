@@ -58,13 +58,7 @@ impl<T: Eq + Hash> Cfg<T> {
         let out_edges: HashMap<U, CfgEdge<U>> = self
             .out_edges
             .iter()
-            .map(|(from, e)| {
-                (
-                    mapping(from),
-                    //TODO is there any simpler way of transforming `&CfgEdge<T>` to `CfgEdge<&T>`?
-                    e.map(&mapping),
-                )
-            })
+            .map(|(from, e)| (mapping(from), e.map(&mapping)))
             .collect();
 
         Cfg {
@@ -103,9 +97,9 @@ impl<TLabel: Eq + Hash + Copy> Cfg<TLabel> {
 
     pub fn from_vec(
         entry: TLabel,
-        edges: &Vec<(TLabel, CfgEdge<TLabel>)>,
+        edges: &[(TLabel, CfgEdge<TLabel>)],
     ) -> Result<Self, anyhow::Error> {
-        let edges_map: HashMap<TLabel, CfgEdge<TLabel>> = edges.into_iter().copied().collect();
+        let edges_map: HashMap<TLabel, CfgEdge<TLabel>> = edges.iter().copied().collect();
         Self::from_edges(entry, &edges_map)
     }
 }
@@ -118,10 +112,9 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
             .collect()
     }
 
-    pub fn edge(&self, label: TLabel) -> &CfgEdge<TLabel> {
-        // TODO to &TLabel
+    pub fn edge(&self, label: &TLabel) -> &CfgEdge<TLabel> {
         self.out_edges
-            .get(&label)
+            .get(label)
             .expect("any node should have outgoing edges")
     }
 
