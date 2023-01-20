@@ -118,9 +118,9 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
             .expect("any node should have outgoing edges")
     }
 
-    pub fn children(&self, label: TLabel) -> HashSet<&TLabel> {
+    pub fn children(&self, label: &TLabel) -> HashSet<&TLabel> {
         self.out_edges
-            .get(&label)
+            .get(label)
             .into_iter()
             .flat_map(|edge| edge.to_vec())
             .collect()

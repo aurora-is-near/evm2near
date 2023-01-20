@@ -118,11 +118,11 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
         let start = self.nodes.get(&self.cfg.entry).unwrap().clone();
         let res: Vec<_> = dfs_post_ord(start.head, &mut |slabel| {
             let snode = self.nodes.get(slabel).unwrap();
-            snode.contained.iter().flat_map(|&l| {
+            snode.contained.iter().flat_map(|l| {
                 self.cfg
                     .children(l)
                     .into_iter()
-                    .map(|to| *self.label_location.get(&to).unwrap())
+                    .map(|to| *self.label_location.get(to).unwrap())
             })
         })
         .into_iter()
