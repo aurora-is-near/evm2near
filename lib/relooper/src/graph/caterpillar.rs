@@ -1,6 +1,6 @@
-use super::cfg::{Cfg, CfgEdge, CfgLabel};
-use super::EnrichedCfg;
-use std::collections::{HashMap, HashSet};
+use super::cfg::{Cfg, CfgEdge};
+
+use std::collections::HashMap;
 use std::fmt::Display;
 
 #[derive(PartialOrd, PartialEq, Clone, Copy, Hash, Eq, Ord)]
@@ -29,7 +29,7 @@ impl Display for CaterpillarLabel {
     }
 }
 
-pub fn make_caterpillar(cfg: Cfg<EvmLabel>) -> Cfg<CaterpillarLabel> {
+pub fn unfold_dyn_edges(cfg: Cfg<EvmLabel>) -> Cfg<CaterpillarLabel> {
     let to_caterpillar_edge = |(label, edge): (&EvmLabel, &CfgEdge<EvmLabel>)| -> (CaterpillarLabel, CfgEdge<CaterpillarLabel>) {
         match edge {
             CfgEdge::Cond(cond, uncond) => {
@@ -77,7 +77,7 @@ pub fn make_caterpillar(cfg: Cfg<EvmLabel>) -> Cfg<CaterpillarLabel> {
         .enumerate()
         .map(|(index, jumpdest)| CaterpillarLabel::Generated(index, *jumpdest))
         .collect();
-    for (label, _edge) in &cfg.out_edges {
+    for label in cfg.out_edges.keys() {
         if !label.is_dynamic {
             continue;
         }
@@ -115,48 +115,56 @@ pub fn make_caterpillar(cfg: Cfg<EvmLabel>) -> Cfg<CaterpillarLabel> {
     res
 }
 
-#[test]
-pub fn test_caterpillar() {
-    let mut nodes: Vec<EvmLabel> = Vec::default();
-    for i in 0..10 {
-        nodes.push(EvmLabel {
-            cfg_label: i,
-            is_dynamic: i % 3 == 0,
-            is_jumpdest: i % 2 == 0,
-        });
-    }
-    nodes[0].is_dynamic = false;
-    let mut edges: HashMap<EvmLabel, CfgEdge<EvmLabel>> = HashMap::default();
-    edges.insert(nodes[0], CfgEdge::Cond(nodes[1], nodes[2]));
-    edges.insert(nodes[1], CfgEdge::Uncond(nodes[3]));
-    edges.insert(nodes[2], CfgEdge::Uncond(nodes[3]));
-    edges.insert(nodes[4], CfgEdge::Cond(nodes[5], nodes[6]));
-    edges.insert(nodes[5], CfgEdge::Uncond(nodes[6]));
-    edges.insert(nodes[8], CfgEdge::Cond(nodes[7], nodes[9]));
-    let cfg = Cfg::from_edges(nodes[0], &edges).unwrap();
-    let caterpillar = make_caterpillar(cfg);
+#[cfg(test)]
+mod tests {
+    use crate::graph::caterpillar::{unfold_dyn_edges, EvmLabel};
+    use crate::graph::cfg::{Cfg, CfgEdge};
+    use crate::graph::EnrichedCfg;
+    use std::collections::HashMap;
 
-    println!("Caterpillar:");
-    for (label, edge) in &caterpillar.out_edges {
-        match edge {
-            CfgEdge::Cond(cond, uncond) => {
-                println!("CEdge from {}. cond = {}, uncond = {}", label, cond, uncond);
-            }
-            CfgEdge::Uncond(uncond) => {
-                println!("UEdge from {} to {}", label, uncond);
-            }
-            CfgEdge::Terminal => {
-                println!("Terminal edge from {}", label);
+    #[test]
+    pub fn test_caterpillar() {
+        let mut nodes: Vec<EvmLabel> = Vec::default();
+        for i in 0..10 {
+            nodes.push(EvmLabel {
+                cfg_label: i,
+                is_dynamic: i % 3 == 0,
+                is_jumpdest: i % 2 == 0,
+            });
+        }
+        nodes[0].is_dynamic = false;
+        let mut edges: HashMap<EvmLabel, CfgEdge<EvmLabel>> = HashMap::default();
+        edges.insert(nodes[0], CfgEdge::Cond(nodes[1], nodes[2]));
+        edges.insert(nodes[1], CfgEdge::Uncond(nodes[3]));
+        edges.insert(nodes[2], CfgEdge::Uncond(nodes[3]));
+        edges.insert(nodes[4], CfgEdge::Cond(nodes[5], nodes[6]));
+        edges.insert(nodes[5], CfgEdge::Uncond(nodes[6]));
+        edges.insert(nodes[8], CfgEdge::Cond(nodes[7], nodes[9]));
+        let cfg = Cfg::from_edges(nodes[0], &edges).unwrap();
+        let caterpillar = unfold_dyn_edges(cfg);
+
+        println!("Caterpillar:");
+        for (label, edge) in &caterpillar.out_edges {
+            match edge {
+                CfgEdge::Cond(cond, uncond) => {
+                    println!("CEdge from {}. cond = {}, uncond = {}", label, cond, uncond);
+                }
+                CfgEdge::Uncond(uncond) => {
+                    println!("UEdge from {} to {}", label, uncond);
+                }
+                CfgEdge::Terminal => {
+                    println!("Terminal edge from {}", label);
+                }
             }
         }
-    }
-    println!("End of caterpillar");
+        println!("End of caterpillar");
 
-    let e_graph = EnrichedCfg::new(caterpillar);
-    let dot_lines: Vec<String> = vec![
-        "digraph {".to_string(),
-        e_graph.cfg_to_dot("reduced"),
-        "}".to_string(),
-    ];
-    std::fs::write("caterpillar.dot", dot_lines.join("\n")).expect("fs error");
+        let e_graph = EnrichedCfg::new(caterpillar);
+        let dot_lines: Vec<String> = vec![
+            "digraph {".to_string(),
+            e_graph.cfg_to_dot("reduced"),
+            "}".to_string(),
+        ];
+        std::fs::write("caterpillar.dot", dot_lines.join("\n")).expect("fs error");
+    }
 }
