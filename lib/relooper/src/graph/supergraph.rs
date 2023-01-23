@@ -114,6 +114,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
         }
     }
 
+    /// We are using that order for traversing supernodes graph for choosing between merge/split actions
     fn snode_order(&self) -> Vec<SLabel<TLabel>> {
         let start = self.nodes.get(&self.cfg.entry).unwrap().clone();
         let res: Vec<_> = dfs_post_ord(start.head, &mut |slabel| {
@@ -130,6 +131,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
         res
     }
 
+    /// finding out applicable action for given supernode
     fn node_action(
         &self,
         node: &SNode<TLabel>,
@@ -142,7 +144,9 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
             .map(|l| self.label_location.get(l).unwrap())
             .map(|snode_label| self.nodes.get(snode_label).unwrap())
             .collect();
+        // if given node have internal edges ending in its head, it will be seen as incoming supernode, which isn't useful
         incoming.remove(node);
+
         // TODO hate there is no pattern-match adapters for simple collections, or is there?
         match incoming.len() {
             0 => None,
@@ -151,6 +155,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
         }
     }
 
+    /// merging `from_label` into `to_label`, entirely removing `from` supernode from the supergraph
     fn merge(&mut self, from_label: SLabel<TLabel>, to_label: SLabel<TLabel>) {
         let from = self.nodes.remove(&from_label).unwrap();
         let to = self.nodes.get_mut(&to_label).unwrap();
@@ -160,6 +165,8 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
         }
     }
 
+    /// splitting given supernode for each of `split` nodes
+    /// duplicates every node residing that supernode
     fn split(&mut self, node_label: SLabel<TLabel>, split: &SplitInto<TLabel>) {
         let split_snode = self.nodes.get(&node_label).unwrap().to_owned();
 
@@ -170,7 +177,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
             .map(|inner| (inner, *self.cfg.edge(&inner)))
             .collect();
 
-        //duplicate every label in that supernode
+        //duplicate every label in that supernode (for each split except the first one, bc original version can be reused)
         for split_for_l in &split[1..] {
             let split_for = self.nodes.get(split_for_l).unwrap();
             let mut versions_mapping: HashMap<SLabel<TLabel>, SLabel<TLabel>> = Default::default();
@@ -205,6 +212,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
                 self.cfg.add_edge(f, redirected);
             }
 
+            // populate supernode graph with new node's new version (for each split)
             let splitted_head = versions_mapping.get(&split_snode.head).unwrap().to_owned();
             let contained: Vec<_> = versions_mapping.values().copied().collect();
             self.nodes.insert(
@@ -221,6 +229,11 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
         }
     }
 
+    /// iterates over supergraph (using `snode_order` on each iteration) until there is only one node left
+    /// on each iteration we either:
+    /// * remove one supernode (by merging it into another one)
+    /// * or duplicate one (by splitting, one dup for each "parent")
+    /// in the end, there is only one supernode, which contains all the nodes and whose head is "entry" node
     pub fn reduce(&mut self) {
         let mut in_edges: Option<HashMap<SLabel<TLabel>, HashSet<SLabel<TLabel>>>> = None;
         'outer: loop {
@@ -306,7 +319,7 @@ mod test {
     }
 
     #[test]
-    fn unreducible() {
+    fn irreducible() {
         let cfg = Cfg::from_vec(
             0,
             &[

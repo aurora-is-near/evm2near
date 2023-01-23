@@ -5,6 +5,9 @@ use crate::graph::EnrichedCfg;
 #[derive(Debug)]
 pub struct ReSeq<TLabel: CfgLabel>(pub Vec<ReBlock<TLabel>>);
 
+/// describes relooped graph structure
+/// consists of three "container" variants and several "actions" variants
+/// containers defines tree structure, actions denotes runtime control flow behaviour
 #[derive(Debug)]
 pub enum ReBlock<TLabel: CfgLabel> {
     Block(ReSeq<TLabel>),
@@ -38,6 +41,8 @@ enum Context<TLabel: CfgLabel> {
 }
 
 impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
+    /// that defines order of graph traversal for nested nodes generation
+    /// returns vector of immediately dominated nodes ordered according to reversed postorder traversal (in cfg graph)
     fn children_ord(&self, label: TLabel) -> Vec<TLabel> {
         let mut res = self
             .domination
@@ -53,6 +58,7 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
         res
     }
 
+    /// either generates branch node or "fallthrough" next node
     fn do_branch(&self, from: TLabel, to: TLabel, context: &Vec<Context<TLabel>>) -> ReSeq<TLabel> {
         if self.node_ordering.is_backward(from, to) || self.merge_nodes.contains(&to) {
             let idx_coll = context
@@ -72,19 +78,21 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
             let &jump_idx = idx_coll
                 .first()
                 .expect("suitable jump target not found in context");
-            ReSeq(vec![Br(jump_idx)]) //TODO is seq really necessary there?
+            ReSeq(vec![Br(jump_idx)])
         } else {
             self.do_tree(to, context)
         }
     }
 
+    /// in case of multiple merge nodes beneath current node, lays down merge nodes first
+    /// otherwise, generates current node and branches to merge nodes generated on previous step (and above in tree structure)
     fn node_within(
         &self,
         node: TLabel,
-        merges: &Vec<TLabel>,
+        merges: &[TLabel],
         context: &Vec<Context<TLabel>>,
     ) -> ReSeq<TLabel> {
-        let mut current_merges = merges.clone();
+        let mut current_merges = Vec::from(merges);
         match current_merges.pop() {
             Some(merge) => {
                 let mut new_ctx = context.clone();
@@ -114,6 +122,7 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
         }
     }
 
+    /// helper function for finding all the merge nodes depending on current node
     fn gen_node(&self, node: TLabel, context: &Vec<Context<TLabel>>) -> ReSeq<TLabel> {
         let merge_children: Vec<TLabel> = self
             .children_ord(node)
@@ -123,6 +132,7 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
         self.node_within(node, &merge_children, context)
     }
 
+    /// main function for node generating, handles loop nodes separately
     fn do_tree(&self, node: TLabel, context: &Vec<Context<TLabel>>) -> ReSeq<TLabel> {
         if self.loop_nodes.contains(&node) {
             let mut ctx = context.clone();
