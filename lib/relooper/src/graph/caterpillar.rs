@@ -10,15 +10,11 @@ pub struct EvmLabel {
     is_jumpdest: bool,
 }
 
-impl CfgLabel for EvmLabel {}
-
 #[derive(PartialOrd, PartialEq, Clone, Copy, Hash, Eq, Ord)]
 pub enum CaterpillarLabel {
     Original(usize),
     Generated(usize, usize), // (unique_id, offset of associated jumpdest)
 }
-
-impl CfgLabel for CaterpillarLabel {}
 
 impl Display for CaterpillarLabel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
