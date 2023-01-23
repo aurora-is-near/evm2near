@@ -9,7 +9,6 @@ pub mod caterpillar;
 pub mod cfg;
 mod dot_debug;
 mod enrichments;
-pub mod reducibility;
 pub(crate) mod relooper;
 pub(crate) mod supergraph;
 
