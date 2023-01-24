@@ -1,10 +1,7 @@
-extern crate core;
+extern crate relooper;
 
-mod graph;
-mod traversal;
-
-use crate::graph::cfg::Cfg;
-use crate::graph::{supergraph, EnrichedCfg};
+use relooper::graph::cfg::Cfg;
+use relooper::graph::{supergraph, EnrichedCfg};
 use std::env;
 use std::path::Path;
 

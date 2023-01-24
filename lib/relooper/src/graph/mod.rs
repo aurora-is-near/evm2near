@@ -8,9 +8,9 @@ use std::vec::Vec;
 pub mod caterpillar;
 pub mod cfg;
 mod dot_debug;
-mod enrichments;
-pub(crate) mod relooper;
-pub(crate) mod supergraph;
+pub mod enrichments;
+pub mod relooper;
+pub mod supergraph;
 
 pub struct EnrichedCfg<TLabel: CfgLabel> {
     cfg: Cfg<TLabel>,
