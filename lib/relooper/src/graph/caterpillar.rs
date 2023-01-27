@@ -9,6 +9,8 @@ pub struct EvmLabel<T> {
     cfg_label: T,
     is_dynamic: bool,
     is_jumpdest: bool,
+    code_begin: usize,
+    code_end: usize,
 }
 
 impl<T: Display> Display for EvmLabel<T> {
@@ -92,6 +94,8 @@ mod tests {
                 cfg_label: i,
                 is_dynamic: i % 3 == 0,
                 is_jumpdest: i % 2 == 0,
+                code_begin: 10,
+                code_end: 16,
             });
         }
         nodes[0].is_dynamic = false;
