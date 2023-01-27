@@ -1,115 +1,81 @@
-use super::cfg::{Cfg, CfgEdge};
+use super::cfg::{Cfg, CfgEdge, CfgLabel};
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
+use std::hash::Hash;
 
 #[derive(PartialOrd, PartialEq, Clone, Copy, Hash, Eq, Ord)]
-pub struct EvmLabel {
-    cfg_label: usize,
+pub struct EvmLabel<T> {
+    cfg_label: T,
     is_dynamic: bool,
     is_jumpdest: bool,
 }
 
-#[derive(PartialOrd, PartialEq, Clone, Copy, Hash, Eq, Ord)]
-pub enum CaterpillarLabel {
-    Original(usize),
-    Generated(usize, usize), // (unique_id, offset of associated jumpdest)
+impl<T: Display> Display for EvmLabel<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}{}", self.cfg_label, if self.is_dynamic {"d"} else {""}, if self.is_jumpdest {"j"} else {""})
+    }
 }
 
-impl Display for CaterpillarLabel {
+#[derive(PartialOrd, PartialEq, Clone, Copy, Hash, Eq, Ord)]
+pub enum CaterpillarLabel<T> {
+    Original(T),
+    Generated(T), // (unique_id, offset of associated jumpdest)
+}
+
+impl<T: Copy> CaterpillarLabel<T> {
+    fn label(&self) -> T {
+        match self {
+            Self::Original(l) => *l,
+            Self::Generated(l) => *l,
+        }
+    }
+}
+
+impl<T: Display> Display for CaterpillarLabel<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {
-            CaterpillarLabel::Generated(id, offset) => write!(f, "{}_{}", id, offset),
+            CaterpillarLabel::Generated(offset) => write!(f, "g{}",offset),
             CaterpillarLabel::Original(id) => write!(f, "{}", id),
         }
     }
 }
 
-pub fn unfold_dyn_edges(cfg: Cfg<EvmLabel>) -> Cfg<CaterpillarLabel> {
-    let to_caterpillar_edge = |(label, edge): (&EvmLabel, &CfgEdge<EvmLabel>)| -> (CaterpillarLabel, CfgEdge<CaterpillarLabel>) {
-        match edge {
-            CfgEdge::Cond(cond, uncond) => {
-                (
-                    CaterpillarLabel::Original(label.cfg_label),
-                    CfgEdge::Cond(
-                        CaterpillarLabel::Original(cond.cfg_label),
-                        CaterpillarLabel::Original(uncond.cfg_label),
-                    )
-                )
+pub fn unfold_dyn_edges<T: CfgLabel>(cfg: &Cfg<EvmLabel<T>>) -> Cfg<CaterpillarLabel<T>> {
+    let mut cat_cfg: Cfg<CaterpillarLabel<T>> = cfg.map_label(|&label| CaterpillarLabel::Original(label.cfg_label));
+
+    let dyn_nodes: Vec<_> = cfg.nodes().into_iter().filter(|l| l.is_dynamic).collect();
+    let jumpdests: Vec<_> = cfg.nodes().into_iter().filter(|l| l.is_jumpdest).collect();
+
+    match &jumpdests[..] {
+        [] => cat_cfg,
+        [single] => {
+            let single_edge = CaterpillarLabel::Original(single.cfg_label);
+            for d in dyn_nodes {
+                cat_cfg.add_edge_or_promote(CaterpillarLabel::Original(d.cfg_label), single_edge);
             }
-            CfgEdge::Uncond(uncond) => {
-                (
-                    CaterpillarLabel::Original(label.cfg_label),
-                    CfgEdge::Uncond(CaterpillarLabel::Original(uncond.cfg_label)),
-                )
+            cat_cfg
+        },
+        [first, second, rest @ ..] => {
+            let last_dyn_node = CaterpillarLabel::Generated(first.cfg_label);
+            cat_cfg.add_edge(last_dyn_node, CfgEdge::Cond(CaterpillarLabel::Original(first.cfg_label), CaterpillarLabel::Original(second.cfg_label)));
+
+            let first_dyn_node = rest.iter().fold(last_dyn_node, |dyn_node, jumpdest| {
+                let j_gen = CaterpillarLabel::Generated(jumpdest.cfg_label);
+                cat_cfg.add_edge(j_gen, CfgEdge::Cond(CaterpillarLabel::Original(jumpdest.cfg_label), dyn_node));
+
+                j_gen
+            });
+
+            for d in dyn_nodes {
+                cat_cfg.add_edge_or_promote(CaterpillarLabel::Original(d.cfg_label), first_dyn_node);
             }
-            CfgEdge::Terminal => {
-                (
-                    CaterpillarLabel::Original(label.cfg_label),
-                    CfgEdge::Terminal,
-                )
-            }
+
+            cat_cfg
         }
-    };
-    let mut outedges: HashMap<CaterpillarLabel, CfgEdge<CaterpillarLabel>> = cfg
-        .out_edges
-        .iter()
-        .filter(|(label, _)| !label.is_dynamic)
-        .map(to_caterpillar_edge)
-        .collect();
-    let jumpdests: Vec<usize> = cfg
-        .out_edges
-        .iter()
-        .filter_map(|(label, _)| {
-            if label.is_jumpdest {
-                Some(label.cfg_label)
-            } else {
-                None
-            }
-        })
-        .collect();
-    let new_nodes: Vec<CaterpillarLabel> = jumpdests
-        .iter()
-        .enumerate()
-        .map(|(index, jumpdest)| CaterpillarLabel::Generated(index, *jumpdest))
-        .collect();
-    for label in cfg.out_edges.keys() {
-        if !label.is_dynamic {
-            continue;
-        }
-        outedges.insert(
-            CaterpillarLabel::Original(label.cfg_label),
-            CfgEdge::Uncond(new_nodes[0]),
-        );
     }
-    let node_pairs = new_nodes.iter().zip(new_nodes.iter().skip(1));
-    for (node, next_node) in node_pairs {
-        let offset = match node {
-            CaterpillarLabel::Generated(_id, offset) => offset,
-            CaterpillarLabel::Original(_) => panic!("It must be Generated"),
-        };
-        outedges.insert(
-            *node,
-            CfgEdge::Cond(CaterpillarLabel::Original(*offset), *next_node),
-        );
-    }
-    let offset = match new_nodes.last().unwrap() {
-        CaterpillarLabel::Original(_orig) => {
-            panic!("It must be Generated");
-        }
-        CaterpillarLabel::Generated(_id, offst) => offst,
-    };
-    outedges.insert(
-        *new_nodes.last().unwrap(),
-        CfgEdge::Uncond(CaterpillarLabel::Original(*offset)),
-    );
-    let res: Cfg<CaterpillarLabel> = Cfg::<CaterpillarLabel>::from_edges(
-        CaterpillarLabel::Original(cfg.entry.cfg_label),
-        &outedges,
-    )
-    .unwrap();
-    res
 }
+
 
 #[cfg(test)]
 mod tests {
@@ -120,7 +86,7 @@ mod tests {
 
     #[test]
     pub fn test_caterpillar() {
-        let mut nodes: Vec<EvmLabel> = Vec::default();
+        let mut nodes: Vec<EvmLabel<usize>> = Vec::default();
         for i in 0..10 {
             nodes.push(EvmLabel {
                 cfg_label: i,
@@ -129,7 +95,7 @@ mod tests {
             });
         }
         nodes[0].is_dynamic = false;
-        let mut edges: HashMap<EvmLabel, CfgEdge<EvmLabel>> = HashMap::default();
+        let mut edges: HashMap<EvmLabel<usize>, CfgEdge<EvmLabel<usize>>> = HashMap::default();
         edges.insert(nodes[0], CfgEdge::Cond(nodes[1], nodes[2]));
         edges.insert(nodes[1], CfgEdge::Uncond(nodes[3]));
         edges.insert(nodes[2], CfgEdge::Uncond(nodes[3]));
@@ -137,7 +103,7 @@ mod tests {
         edges.insert(nodes[5], CfgEdge::Uncond(nodes[6]));
         edges.insert(nodes[8], CfgEdge::Cond(nodes[7], nodes[9]));
         let cfg = Cfg::from_edges(nodes[0], &edges).unwrap();
-        let caterpillar = unfold_dyn_edges(cfg);
+        let caterpillar = unfold_dyn_edges(&cfg);
 
         println!("Caterpillar:");
         for (label, edge) in &caterpillar.out_edges {
@@ -158,7 +124,8 @@ mod tests {
         let e_graph = EnrichedCfg::new(caterpillar);
         let dot_lines: Vec<String> = vec![
             "digraph {".to_string(),
-            e_graph.cfg_to_dot("reduced"),
+            cfg.cfg_to_dot("cfg"),
+            e_graph.cfg_to_dot("caterpillar"),
             "}".to_string(),
         ];
         std::fs::write("caterpillar.dot", dot_lines.join("\n")).expect("fs error");

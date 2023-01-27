@@ -146,4 +146,12 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
         let removed_edge = self.out_edges.remove(&from);
         assert!(removed_edge == Some(edge));
     }
+
+    pub fn add_edge_or_promote(&mut self, from: TLabel, to: TLabel) {
+        match self.out_edges.remove(&from) {
+            None | Some(Terminal) => self.out_edges.insert(from, Uncond(to)),
+            Some(Uncond(uncond)) => self.out_edges.insert(from, Cond(to, uncond)),
+            _ => panic!("edge (should be absent) or (shouldn't be `Cond`)"),
+        };
+    }
 }
