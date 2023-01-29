@@ -9,7 +9,7 @@ type SVersion = usize;
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub struct SLabel<TLabel: CfgLabel> {
-    origin: TLabel,
+    pub origin: TLabel,
     version: SVersion,
 }
 
