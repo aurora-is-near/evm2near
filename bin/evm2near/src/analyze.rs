@@ -31,6 +31,18 @@ pub struct Block {
     closed: bool,
 }
 
+impl From<&Block> for EvmLabel<Label> {
+    fn from(val: &Block) -> Self {
+        EvmLabel {
+            cfg_label: val.label,
+            is_dynamic: val.is_dyn,
+            is_jumpdest: val.is_jumpdest,
+            code_begin: val.code.start,
+            code_end: val.code.end,
+        }
+    }
+}
+
 impl Block {
     pub fn new() -> Block {
         Self::at(0, 0, 0)
@@ -136,50 +148,36 @@ pub fn analyze_cfg(program: &Program) -> Cfg<EvmLabel<usize>> {
         code_begin: entry_block.code.start,
         code_end: entry_block.code.end,
     };
-    let mut evm_labels: HashMap<Label, EvmLabel<usize>> = HashMap::default();
-    evm_labels = blocks
-        .into_iter()
-        .map(|(label, block)| {
-            (
-                label,
-                EvmLabel {
-                    cfg_label: block.label,
-                    is_dynamic: block.is_dyn,
-                    is_jumpdest: block.is_jumpdest,
-                    code_begin: entry_block.code.start,
-                    code_end: entry_block.code.end,
-                },
-            )
-        })
+    let evm_labels: HashMap<Label, EvmLabel<usize>> = blocks
+        .iter()
+        .map(|(&label, block)| (label, block.into()))
         .collect();
     for (cfg_label, evm_label) in &evm_labels {
         if blocks.get(cfg_label).unwrap().succ.len() == 1 {
-            let edge = blocks.get(cfg_label).unwrap().succ.into_iter().next().unwrap();
-            match edge {
-                Edge::Static(dest, cond) => {
-                    if cond {
-                        panic!("This edge must be uncond!!!");
-                    }
-                    edges.insert(*evm_label, CfgEdge::Uncond(*evm_labels.get(&dest).unwrap()));
+            let edge = blocks.get(cfg_label).unwrap().succ.iter().next().unwrap();
+            if let Edge::Static(dest, cond) = edge {
+                if *cond {
+                    panic!("This edge must be uncond!!!");
                 }
-                _ => {}
+                edges.insert(*evm_label, CfgEdge::Uncond(*evm_labels.get(dest).unwrap()));
             }
         } else if blocks.get(cfg_label).unwrap().succ.len() == 2 {
-            let cond_dest: EvmLabel<usize>;
-            let uncond_dest: EvmLabel<usize>;
+            let mut cond_dest: Option<EvmLabel<usize>> = None;
+            let mut uncond_dest: Option<EvmLabel<usize>> = None;
             for edge in &blocks.get(cfg_label).unwrap().succ {
                 match edge {
-                    Edge::Static(dest, cond) => {
-                        if *cond {
-                            cond_dest = *evm_labels.get(dest).unwrap();
-                        } else {
-                            uncond_dest = *evm_labels.get(dest).unwrap();
-                        }
+                    Edge::Static(dest, true) => {
+                        assert!(cond_dest.is_none());
+                        cond_dest = Some(*evm_labels.get(dest).unwrap());
+                    }
+                    Edge::Static(dest, false) => {
+                        assert!(uncond_dest.is_none());
+                        uncond_dest = Some(*evm_labels.get(dest).unwrap());
                     }
                     _ => {}
                 }
             }
-            edges.insert(*evm_label, CfgEdge::Cond(cond_dest, uncond_dest));
+            edges.insert(*evm_label, CfgEdge::Cond(cond_dest.unwrap(), uncond_dest.unwrap()));
         }
     }
     Cfg::from_edges(entry_evm_label, &edges).unwrap()

@@ -6,11 +6,11 @@ use std::hash::Hash;
 
 #[derive(PartialOrd, PartialEq, Clone, Copy, Hash, Eq, Ord)]
 pub struct EvmLabel<T> {
-    cfg_label: T,
-    is_dynamic: bool,
-    is_jumpdest: bool,
-    code_begin: usize,
-    code_end: usize,
+    pub cfg_label: T,
+    pub is_dynamic: bool,
+    pub is_jumpdest: bool,
+    pub code_begin: usize,
+    pub code_end: usize,
 }
 
 impl<T: Display> Display for EvmLabel<T> {
