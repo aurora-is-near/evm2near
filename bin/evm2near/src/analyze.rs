@@ -2,14 +2,17 @@
 
 use evm_rs::{Opcode, Program};
 use relooper::graph::{
-    caterpillar::{unfold_dyn_edges, EvmLabel},
+    caterpillar::EvmCfgLabel,
     cfg::{Cfg, CfgEdge},
     relooper::ReSeq,
 };
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap},
     ops::Range,
 };
+
+use relooper::graph::caterpillar::CaterpillarLabel;
+use relooper::graph::supergraph::SLabel;
 
 pub type Label = usize;
 
@@ -26,19 +29,34 @@ pub struct Block {
     pub label: Label,
     pub code: Range<usize>,
     pub succ: BTreeSet<Edge>,
-    pub is_jumpdest: bool,       // if true than this block have jumpdest as 1st opcode
-    pub is_dyn: bool,            // if true than this block have dynamic edge.
+    pub is_jumpdest: bool, // if true than this block have jumpdest as 1st opcode
+    pub is_dyn: bool,      // if true than this block have dynamic edge.
     closed: bool,
 }
 
-impl From<&Block> for EvmLabel<Label> {
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct EvmLabel {
+    pub label: usize,
+    pub code_start: usize,
+    pub code_end: usize,
+}
+
+impl EvmLabel {
+    fn new(label: usize, code_start: usize, code_end: usize) -> Self {
+        Self {
+            label,
+            code_start,
+            code_end,
+        }
+    }
+}
+
+impl From<&Block> for EvmCfgLabel<EvmLabel> {
     fn from(val: &Block) -> Self {
-        EvmLabel {
-            cfg_label: val.label,
+        EvmCfgLabel {
+            cfg_label: EvmLabel::new(val.label, val.code.start, val.code.end),
             is_dynamic: val.is_dyn,
             is_jumpdest: val.is_jumpdest,
-            code_begin: val.code.start,
-            code_end: val.code.end,
         }
     }
 }
@@ -79,8 +97,11 @@ impl Default for Block {
     }
 }
 
+fn relooped_cfg(cfg: Cfg<EvmCfgLabel<EvmLabel>>) -> ReSeq<SLabel<CaterpillarLabel<EvmLabel>>> {
+    todo!();
+}
 
-pub fn analyze_cfg(program: &Program) -> Cfg<EvmLabel<usize>> {
+pub fn analyze_cfg(program: &Program) -> ReSeq<SLabel<CaterpillarLabel<EvmLabel>>> {
     let mut blocks: HashMap<Label, Block> = HashMap::new();
     let mut pc: usize = 0; // program counter
     let entry = pc;
@@ -120,7 +141,7 @@ pub fn analyze_cfg(program: &Program) -> Cfg<EvmLabel<usize>> {
                 }
                 blocks.insert(pc, Block::at(pc, op_idx, op_idx + 1));
                 block = blocks.get_mut(&pc).unwrap();
-                block.is_jumpdest = true;   // I am not sure if it should be here...
+                block.is_jumpdest = true; // I am not sure if it should be here...
             }
             _ => {
                 if block.closed {
@@ -139,16 +160,11 @@ pub fn analyze_cfg(program: &Program) -> Cfg<EvmLabel<usize>> {
     }
     block.add_succ(Edge::Exit);
     // move edges to CFGEdge
-    let mut edges: HashMap<EvmLabel<usize>, CfgEdge<EvmLabel<usize>>> = HashMap::default();
+    let mut edges: HashMap<EvmCfgLabel<EvmLabel>, CfgEdge<EvmCfgLabel<EvmLabel>>> =
+        HashMap::default();
     let entry_block = blocks.get(&entry).unwrap();
-    let entry_evm_label = EvmLabel::<usize> {
-        cfg_label: entry_block.label,
-        is_dynamic: entry_block.is_dyn,
-        is_jumpdest: entry_block.is_jumpdest,
-        code_begin: entry_block.code.start,
-        code_end: entry_block.code.end,
-    };
-    let evm_labels: HashMap<Label, EvmLabel<usize>> = blocks
+    let entry_evm_label: EvmCfgLabel<EvmLabel> = entry_block.into();
+    let evm_labels: HashMap<Label, EvmCfgLabel<EvmLabel>> = blocks
         .iter()
         .map(|(&label, block)| (label, block.into()))
         .collect();
@@ -162,8 +178,8 @@ pub fn analyze_cfg(program: &Program) -> Cfg<EvmLabel<usize>> {
                 edges.insert(*evm_label, CfgEdge::Uncond(*evm_labels.get(dest).unwrap()));
             }
         } else if blocks.get(cfg_label).unwrap().succ.len() == 2 {
-            let mut cond_dest: Option<EvmLabel<usize>> = None;
-            let mut uncond_dest: Option<EvmLabel<usize>> = None;
+            let mut cond_dest: Option<EvmCfgLabel<EvmLabel>> = None;
+            let mut uncond_dest: Option<EvmCfgLabel<EvmLabel>> = None;
             for edge in &blocks.get(cfg_label).unwrap().succ {
                 match edge {
                     Edge::Static(dest, true) => {
@@ -177,22 +193,12 @@ pub fn analyze_cfg(program: &Program) -> Cfg<EvmLabel<usize>> {
                     _ => {}
                 }
             }
-            edges.insert(*evm_label, CfgEdge::Cond(cond_dest.unwrap(), uncond_dest.unwrap()));
+            edges.insert(
+                *evm_label,
+                CfgEdge::Cond(cond_dest.unwrap(), uncond_dest.unwrap()),
+            );
         }
     }
-    Cfg::from_edges(entry_evm_label, &edges).unwrap()
-}
-
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct FinalLabel {
-    pub label: usize,
-    pub code_begin: usize,
-    pub code_end: usize,
-}
-
-use relooper::graph::supergraph::SLabel;
-use relooper::graph::caterpillar::CaterpillarLabel;
-
-pub fn relooped_cfg(cfg: Cfg<EvmLabel<usize>>) -> ReSeq<SLabel<CaterpillarLabel<FinalLabel>>> {
-    todo!();
+    let cfg = Cfg::from_edges(entry_evm_label, &edges).unwrap();
+    relooped_cfg(cfg)
 }

@@ -1,19 +1,16 @@
 use super::cfg::{Cfg, CfgEdge, CfgLabel};
 
-use std::collections::{HashMap, HashSet};
 use std::fmt::Display;
 use std::hash::Hash;
 
 #[derive(PartialOrd, PartialEq, Clone, Copy, Hash, Eq, Ord)]
-pub struct EvmLabel<T> {
+pub struct EvmCfgLabel<T> {
     pub cfg_label: T,
     pub is_dynamic: bool,
     pub is_jumpdest: bool,
-    pub code_begin: usize,
-    pub code_end: usize,
 }
 
-impl<T: Display> Display for EvmLabel<T> {
+impl<T: Display> Display for EvmCfgLabel<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}{}{}", self.cfg_label, if self.is_dynamic {"d"} else {""}, if self.is_jumpdest {"j"} else {""})
     }
@@ -43,7 +40,7 @@ impl<T: Display> Display for CaterpillarLabel<T> {
     }
 }
 
-pub fn unfold_dyn_edges<T: CfgLabel>(cfg: &Cfg<EvmLabel<T>>) -> Cfg<CaterpillarLabel<T>> {
+pub fn unfold_dyn_edges<T: CfgLabel>(cfg: &Cfg<EvmCfgLabel<T>>) -> Cfg<CaterpillarLabel<T>> {
     let mut cat_cfg: Cfg<CaterpillarLabel<T>> = cfg.map_label(|&label| CaterpillarLabel::Original(label.cfg_label));
 
     let dyn_nodes: Vec<_> = cfg.nodes().into_iter().filter(|l| l.is_dynamic).collect();
@@ -81,25 +78,23 @@ pub fn unfold_dyn_edges<T: CfgLabel>(cfg: &Cfg<EvmLabel<T>>) -> Cfg<CaterpillarL
 
 #[cfg(test)]
 mod tests {
-    use crate::graph::caterpillar::{unfold_dyn_edges, EvmLabel};
+    use crate::graph::caterpillar::{unfold_dyn_edges, EvmCfgLabel};
     use crate::graph::cfg::{Cfg, CfgEdge};
     use crate::graph::EnrichedCfg;
     use std::collections::HashMap;
 
     #[test]
     pub fn test_caterpillar() {
-        let mut nodes: Vec<EvmLabel<usize>> = Vec::default();
+        let mut nodes: Vec<EvmCfgLabel<usize>> = Vec::default();
         for i in 0..10 {
-            nodes.push(EvmLabel {
+            nodes.push(EvmCfgLabel {
                 cfg_label: i,
                 is_dynamic: i % 3 == 0,
                 is_jumpdest: i % 2 == 0,
-                code_begin: 10,
-                code_end: 16,
             });
         }
         nodes[0].is_dynamic = false;
-        let mut edges: HashMap<EvmLabel<usize>, CfgEdge<EvmLabel<usize>>> = HashMap::default();
+        let mut edges: HashMap<EvmCfgLabel<usize>, CfgEdge<EvmCfgLabel<usize>>> = HashMap::default();
         edges.insert(nodes[0], CfgEdge::Cond(nodes[1], nodes[2]));
         edges.insert(nodes[1], CfgEdge::Uncond(nodes[3]));
         edges.insert(nodes[2], CfgEdge::Uncond(nodes[3]));

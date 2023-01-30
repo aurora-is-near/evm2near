@@ -19,7 +19,7 @@ use relooper::graph::relooper::ReBlock;
 
 use crate::{
     abi::Functions,
-    analyze::{analyze_cfg, Block, Edge, Label},
+    analyze::{analyze_cfg, Block, Edge, Label, EvmLabel},
     config::CompilerConfig,
     encode::encode_operands,
 };
@@ -32,8 +32,7 @@ pub fn compile(
     runtime_library: Module,
     config: CompilerConfig,
 ) -> Module {
-    let input_cfg = analyze_cfg(input_program);
-    let relooped_cfg: ReSeq<SLabel<CaterpillarLabel<EvmLabel>>> = todo!();
+    let relooped_cfg: ReSeq<SLabel<CaterpillarLabel<EvmLabel>>> = analyze_cfg(input_program);
 
     let mut compiler = Compiler::new(runtime_library, config);
     compiler.emit_wasm_start();
@@ -87,13 +86,6 @@ pub fn compile(
 type DataOffset = i32;
 type FunctionIndex = u32;
 type TypeIndex = u32;
-
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct EvmLabel {
-    pub label: usize,
-    pub code_start: usize,
-    pub code_end: usize,
-}
 
 struct Compiler {
     config: CompilerConfig,
