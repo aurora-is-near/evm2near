@@ -2,7 +2,7 @@
 
 use evm_rs::{Opcode, Program};
 use relooper::graph::{
-    caterpillar::{EvmCfgLabel, unfold_dyn_edges},
+    caterpillar::{unfold_dyn_edges, EvmCfgLabel},
     cfg::{Cfg, CfgEdge},
     relooper::ReSeq,
 };
@@ -12,8 +12,8 @@ use std::{
 };
 
 use relooper::graph::caterpillar::CaterpillarLabel;
-use relooper::graph::supergraph::{SLabel, reduce};
 use relooper::graph::relooper::reloop;
+use relooper::graph::supergraph::{reduce, SLabel};
 
 pub type Label = usize;
 
@@ -34,79 +34,119 @@ impl EvmLabel {
     }
 }
 
-
-
 fn relooped_cfg(cfg: Cfg<EvmCfgLabel<EvmLabel>>) -> ReSeq<SLabel<CaterpillarLabel<EvmLabel>>> {
     let undyned = unfold_dyn_edges(&cfg);
     let reduced = reduce(&undyned);
     reloop(&reduced)
 }
 
-
-
-
 pub fn analyze_cfg(program: &Program) -> ReSeq<SLabel<CaterpillarLabel<EvmLabel>>> {
-    let mut pc: usize = 0; // program counter
-    let entry = pc;
+    let mut bc_offs: usize = 0; // program counter
+    let entry = bc_offs;
     let mut node_info: HashMap<usize, (bool, bool)> = Default::default(); // label => (is_jumpdest, is_dynamic);
     let mut code_ranges: HashMap<usize, Range<usize>> = Default::default();
     let mut prev_op: Option<&Opcode> = None;
-    let mut current_label = entry; 
+    let mut current_label = entry;
     let mut cfg = Cfg::from_edges(entry, &Default::default()).unwrap();
     let mut closed: bool = false;
     let mut was_jumpdest = false;
+    let mut begin_idx: usize = 0;
+    let mut was_dynamic = false;
+
+    let start_new_block = |next_opode_idx: &usize| {
+        node_info.insert(current_label, (was_jumpdest, was_dynamic));
+        code_ranges.insert(current_label, begin_idx..*next_opode_idx);
+        begin_idx = *next_opode_idx;
+        was_dynamic = false;
+        was_jumpdest = false;
+        current_label = bc_offs;
+        closed = false;
+    };
+
     for (op_idx, op) in program.0.iter().enumerate() {
+        let next_opode_idx = op_idx + 1;
         use Opcode::*;
         match op {
             JUMP => {
-                code_ranges.insert(current_label, current_label..(op_idx + 1));
                 match prev_op {
-                    Some(PUSH1(addr)) => cfg.add_edge(current_label, CfgEdge::Uncond(usize::from(*addr))),
-                    Some(PUSHn(_, addr, _)) => cfg.add_edge(current_label, CfgEdge::Uncond(addr.as_usize())),
-                    Some(_) => {node_info.insert(current_label, (was_jumpdest, true)); was_jumpdest = false;}
+                    Some(PUSH1(addr)) => {
+                        cfg.add_edge(current_label, CfgEdge::Uncond(usize::from(*addr)))
+                    }
+                    Some(PUSHn(_, addr, _)) => {
+                        cfg.add_edge(current_label, CfgEdge::Uncond(addr.as_usize()))
+                    }
+                    Some(_) => {
+                        was_dynamic = true;
+                    }
                     None => unreachable!(),
                 }
                 closed = true;
             }
             JUMPI => {
-                code_ranges.insert(current_label, current_label..(op_idx + 1));
                 match prev_op {
-                    Some(PUSH1(addr)) => cfg.add_edge(current_label, CfgEdge::Cond(usize::from(*addr), (pc + 1).into())),
-                    Some(PUSHn(_, addr, _)) => cfg.add_edge(current_label, CfgEdge::Cond(addr.as_usize(), (pc + 1).into())),
-                    Some(_) => {node_info.insert(current_label, (was_jumpdest, true)); was_jumpdest = false;}
+                    Some(PUSH1(addr)) => cfg.add_edge(
+                        current_label,
+                        CfgEdge::Cond(usize::from(*addr), (bc_offs + 1).into()),
+                    ),
+                    Some(PUSHn(_, addr, _)) => cfg.add_edge(
+                        current_label,
+                        CfgEdge::Cond(addr.as_usize(), (bc_offs + 1).into()),
+                    ),
+                    Some(_) => {
+                        was_dynamic = true;
+                    }
                     None => unreachable!(),
                 }
                 closed = true;
             }
             JUMPDEST => {
                 if !closed {
-                    cfg.add_edge(current_label, CfgEdge::Uncond(pc));
+                    cfg.add_edge(current_label, CfgEdge::Uncond(bc_offs));
                 }
-                code_ranges.insert(current_label, current_label..op_idx);
+                start_new_block(&op_idx);
                 was_jumpdest = true;
-                closed = false;
-                current_label = pc;
             }
             _ => {
                 if closed {
-                    closed = false;
-                    current_label = pc;
-                    was_jumpdest = false;
+                    start_new_block(&op_idx);
                 }
                 if op.is_halt() {
                     cfg.add_edge(current_label, CfgEdge::Terminal);
+                    // start_new_block(&op_idx);
                     closed = true;
                 }
             }
         }
         prev_op = Some(op);
-        pc += op.size();
+        bc_offs += op.size();
     }
-    let with_ranges = cfg.map_label(|int| EvmLabel {label: *int,
-                                                                                  code_start: code_ranges.get(&int).unwrap().start,
-                                                                                  code_end: code_ranges.get(&int).unwrap().end});
-    let with_flags = with_ranges.map_label(|evm_label| EvmCfgLabel {cfg_label: *evm_label,
-                                                                                                                     is_jumpdest: node_info.get(&evm_label.label).unwrap().0,
-                                                                                                                     is_dynamic:node_info.get(&evm_label.label).unwrap().1});
+    // code_ranges.insert(current_label, current_label..pc);
+    // node_info.insert(current_label, (was_jumpdest, false));
+    // cfg.add_edge(current_label, CfgEdge::Terminal);
+
+
+
+
+
+
+
+
+
+
+    println!("Existing labels:");
+    for node in &cfg.nodes() {
+        println!("{}", node);
+    }
+    println!("There is all labels");
+    let with_ranges = cfg.map_label(|int| EvmLabel {
+        label: *int,
+        code_start: code_ranges.get(&int).expect(format!("no code ranges for {}", *int).as_str()).start,
+        code_end: code_ranges.get(&int).unwrap().end,
+    });
+    let with_flags = with_ranges.map_label(|evm_label| EvmCfgLabel {
+        cfg_label: *evm_label,
+        is_jumpdest: node_info.get(&evm_label.label).unwrap().0,
+        is_dynamic: node_info.get(&evm_label.label).unwrap().1,
+    });
     relooped_cfg(with_flags)
 }
