@@ -11,9 +11,9 @@ impl<TLabel: CfgLabel + Display> Cfg<TLabel> {
         lines.push(format!("{name}_nend[label=\"end\"]"));
 
         let mut edges: Vec<String> = Vec::new();
-        for &n in self.nodes() {
+        for (n, edge) in &self.out_edges {
             lines.push(format!("{name}_n{n}[label=\"{n}\"];"));
-            match self.edge(&n) {
+            match edge {
                 CfgEdge::Uncond(u) => {
                     edges.push(format!("{name}_n{n} -> {name}_n{u};"));
                 }

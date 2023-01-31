@@ -7,7 +7,7 @@ use std::vec::Vec;
 
 pub mod caterpillar;
 pub mod cfg;
-mod dot_debug;
+pub mod dot_debug;
 pub mod enrichments;
 pub mod relooper;
 pub mod supergraph;

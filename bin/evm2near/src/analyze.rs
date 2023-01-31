@@ -33,9 +33,19 @@ impl EvmLabel {
         }
     }
 }
+use std::fmt::Display;
+impl Display for EvmLabel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "code_start_{}_code_end_{}", self.code_start, self.code_end)
+    }
+}
+
 
 fn relooped_cfg(cfg: Cfg<EvmCfgLabel<EvmLabel>>) -> ReSeq<SLabel<CaterpillarLabel<EvmLabel>>> {
+    
+    std::fs::write("cfg.dot", format!("digraph {{{}}}", cfg.cfg_to_dot("generated")).to_string()).expect("fs error");
     let undyned = unfold_dyn_edges(&cfg);
+    std::fs::write("cater.dot", format!("digraph {{{}}}", undyned.cfg_to_dot("cater")).to_string()).expect("fs error");
     let reduced = reduce(&undyned);
     reloop(&reduced)
 }
@@ -53,18 +63,32 @@ pub fn analyze_cfg(program: &Program) -> ReSeq<SLabel<CaterpillarLabel<EvmLabel>
     let mut begin_idx: usize = 0;
     let mut was_dynamic = false;
 
-    let start_new_block = |next_opode_idx: &usize| {
-        node_info.insert(current_label, (was_jumpdest, was_dynamic));
-        code_ranges.insert(current_label, begin_idx..*next_opode_idx);
-        begin_idx = *next_opode_idx;
-        was_dynamic = false;
-        was_jumpdest = false;
-        current_label = bc_offs;
-        closed = false;
-    };
+    // rewrite this closure to macros
+    // let start_new_block = |next_opode_idx: &usize| {
+    //     node_info.insert(current_label, (was_jumpdest, was_dynamic));
+    //     code_ranges.insert(current_label, begin_idx..*next_opode_idx);
+    //     begin_idx = *next_opode_idx;
+    //     was_dynamic = false;
+    //     was_jumpdest = false;
+    //     current_label = bc_offs;
+    //     closed = false;
+    // };
+    macro_rules! start_new_block {
+        ($next_opode_idx: expr) => {
+            
+            node_info.insert(current_label, (was_jumpdest, was_dynamic));
+            code_ranges.insert(current_label, begin_idx..$next_opode_idx);
+
+            begin_idx = $next_opode_idx;
+            was_dynamic = false;
+            was_jumpdest = false;
+            current_label = bc_offs;
+            closed = false; 
+        }; 
+    } 
 
     for (op_idx, op) in program.0.iter().enumerate() {
-        let next_opode_idx = op_idx + 1;
+        // let next_opode_idx = op_idx + 1;
         use Opcode::*;
         match op {
             JUMP => {
@@ -103,23 +127,27 @@ pub fn analyze_cfg(program: &Program) -> ReSeq<SLabel<CaterpillarLabel<EvmLabel>
                 if !closed {
                     cfg.add_edge(current_label, CfgEdge::Uncond(bc_offs));
                 }
-                start_new_block(&op_idx);
+                start_new_block!(op_idx + 1);
                 was_jumpdest = true;
             }
             _ => {
                 if closed {
-                    start_new_block(&op_idx);
+                    start_new_block!(op_idx + 1);
                 }
                 if op.is_halt() {
                     cfg.add_edge(current_label, CfgEdge::Terminal);
-                    // start_new_block(&op_idx);
-                    closed = true;
+                    start_new_block!(op_idx + 2);
+                    // closed = true;
                 }
             }
         }
         prev_op = Some(op);
         bc_offs += op.size();
     }
+    let opcodes: Vec<String> = program.clone().0.into_iter().map(|opcode| opcode.to_string()).collect();
+    std::fs::write("opcodes.evm", opcodes.join("\n")).expect("fs error");
+    // start_new_block!(program.0.len());
+
     // code_ranges.insert(current_label, current_label..pc);
     // node_info.insert(current_label, (was_jumpdest, false));
     // cfg.add_edge(current_label, CfgEdge::Terminal);
