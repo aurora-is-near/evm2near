@@ -21,7 +21,7 @@ use relooper::graph::{
 
 use crate::{
     abi::Functions,
-    analyze::{analyze_cfg, Block, EvmLabel},
+    analyze::{analyze_cfg, EvmLabel},
     config::CompilerConfig,
     encode::encode_operands,
 };
@@ -594,12 +594,12 @@ impl Compiler {
     }
 }
 
-fn make_block_id(block: &Block) -> String {
-    match block.label {
-        0 => "_evm_exec".to_string(),
-        pc => format!("_{:04x}", pc),
-    }
-}
+// fn make_block_id(block: &Block) -> String {
+//     match block.label {
+//         0 => "_evm_exec".to_string(),
+//         pc => format!("_{:04x}", pc),
+//     }
+// }
 
 fn make_op_table(module: &Module) -> HashMap<Opcode, FunctionIndex> {
     let mut result: HashMap<Opcode, FunctionIndex> = HashMap::new();

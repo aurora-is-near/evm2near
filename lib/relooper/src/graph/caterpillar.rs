@@ -16,7 +16,7 @@ impl<T: Display> Display for EvmCfgLabel<T> {
     }
 }
 
-#[derive(PartialOrd, PartialEq, Clone, Copy, Hash, Eq, Ord)]
+#[derive(PartialOrd, PartialEq, Clone, Copy, Hash, Eq, Ord, Debug)]
 pub enum CaterpillarLabel<T> {
     Original(T),
     Generated(T), // (unique_id, offset of associated jumpdest)
@@ -42,10 +42,8 @@ impl<T: Display> Display for CaterpillarLabel<T> {
 
 pub fn unfold_dyn_edges<T: CfgLabel>(cfg: &Cfg<EvmCfgLabel<T>>) -> Cfg<CaterpillarLabel<T>> {
     let mut cat_cfg: Cfg<CaterpillarLabel<T>> = cfg.map_label(|&label| CaterpillarLabel::Original(label.cfg_label));
-
     let dyn_nodes: Vec<_> = cfg.nodes().into_iter().filter(|l| l.is_dynamic).collect();
     let jumpdests: Vec<_> = cfg.nodes().into_iter().filter(|l| l.is_jumpdest).collect();
-
     match &jumpdests[..] {
         [] => cat_cfg,
         [single] => {
@@ -58,18 +56,14 @@ pub fn unfold_dyn_edges<T: CfgLabel>(cfg: &Cfg<EvmCfgLabel<T>>) -> Cfg<Caterpill
         [first, second, rest @ ..] => {
             let last_dyn_node = CaterpillarLabel::Generated(first.cfg_label);
             cat_cfg.add_edge(last_dyn_node, CfgEdge::Cond(CaterpillarLabel::Original(first.cfg_label), CaterpillarLabel::Original(second.cfg_label)));
-
             let first_dyn_node = rest.iter().fold(last_dyn_node, |dyn_node, jumpdest| {
                 let j_gen = CaterpillarLabel::Generated(jumpdest.cfg_label);
                 cat_cfg.add_edge(j_gen, CfgEdge::Cond(CaterpillarLabel::Original(jumpdest.cfg_label), dyn_node));
-
                 j_gen
             });
-
             for d in dyn_nodes {
                 cat_cfg.add_edge_or_promote(CaterpillarLabel::Original(d.cfg_label), first_dyn_node);
             }
-
             cat_cfg
         }
     }
