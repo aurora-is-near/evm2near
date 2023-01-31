@@ -1,9 +1,9 @@
 // This is free and unencumbered software released into the public domain.
 
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::HashMap,
     convert::TryInto,
-    io::Write, ops::Range,
+    io::Write,
 };
 
 use evm_rs::{parse_opcode, Opcode, Program};
@@ -14,12 +14,14 @@ use parity_wasm::{
         Instructions, Internal, Local, Module, TableType, Type, ValueType,
     },
 };
-use relooper::graph::{cfg::Cfg, relooper::ReSeq, supergraph::SLabel, caterpillar::CaterpillarLabel};
 use relooper::graph::relooper::ReBlock;
+use relooper::graph::{
+    caterpillar::CaterpillarLabel, relooper::ReSeq, supergraph::SLabel,
+};
 
 use crate::{
     abi::Functions,
-    analyze::{analyze_cfg, Block, Edge, Label, EvmLabel},
+    analyze::{analyze_cfg, Block, EvmLabel},
     config::CompilerConfig,
     encode::encode_operands,
 };
@@ -235,29 +237,34 @@ impl Compiler {
     }
 
     //TODO self is only used for `evm_pop_function`
-    fn unfold_cfg(&self, program: &Program, cfg_part: &ReSeq<SLabel<CaterpillarLabel<EvmLabel>>>, res: &mut Vec<Instruction>) {
+    fn unfold_cfg(
+        &self,
+        program: &Program,
+        cfg_part: &ReSeq<SLabel<CaterpillarLabel<EvmLabel>>>,
+        res: &mut Vec<Instruction>,
+    ) {
         for block in cfg_part.0.iter() {
             match block {
                 ReBlock::Block(inner_seq) => {
-                    res.push(Instruction::Block(BlockType::NoResult));  //TODO block type?
+                    res.push(Instruction::Block(BlockType::NoResult)); //TODO block type?
                     self.unfold_cfg(program, inner_seq, res);
                     res.push(Instruction::End);
                 }
                 ReBlock::Loop(inner_seq) => {
-                    res.push(Instruction::Loop(BlockType::NoResult));   //TODO block type?
+                    res.push(Instruction::Loop(BlockType::NoResult)); //TODO block type?
                     self.unfold_cfg(program, inner_seq, res);
                     res.push(Instruction::End);
                 }
                 ReBlock::If(true_branch, false_branch) => {
                     res.push(Instruction::Call(self.evm_pop_function));
-                    res.push(Instruction::If(BlockType::NoResult));     //TODO block type?
+                    res.push(Instruction::If(BlockType::NoResult)); //TODO block type?
                     self.unfold_cfg(program, true_branch, res);
                     res.push(Instruction::Else);
                     self.unfold_cfg(program, false_branch, res);
                     res.push(Instruction::End);
                 }
                 ReBlock::Br(levels) => {
-                    res.push(Instruction::Br(*levels as u32));
+                    res.push(Instruction::Br((*levels).try_into().unwrap()));
                 }
                 ReBlock::Return => {
                     res.push(Instruction::Return);
@@ -271,24 +278,31 @@ impl Compiler {
                                 res.extend(operands);
                                 let call = self.compile_operator(op);
                                 res.push(call);
-                                if op == &Opcode::RETURN {  //TODO idk
+                                if op == &Opcode::RETURN {
+                                    //TODO idk
                                     res.push(Instruction::Return);
                                 }
                             }
                         }
                         CaterpillarLabel::Generated(a) => {
-                            todo!()
+                            res.extend(vec![
+                                Instruction::Call(self.evm_pop_function),
+                                Instruction::I32Const(a.label.try_into().unwrap()),
+                                Instruction::I32Eq,
+                            ]);
                         }
                     }
-
-                    todo!()
                 }
             }
         }
     }
 
     /// Compiles the program's control-flow graph.
-    fn compile_cfg(self: &mut Compiler, input_cfg: &ReSeq<SLabel<CaterpillarLabel<EvmLabel>>>, input_program: &Program) {
+    fn compile_cfg(
+        self: &mut Compiler,
+        input_cfg: &ReSeq<SLabel<CaterpillarLabel<EvmLabel>>>,
+        input_program: &Program,
+    ) {
         assert_ne!(self.evm_start_function, 0); // filled in during emit_start()
         assert_eq!(self.evm_exec_function, 0); // filled in below
 
