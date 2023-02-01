@@ -1,4 +1,5 @@
 use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
+use crate::traversal::graph::bfs::Bfs;
 use anyhow::ensure;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -153,5 +154,20 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
             Some(Uncond(uncond)) => self.out_edges.insert(from, Cond(to, uncond)),
             _ => panic!("edge (should be absent) or (shouldn't be `Cond`)"),
         };
+    }
+
+    fn reachable_nodes(&self) -> HashSet<TLabel> {
+        Bfs::start_from(self.entry, |label| {
+            self.children(label).into_iter().copied()
+        })
+        .collect()
+    }
+
+    pub fn strip_unreachable(&mut self) {
+        let nodes: HashSet<TLabel> = self.nodes().into_iter().copied().collect();
+        let reachable: HashSet<TLabel> = self.reachable_nodes();
+        for unreachable in nodes.difference(&reachable) {
+            self.out_edges.remove(unreachable);
+        }
     }
 }
