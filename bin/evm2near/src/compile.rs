@@ -1,10 +1,6 @@
 // This is free and unencumbered software released into the public domain.
 
-use std::{
-    collections::HashMap,
-    convert::TryInto,
-    io::Write,
-};
+use std::{collections::HashMap, convert::TryInto, io::Write};
 
 use evm_rs::{parse_opcode, Opcode, Program};
 use parity_wasm::{
@@ -15,9 +11,7 @@ use parity_wasm::{
     },
 };
 use relooper::graph::relooper::ReBlock;
-use relooper::graph::{
-    caterpillar::CaterpillarLabel, relooper::ReSeq, supergraph::SLabel,
-};
+use relooper::graph::{caterpillar::CaterpillarLabel, relooper::ReSeq, supergraph::SLabel};
 
 use crate::{
     abi::Functions,
@@ -306,9 +300,12 @@ impl Compiler {
         assert_ne!(self.evm_start_function, 0); // filled in during emit_start()
         assert_eq!(self.evm_exec_function, 0); // filled in below
 
-        let mut res: Vec<Instruction> = Default::default();
+        let mut wasm: Vec<Instruction> = Default::default();
 
-        self.unfold_cfg(input_program, input_cfg, &mut res);
+        self.unfold_cfg(input_program, input_cfg, &mut wasm);
+
+        let func_id = self.emit_function(Some("_evm_exec".to_string()), wasm);
+        self.evm_exec_function = func_id;
 
         // self.jump_table = self.make_jump_table(input_cfg);
 
