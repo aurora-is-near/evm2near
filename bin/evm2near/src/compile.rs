@@ -235,6 +235,7 @@ impl Compiler {
                 }
                 ReBlock::If(true_branch, false_branch) => {
                     res.push(Instruction::Call(self.evm_pop_function));
+                    res.push(Instruction::I32Eq);
                     res.push(Instruction::If(BlockType::NoResult)); //TODO block type?
                     self.unfold_cfg(program, true_branch, res);
                     res.push(Instruction::Else);
@@ -286,6 +287,8 @@ impl Compiler {
 
         let mut wasm: Vec<Instruction> = Default::default();
         self.unfold_cfg(input_program, input_cfg, &mut wasm);
+        wasm.push(Instruction::End);
+
         let func_id = self.emit_function(Some("_evm_exec".to_string()), wasm);
         self.evm_exec_function = func_id;
     }
