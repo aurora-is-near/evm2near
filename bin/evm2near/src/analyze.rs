@@ -49,7 +49,9 @@ fn relooped_cfg(cfg: Cfg<EvmCfgLabel<EvmLabel>>) -> ReSeq<SLabel<CaterpillarLabe
     )
     .expect("fs error");
     let reduced = reduce(&undyned);
-    reloop(&reduced)
+    let res = reloop(&reduced);
+    std::fs::write("cater.dot", format!("digraph {{{}}}", res.to_dot())).expect("fs error");
+    res
 }
 
 #[derive(Debug)]
@@ -130,13 +132,6 @@ pub fn analyze_cfg(program: &Program) -> ReSeq<SLabel<CaterpillarLabel<EvmLabel>
         node_info.insert(start_offs, (is_jmpdest, false));
         code_ranges.insert(start_offs, start_idx..curr_offs);
     }
-
-    let mut opcode_lines: Vec<String> = vec![];
-    program.0.iter().fold(0_usize, |offs, opcode| {
-        opcode_lines.push(format!("0x{:02x}\t{}", offs, opcode));
-        offs + opcode.size()
-    });
-    std::fs::write("opcodes.evm", opcode_lines.join("\n")).expect("fs error");
 
     let with_ranges = cfg.map_label(|label| {
         let code_range = code_ranges

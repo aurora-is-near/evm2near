@@ -28,12 +28,25 @@ pub fn compile(
     runtime_library: Module,
     config: CompilerConfig,
 ) -> Module {
-    let relooped_cfg: ReSeq<SLabel<CaterpillarLabel<EvmLabel>>> = analyze_cfg(input_program);
+    let relooped_cfg = analyze_cfg(input_program);
+
+    let mut opcode_lines: Vec<String> = vec![];
+    let mut id2offs: HashMap<usize, usize> = Default::default();
+    input_program
+        .0
+        .iter()
+        .enumerate()
+        .fold(0_usize, |offs, (cnt, opcode)| {
+            opcode_lines.push(format!("0x{:02x}\t{}", offs, opcode));
+            id2offs.insert(cnt, offs);
+            offs + opcode.size()
+        });
+    std::fs::write("opcodes.evm", opcode_lines.join("\n")).expect("fs error");
 
     let mut compiler = Compiler::new(runtime_library, config);
     compiler.emit_wasm_start();
     compiler.emit_evm_start();
-    compiler.compile_cfg(&relooped_cfg, input_program);
+    compiler.compile_cfg(&relooped_cfg, input_program, id2offs);
     compiler.emit_abi_execute();
     let abi_data = compiler.emit_abi_methods(input_abi).unwrap();
 
@@ -224,25 +237,26 @@ impl Compiler {
         program: &Program,
         cfg_part: &ReSeq<SLabel<CaterpillarLabel<EvmLabel>>>,
         res: &mut Vec<Instruction>,
+        wasm_idx2evm_idx: &mut HashMap<usize, usize>,
     ) {
         for block in cfg_part.0.iter() {
             match block {
                 ReBlock::Block(inner_seq) => {
                     res.push(Instruction::Block(BlockType::NoResult)); //TODO block type?
-                    self.unfold_cfg(program, inner_seq, res);
+                    self.unfold_cfg(program, inner_seq, res, wasm_idx2evm_idx);
                     res.push(Instruction::End);
                 }
                 ReBlock::Loop(inner_seq) => {
                     res.push(Instruction::Loop(BlockType::NoResult)); //TODO block type?
-                    self.unfold_cfg(program, inner_seq, res);
+                    self.unfold_cfg(program, inner_seq, res, wasm_idx2evm_idx);
                     res.push(Instruction::End);
                 }
                 ReBlock::If(true_branch, false_branch) => {
                     res.push(Instruction::Call(self.evm_pop_function));
                     res.push(Instruction::If(BlockType::NoResult)); //TODO block type?
-                    self.unfold_cfg(program, true_branch, res);
+                    self.unfold_cfg(program, true_branch, res, wasm_idx2evm_idx);
                     res.push(Instruction::Else);
-                    self.unfold_cfg(program, false_branch, res);
+                    self.unfold_cfg(program, false_branch, res, wasm_idx2evm_idx);
                     res.push(Instruction::End);
                 }
                 ReBlock::Br(levels) => {
@@ -282,6 +296,8 @@ impl Compiler {
                                         curr_idx += 1;
                                     }
                                     [op, ..] => {
+                                        wasm_idx2evm_idx
+                                            .insert(res.len(), curr_idx + orig_label.code_start);
                                         if op.is_push() {
                                             let operands = encode_push(op);
                                             res.extend(operands);
@@ -317,6 +333,7 @@ impl Compiler {
         self: &mut Compiler,
         input_cfg: &ReSeq<SLabel<CaterpillarLabel<EvmLabel>>>,
         input_program: &Program,
+        id2offs: HashMap<usize, usize>,
     ) {
         assert_ne!(self.evm_start_function, 0); // filled in during emit_start()
         assert_eq!(self.evm_exec_function, 0); // filled in below
@@ -327,8 +344,61 @@ impl Compiler {
         std::fs::write("relooped.dot", dot_lines.join("\n")).expect("fs error");
 
         let mut wasm: Vec<Instruction> = Default::default();
-        self.unfold_cfg(input_program, input_cfg, &mut wasm);
+        let mut debug_info = Default::default();
+        self.unfold_cfg(input_program, input_cfg, &mut wasm, &mut debug_info);
         wasm.push(Instruction::End);
+
+        let make_tab = |shift: &String, instr: &Instruction| -> String {
+            let length = 80 - format!("{}{}", shift, instr).to_string().len();
+            let mut res = "".to_string();
+            for _ in 0..length {
+                res.push(' ');
+            }
+            res
+        };
+        let mut shift = String::default();
+        std::fs::write(
+            "compiled.wat",
+            wasm.clone()
+                .into_iter()
+                .enumerate()
+                .map(|(idx, instr)| {
+                    if instr == Instruction::Else || instr == Instruction::End {
+                        for _ in 0..2 {
+                            shift.pop();
+                        }
+                    }
+                    let res: String;
+                    match debug_info.get(&idx).and_then(|x| id2offs.get(x)) {
+                        Some(offs) => {
+                            res = format!(
+                                "{}{} {}0x{:02x}",
+                                shift,
+                                instr,
+                                make_tab(&shift, &instr),
+                                offs
+                            )
+                            .to_string();
+                        }
+                        None => {
+                            res = format!("{}{}", shift, instr,).to_string();
+                        }
+                    }
+                    match instr {
+                        Instruction::Block(_)
+                        | Instruction::Else
+                        | Instruction::If(_)
+                        | Instruction::Loop(_) => {
+                            shift.push_str("  ");
+                        }
+                        _ => {}
+                    }
+                    res
+                })
+                .collect::<Vec<String>>()
+                .join("\n"),
+        )
+        .expect("fs error");
 
         let func_id = self.emit_function(Some("_evm_exec".to_string()), wasm);
         self.evm_exec_function = func_id;
