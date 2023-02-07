@@ -1,4 +1,4 @@
-name: Makefile CI
+name: Compile CI
 
 on:
   push:
@@ -13,8 +13,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-
+    
     - name: Install dependencies
+      run: cargo build || true
+
+    - name: Build
       run: make
 
     - name: Compile const
