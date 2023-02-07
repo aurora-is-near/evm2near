@@ -14,9 +14,13 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     
-    - name: Install dependencies
+    - name: Add wasi target
       run: rustup target add wasm32-wasi
+      
+    - name: Add unknown target
       run: rustup target add wasm32-unknown-unknown
+      
+    -name: Install dependecies
       run: cargo build || true
 
     - name: Build
