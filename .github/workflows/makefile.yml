@@ -20,9 +20,9 @@ jobs:
     - name: Add unknown target
       run: rustup target add wasm32-unknown-unknown
       
-    -name: Install dependecies
+    - name: Install dependecies
       run: cargo build || true
-
+      
     - name: Build
       run: make
 
