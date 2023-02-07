@@ -712,13 +712,19 @@ pub unsafe fn jump() {
 }
 
 #[no_mangle]
-pub unsafe fn jumpi() -> u32 {
+pub unsafe fn jumpi() {
     EVM.burn_gas(10);
-    //let pc = EVM.stack.pop(); // never pushed on the stack for static jumps
-    let cond = EVM.stack.pop();
-    let jump = if cond != Word::ZERO { 1 } else { 0 };
-    trace!("JUMPI {}", if jump == 1 { "true" } else { "false" });
-    jump
+    // let pc = EVM.stack.pop(); // never pushed on the stack for static jumps
+    // let cond = EVM.stack.pop();
+    // let jump = if cond != Word::ZERO { 1 } else { 0 };
+    // trace!(
+    //     "JUMPI {} (pc: {}, cond: {:?})",
+    //     if jump == 1 { "true" } else { "false" },
+    //     pc,
+    //     cond
+    // );
+
+    // jump
 }
 
 #[no_mangle]

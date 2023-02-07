@@ -17,7 +17,7 @@ use crate::{
     abi::Functions,
     analyze::{analyze_cfg, EvmLabel},
     config::CompilerConfig,
-    encode::encode_operands,
+    encode::encode_push,
 };
 
 const TABLE_OFFSET: i32 = 0x1000;
@@ -80,6 +80,8 @@ struct Compiler {
     evm_exec_function: FunctionIndex,      // _evm_exec
     evm_post_exec_function: FunctionIndex, // _evm_post_exec
     evm_pop_function: FunctionIndex,       // _evm_pop_u32
+    evm_push_function: FunctionIndex,      // _evm_push_u32
+    evm_burn_gas: FunctionIndex,           // _evm_burn_gas
     evm_pc_function: FunctionIndex,        // _evm_set_pc
     function_import_count: usize,
     builder: ModuleBuilder,
@@ -102,6 +104,8 @@ impl Compiler {
                 .unwrap(),
             evm_exec_function: 0, // filled in during compile_cfg()
             evm_pop_function: find_runtime_function(&runtime_library, "_evm_pop_u32").unwrap(),
+            evm_push_function: find_runtime_function(&runtime_library, "_evm_push_u32").unwrap(),
+            evm_burn_gas: find_runtime_function(&runtime_library, "_evm_burn_gas").unwrap(),
             evm_pc_function: find_runtime_function(&runtime_library, "_evm_set_pc").unwrap(),
             function_import_count: runtime_library.import_count(ImportCountType::Function),
             builder: parity_wasm::builder::from_module(runtime_library),
@@ -235,7 +239,6 @@ impl Compiler {
                 }
                 ReBlock::If(true_branch, false_branch) => {
                     res.push(Instruction::Call(self.evm_pop_function));
-                    res.push(Instruction::I32Eq);
                     res.push(Instruction::If(BlockType::NoResult)); //TODO block type?
                     self.unfold_cfg(program, true_branch, res);
                     res.push(Instruction::Else);
@@ -251,23 +254,56 @@ impl Compiler {
                 ReBlock::Actions(block) => {
                     match block.origin {
                         CaterpillarLabel::Original(orig_label) => {
-                            let code = &program.0[orig_label.code_start..orig_label.code_end];
-                            for op in code {
-                                let operands = encode_operands(op);
-                                res.extend(operands);
-                                let call = self.compile_operator(op);
-                                res.push(call);
-                                if op == &Opcode::RETURN {
-                                    //TODO idk
-                                    res.push(Instruction::Return);
+                            let block_code = &program.0[orig_label.code_start..orig_label.code_end];
+                            let block_len = orig_label.code_end - orig_label.code_start;
+                            let mut curr_idx = 0;
+                            while curr_idx < block_len {
+                                match &block_code[curr_idx..] {
+                                    [p, j, ..] if p.is_push() && j.is_jump() => {
+                                        // this is static jump, already accounted during cfg analysis. we only need to burn gas there
+                                        let jump_gas = if j == &Opcode::JUMP { 8 } else { 10 };
+                                        res.extend(vec![
+                                            Instruction::I32Const(3),             // any push costs 3 gas
+                                            Instruction::Call(self.evm_burn_gas), // burn it
+                                            Instruction::I32Const(jump_gas),
+                                            Instruction::Call(self.evm_burn_gas),
+                                        ]);
+                                        curr_idx += 2;
+                                    }
+                                    [j, ..] if j.is_jump() => {
+                                        // this is dynamic jump
+                                        let jump_gas = if j == &Opcode::JUMP { 8 } else { 10 };
+                                        res.extend(vec![
+                                            Instruction::Call(self.evm_pop_function),
+                                            Instruction::SetLocal(0),
+                                            Instruction::I32Const(jump_gas),
+                                            Instruction::Call(self.evm_burn_gas),
+                                        ]);
+                                        curr_idx += 1;
+                                    }
+                                    [op, ..] => {
+                                        if op.is_push() {
+                                            let operands = encode_push(op);
+                                            res.extend(operands);
+                                        }
+                                        let call = self.compile_operator(op);
+                                        res.push(call);
+                                        if op == &Opcode::RETURN {
+                                            //TODO idk
+                                            res.push(Instruction::Return);
+                                        }
+                                        curr_idx += 1;
+                                    }
+                                    [] => {}
                                 }
                             }
                         }
                         CaterpillarLabel::Generated(a) => {
                             res.extend(vec![
-                                Instruction::Call(self.evm_pop_function),
+                                Instruction::GetLocal(0),
                                 Instruction::I32Const(a.label.try_into().unwrap()),
                                 Instruction::I32Eq,
+                                Instruction::Call(self.evm_push_function),
                             ]);
                         }
                     }
@@ -284,6 +320,11 @@ impl Compiler {
     ) {
         assert_ne!(self.evm_start_function, 0); // filled in during emit_start()
         assert_eq!(self.evm_exec_function, 0); // filled in below
+
+        let dot_lines: Vec<String> =
+            vec!["digraph {".to_string(), input_cfg.to_dot(), "}".to_string()];
+
+        std::fs::write("relooped.dot", dot_lines.join("\n")).expect("fs error");
 
         let mut wasm: Vec<Instruction> = Default::default();
         self.unfold_cfg(input_program, input_cfg, &mut wasm);
@@ -339,7 +380,8 @@ fn make_op_table(module: &Module) -> HashMap<Opcode, FunctionIndex> {
         match export.internal() {
             &Internal::Function(op_idx) => match export.field() {
                 "_abi_buffer" | "_evm_start" | "_evm_init" | "_evm_call" | "_evm_exec"
-                | "_evm_post_exec" | "_evm_pop_u32" | "_evm_set_pc" | "execute" => {}
+                | "_evm_post_exec" | "_evm_pop_u32" | "_evm_push_u32" | "_evm_burn_gas"
+                | "_evm_set_pc" | "execute" => {}
                 export_sym => match parse_opcode(&export_sym.to_ascii_uppercase()) {
                     None => unreachable!(), // TODO
                     Some(op) => _ = result.insert(op, op_idx),

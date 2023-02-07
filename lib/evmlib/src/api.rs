@@ -143,7 +143,18 @@ pub unsafe fn _evm_pop_u32() -> u32 {
 }
 
 #[no_mangle]
+pub unsafe fn _evm_push_u32(x: u32) {
+    EVM.stack.push(x.into())
+}
+
+#[no_mangle]
 pub unsafe fn _evm_set_pc(pc: u32) {
     #[cfg(feature = "pc")]
     EVM.program_counter = pc;
+}
+
+#[no_mangle]
+pub unsafe fn _evm_burn_gas(gas: u32) {
+    // TODO gas value should be u64
+    EVM.burn_gas(gas as u64)
 }

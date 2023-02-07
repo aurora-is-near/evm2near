@@ -131,14 +131,12 @@ pub fn analyze_cfg(program: &Program) -> ReSeq<SLabel<CaterpillarLabel<EvmLabel>
         code_ranges.insert(start_offs, start_idx..curr_offs);
     }
 
-    let opcodes: Vec<String> = program
-        .clone()
-        .0
-        .into_iter()
-        .enumerate()
-        .map(|(idx, opcode)| format!("\t{}\t{}", idx, opcode))
-        .collect();
-    std::fs::write("opcodes.evm", opcodes.join("\n")).expect("fs error");
+    let mut opcode_lines: Vec<String> = vec![];
+    program.0.iter().fold(0_usize, |offs, opcode| {
+        opcode_lines.push(format!("0x{:02x}\t{}", offs, opcode));
+        offs + opcode.size()
+    });
+    std::fs::write("opcodes.evm", opcode_lines.join("\n")).expect("fs error");
 
     let with_ranges = cfg.map_label(|label| {
         let code_range = code_ranges
