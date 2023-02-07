@@ -1,0 +1,27 @@
+name: Makefile CI
+
+on:
+  push:
+    branches: [ "master", "*" ]
+  pull_request:
+    branches: [ "master", "*" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Install dependencies
+      run: make
+
+    - name: Compile const
+      run: ./evm2near test/const.sol -o const.wasm -b wasi
+
+    - name: Compile calc
+      run: ./evm2near test/calc.sol -o calc.wasm -b wasi
+      
+    - name: Compile bench
+      run: ./evm2near test/bench.sol -o bench.wasm -b wasi
