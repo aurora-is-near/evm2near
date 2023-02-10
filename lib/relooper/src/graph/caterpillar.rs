@@ -95,7 +95,6 @@ pub fn unfold_dyn_edges<T: CfgLabel>(cfg: &Cfg<EvmCfgLabel<T>>) -> Cfg<Caterpill
 mod tests {
     use crate::graph::caterpillar::{unfold_dyn_edges, EvmCfgLabel};
     use crate::graph::cfg::{Cfg, CfgEdge};
-    use crate::graph::EnrichedCfg;
     use std::collections::HashMap;
 
     #[test]
@@ -118,31 +117,6 @@ mod tests {
         edges.insert(nodes[5], CfgEdge::Uncond(nodes[6]));
         edges.insert(nodes[8], CfgEdge::Cond(nodes[7], nodes[9]));
         let cfg = Cfg::from_edges(nodes[0], &edges).unwrap();
-        let caterpillar = unfold_dyn_edges(&cfg);
-
-        println!("Caterpillar:");
-        for (label, edge) in &caterpillar.out_edges {
-            match edge {
-                CfgEdge::Cond(cond, uncond) => {
-                    println!("CEdge from {}. cond = {}, uncond = {}", label, cond, uncond);
-                }
-                CfgEdge::Uncond(uncond) => {
-                    println!("UEdge from {} to {}", label, uncond);
-                }
-                CfgEdge::Terminal => {
-                    println!("Terminal edge from {}", label);
-                }
-            }
-        }
-        println!("End of caterpillar");
-
-        let e_graph = EnrichedCfg::new(caterpillar);
-        let dot_lines: Vec<String> = vec![
-            "digraph {".to_string(),
-            cfg.cfg_to_dot("cfg"),
-            e_graph.cfg_to_dot("caterpillar"),
-            "}".to_string(),
-        ];
-        std::fs::write("caterpillar.dot", dot_lines.join("\n")).expect("fs error");
+        let _caterpillar = unfold_dyn_edges(&cfg);
     }
 }
