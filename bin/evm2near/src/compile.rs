@@ -1,6 +1,10 @@
 // This is free and unencumbered software released into the public domain.
 
-use std::{collections::HashMap, convert::TryInto, io::Write};
+use std::{
+    collections::{HashMap, HashSet},
+    convert::TryInto,
+    io::Write,
+};
 
 use evm_rs::{parse_opcode, Opcode, Program};
 use parity_wasm::{
@@ -15,24 +19,24 @@ use relooper::graph::{caterpillar::CaterpillarLabel, relooper::ReSeq, supergraph
 
 use crate::{
     abi::Functions,
-    analyze::{basic_cfg, relooped_cfg, BasicCfg, EvmLabel},
+    analyze::{basic_cfg, relooped_cfg, BasicCfg, EvmLabel, Idx, Offs},
     config::CompilerConfig,
     encode::encode_push,
 };
 
 const TABLE_OFFSET: i32 = 0x1000;
 
-fn evm_idx_to_offs(program: &Program) -> HashMap<usize, usize> {
+fn evm_idx_to_offs(program: &Program) -> HashMap<Idx, Offs> {
     // let mut opcode_lines: Vec<String> = vec![];
-    let mut idx2offs: HashMap<usize, usize> = Default::default();
+    let mut idx2offs: HashMap<Idx, Offs> = Default::default();
     program
         .0
         .iter()
         .enumerate()
-        .fold(0_usize, |offs, (cnt, opcode)| {
+        .fold(Offs(0), |offs, (cnt, opcode)| {
             // opcode_lines.push(format!("0x{:02x}\t{}", offs, opcode));
-            idx2offs.insert(cnt, offs);
-            offs + opcode.size()
+            idx2offs.insert(Idx(cnt), offs);
+            Offs(offs.0 + opcode.size())
         });
     // std::fs::write("opcodes.evm", opcode_lines.join("\n")).expect("fs error");
     idx2offs
@@ -238,7 +242,7 @@ impl Compiler {
         program: &Program,
         cfg_part: &ReSeq<SLabel<CaterpillarLabel<EvmLabel>>>,
         res: &mut Vec<Instruction>,
-        wasm_idx2evm_idx: &mut HashMap<usize, usize>,
+        wasm_idx2evm_idx: &mut HashMap<Idx, Idx>,
     ) {
         for block in cfg_part.0.iter() {
             match block {
@@ -298,8 +302,10 @@ impl Compiler {
                                         curr_idx += 1;
                                     }
                                     [op, ..] => {
-                                        wasm_idx2evm_idx
-                                            .insert(res.len(), curr_idx + orig_label.code_start.0);
+                                        wasm_idx2evm_idx.insert(
+                                            Idx(res.len()),
+                                            Idx(curr_idx + orig_label.code_start.0),
+                                        );
                                         if op.is_push() {
                                             let operands = encode_push(op);
                                             res.extend(operands);
@@ -392,44 +398,38 @@ impl Compiler {
         basic_cfg: &BasicCfg,
         input_cfg: &ReSeq<SLabel<CaterpillarLabel<EvmLabel>>>,
         wasm: &[Instruction],
-        wasm_idx2evm_idx: &HashMap<usize, usize>,
+        wasm_idx2evm_idx: &HashMap<Idx, Idx>,
     ) {
         let evm_idx2offs = evm_idx_to_offs(program);
 
-        let mut code_ranges: Vec<_> = basic_cfg.code_ranges.values().collect();
-        code_ranges.sort_by_key(|x| x.start);
+        let mut code_ranges: Vec<_> = basic_cfg.code_ranges.iter().collect();
+        code_ranges.sort_by_key(|&(Offs(offs), r)| offs);
 
-        let todo = code_ranges.iter().map(|range| {
-            let start_end_str = format!("{}_{}", range.start, range.end);
-            let range_nodes: Vec<String> = vec![];
-            // let range_nodes: Vec<_> = range
-            //     .map(|idx| {
-            //         let op_offs = evm_idx2offs.get(&idx).unwrap();
-            //         let e_op = program.0[idx];
-            //         format!("evm_{}[label=\"0x{:x}: {}\"];", idx, op_offs, e_op)
-            //     })
-            //     .collect();
-            format!(
-                "subgraph cluster_evm_{} {{ label = \"{}\"
+        let evm_blocks: Vec<_> = code_ranges
+            .iter()
+            .map(|(offs, range)| {
+                let range_nodes: Vec<_> = (range.start.0..range.end.0)
+                    .map(|idx| {
+                        let idx = Idx(idx);
+                        let op_offs = evm_idx2offs.get(&idx).unwrap();
+                        let e_op = &program.0[idx.0];
+                        format!("evm_{}[label=\"0x{:x}: {}\"];", idx, op_offs.0, e_op)
+                    })
+                    .collect();
+                format!(
+                    "subgraph cluster_evm_{} {{ label = \"{}-{}, 0x{:x}\";
 {}
 }}",
-                start_end_str,
-                start_end_str,
-                range_nodes.join("\n")
-            )
-        });
-
-        let evm_nodes: Vec<_> = program
-            .0
-            .iter()
-            .enumerate()
-            .map(|(i, e_op)| {
-                let op_offs = evm_idx2offs.get(&i).unwrap();
-                format!("evm_{}[label=\"0x{:x}: {}\"];", i, op_offs, e_op)
+                    offs.0,
+                    range.start,
+                    range.end,
+                    offs.0,
+                    range_nodes.join("\n")
+                )
             })
             .collect();
 
-        let evm_links: Vec<_> = (0..program.0.len())
+        let evm_seq_links: Vec<_> = (0..program.0.len())
             .collect::<Vec<_>>()
             .windows(2) // TODO use `array_windows` (unstable for now)
             .map(|pair| {
@@ -440,8 +440,40 @@ impl Compiler {
             .collect();
 
         let mut evm_lines = Vec::default();
-        evm_lines.extend(evm_nodes);
-        evm_lines.extend(evm_links);
+        evm_lines.extend(evm_blocks);
+        evm_lines.extend(evm_seq_links);
+
+        let wasm_nodes: Vec<_> = wasm
+            .iter()
+            .enumerate()
+            .map(|(idx, w_op)| format!("wasm_{}[label=\"{}\"];", idx, w_op))
+            .collect();
+
+        let wasm_seq_links: Vec<_> = (0..wasm.len())
+            .collect::<Vec<_>>()
+            .windows(2)
+            .map(|pair| {
+                let a = pair[0];
+                let b = pair[1];
+                format!("wasm_{a} -> wasm_{b};")
+            })
+            .collect();
+
+        let mut wasm_lines = Vec::default();
+        wasm_lines.extend(wasm_nodes);
+        wasm_lines.extend(wasm_seq_links);
+
+        let evm_block_starts: HashSet<_> = code_ranges.iter().map(|(_, b)| b.start).collect();
+        let wasm2evm_lines: Vec<_> = wasm_idx2evm_idx
+            .iter()
+            .filter_map(|(w, e)| {
+                if evm_block_starts.contains(e) {
+                    Some(format!("wasm_{w} -> evm_{e}[constraint=false];"))
+                } else {
+                    None
+                }
+            })
+            .collect();
 
         std::fs::write(
             "dbg.dot",
@@ -450,8 +482,14 @@ impl Compiler {
 subgraph cluster_evm {{ label = \"evm\"
 {}
 }}
+subgraph cluster_wasm {{ label = \"wasm\"
+{}
+}}
+{}
 }}",
-                evm_lines.join("\n")
+                evm_lines.join("\n"),
+                wasm_lines.join("\n"),
+                wasm2evm_lines.join("\n")
             ),
         )
         .expect("fs error");
@@ -470,7 +508,7 @@ subgraph cluster_evm {{ label = \"evm\"
         self.unfold_cfg(program, &relooped_cfg, &mut wasm, &mut wasm_idx2evm_idx);
         wasm.push(Instruction::End);
 
-        Self::evm_wasm_dot_debug(program, &basic_cfg, &relooped_cfg, &wasm, &wasm_idx2evm_idx);
+        // Self::evm_wasm_dot_debug(program, &basic_cfg, &relooped_cfg, &wasm, &wasm_idx2evm_idx);
 
         let func_id = self.emit_function(Some("_evm_exec".to_string()), wasm);
         self.evm_exec_function = func_id;
