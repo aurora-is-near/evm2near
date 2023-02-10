@@ -14,13 +14,13 @@ use relooper::graph::supergraph::{reduce, SLabel};
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct EvmLabel {
-    pub label: usize,
-    pub code_start: usize,
-    pub code_end: usize,
+    pub label: Offs,
+    pub code_start: Idx,
+    pub code_end: Idx,
 }
 
 impl EvmLabel {
-    fn new(label: usize, code_start: usize, code_end: usize) -> Self {
+    fn new(label: Offs, code_start: Idx, code_end: Idx) -> Self {
         Self {
             label,
             code_start,
@@ -31,44 +31,51 @@ impl EvmLabel {
 use std::fmt::Display;
 impl Display for EvmLabel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}_to_{}", self.code_start, self.code_end)
+        write!(f, "{:?}_to_{:?}", self.code_start, self.code_end)
     }
 }
 
-fn relooped_cfg(cfg: Cfg<EvmCfgLabel<EvmLabel>>) -> ReSeq<SLabel<CaterpillarLabel<EvmLabel>>> {
-    std::fs::write(
-        "cfg.dot",
-        format!("digraph {{{}}}", cfg.cfg_to_dot("generated")),
-    )
-    .expect("fs error");
-    let mut undyned = unfold_dyn_edges(&cfg);
-    undyned.strip_unreachable();
-    std::fs::write(
-        "cater.dot",
-        format!("digraph {{{}}}", undyned.cfg_to_dot("cater")),
-    )
-    .expect("fs error");
-    let reduced = reduce(&undyned);
-    let res = reloop(&reduced);
-    std::fs::write("cater.dot", format!("digraph {{{}}}", res.to_dot())).expect("fs error");
-    res
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Offs(pub usize);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Idx(pub usize);
+
+impl Display for Offs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl Display for Idx {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
 }
 
 #[derive(Debug)]
-struct BlockStart(usize, usize, bool);
+struct BlockStart(Offs, Idx, bool);
 
-pub fn analyze_cfg(program: &Program) -> ReSeq<SLabel<CaterpillarLabel<EvmLabel>>> {
-    let mut cfg = Cfg::from_edges(0, &Default::default()).unwrap();
-    let mut node_info: HashMap<usize, (bool, bool)> = Default::default(); // label => (is_jumpdest, is_dynamic);
-    let mut code_ranges: HashMap<usize, Range<usize>> = Default::default();
+#[derive(Debug)]
+pub struct BasicCfg {
+    pub cfg: Cfg<Offs>,
+    pub node_info: HashMap<Offs, (bool, bool)>,
+    pub code_ranges: HashMap<Offs, Range<Idx>>,
+}
 
-    let mut curr_offs = 0_usize;
+pub fn basic_cfg(program: &Program) -> BasicCfg {
+    let mut cfg = Cfg::from_edges(Offs(0), &Default::default()).unwrap();
+    let mut node_info: HashMap<Offs, (bool, bool)> = Default::default(); // label => (is_jumpdest, is_dynamic);
+    let mut code_ranges: HashMap<Offs, Range<Idx>> = Default::default();
+
+    let mut curr_offs = Offs(0);
     let mut block_start: Option<BlockStart> = None;
     let mut prev_op: Option<&Opcode> = None;
+    let mut next_idx = Idx(1);
 
-    for (curr_idx, op) in program.0.iter().enumerate() {
-        let next_idx = curr_idx + 1;
-        let next_offs = curr_offs + op.size();
+    for (curr_idx, op) in program.0.iter().enumerate().map(|(i, op)| (Idx(i), op)) {
+        next_idx = Idx(curr_idx.0 + 1);
+        let next_offs = Offs(curr_offs.0 + op.size());
 
         use Opcode::*;
         block_start = match op {
@@ -77,8 +84,8 @@ pub fn analyze_cfg(program: &Program) -> ReSeq<SLabel<CaterpillarLabel<EvmLabel>
                     block_start.expect("block should be present at any jump opcode");
 
                 let label = match prev_op {
-                    Some(PUSH1(addr)) => Some(usize::from(*addr)),
-                    Some(PUSHn(_, addr, _)) => Some(addr.as_usize()),
+                    Some(PUSH1(addr)) => Some(Offs(usize::from(*addr))),
+                    Some(PUSHn(_, addr, _)) => Some(Offs(addr.as_usize())),
                     Some(_) => None,
                     None => unreachable!(),
                 };
@@ -130,19 +137,34 @@ pub fn analyze_cfg(program: &Program) -> ReSeq<SLabel<CaterpillarLabel<EvmLabel>
 
     if let Some(BlockStart(start_offs, start_idx, is_jmpdest)) = block_start {
         node_info.insert(start_offs, (is_jmpdest, false));
-        code_ranges.insert(start_offs, start_idx..curr_offs);
+        code_ranges.insert(start_offs, start_idx..next_idx);
     }
 
-    let with_ranges = cfg.map_label(|label| {
-        let code_range = code_ranges
+    BasicCfg {
+        cfg,
+        node_info,
+        code_ranges,
+    }
+}
+
+pub fn relooped_cfg(basic_cfg: &BasicCfg) -> ReSeq<SLabel<CaterpillarLabel<EvmLabel>>> {
+    let cfg = basic_cfg.cfg.map_label(|label| {
+        let code_range = basic_cfg
+            .code_ranges
             .get(label)
             .unwrap_or_else(|| panic!("no code ranges for {}", *label));
-        EvmLabel::new(*label, code_range.start, code_range.end)
+        let &(is_jumpdest, is_dynamic) = basic_cfg.node_info.get(label).unwrap();
+        let evm_label = EvmLabel::new(*label, code_range.start, code_range.end);
+        EvmCfgLabel {
+            cfg_label: evm_label,
+            is_jumpdest,
+            is_dynamic,
+        }
     });
-    let with_flags = with_ranges.map_label(|evm_label| EvmCfgLabel {
-        cfg_label: *evm_label,
-        is_jumpdest: node_info.get(&evm_label.label).unwrap().0,
-        is_dynamic: node_info.get(&evm_label.label).unwrap().1,
-    });
-    relooped_cfg(with_flags)
+
+    let mut undyned = unfold_dyn_edges(&cfg);
+    undyned.strip_unreachable();
+    let reduced = reduce(&undyned);
+    let res = reloop(&reduced);
+    res
 }

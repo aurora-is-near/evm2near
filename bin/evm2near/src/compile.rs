@@ -15,7 +15,7 @@ use relooper::graph::{caterpillar::CaterpillarLabel, relooper::ReSeq, supergraph
 
 use crate::{
     abi::Functions,
-    analyze::{analyze_cfg, EvmLabel},
+    analyze::{basic_cfg, relooped_cfg, BasicCfg, EvmLabel},
     config::CompilerConfig,
     encode::encode_push,
 };
@@ -44,12 +44,10 @@ pub fn compile(
     runtime_library: Module,
     config: CompilerConfig,
 ) -> Module {
-    let relooped_cfg = analyze_cfg(input_program);
-
     let mut compiler = Compiler::new(runtime_library, config);
     compiler.emit_wasm_start();
     compiler.emit_evm_start();
-    compiler.compile_cfg(&relooped_cfg, input_program);
+    compiler.compile_cfg(input_program);
     compiler.emit_abi_execute();
     let abi_data = compiler.emit_abi_methods(input_abi).unwrap();
 
@@ -271,8 +269,9 @@ impl Compiler {
                 ReBlock::Actions(block) => {
                     match block.origin {
                         CaterpillarLabel::Original(orig_label) => {
-                            let block_code = &program.0[orig_label.code_start..orig_label.code_end];
-                            let block_len = orig_label.code_end - orig_label.code_start;
+                            let block_code =
+                                &program.0[orig_label.code_start.0..orig_label.code_end.0];
+                            let block_len = orig_label.code_end.0 - orig_label.code_start.0;
                             let mut curr_idx = 0;
                             while curr_idx < block_len {
                                 match &block_code[curr_idx..] {
@@ -300,7 +299,7 @@ impl Compiler {
                                     }
                                     [op, ..] => {
                                         wasm_idx2evm_idx
-                                            .insert(res.len(), curr_idx + orig_label.code_start);
+                                            .insert(res.len(), curr_idx + orig_label.code_start.0);
                                         if op.is_push() {
                                             let operands = encode_push(op);
                                             res.extend(operands);
@@ -320,7 +319,7 @@ impl Compiler {
                         CaterpillarLabel::Generated(a) => {
                             res.extend(vec![
                                 Instruction::GetLocal(0),
-                                Instruction::I32Const(a.label.try_into().unwrap()),
+                                Instruction::I32Const(a.label.0.try_into().unwrap()),
                                 Instruction::I32Eq,
                                 Instruction::Call(self.evm_push_function),
                             ]);
@@ -331,79 +330,147 @@ impl Compiler {
         }
     }
 
-    fn debug_only_exec_func(
-        wasm: &[Instruction],
-        evm_idx2offs: HashMap<usize, usize>,
-        wasm_idx2evm_idx: HashMap<usize, usize>,
-    ) {
-        let make_tab = |shift: &String, instr: &Instruction| -> String {
-            let length = 80 - format!("{}{}", shift, instr).len();
-            let mut res = "".to_string();
-            for _ in 0..length {
-                res.push(' ');
-            }
-            res
-        };
-        let mut shift = String::default();
-        std::fs::write(
-            "compiled.wat",
-            wasm.iter()
-                .enumerate()
-                .map(|(idx, instr)| {
-                    if instr == &Instruction::Else || instr == &Instruction::End {
-                        for _ in 0..2 {
-                            shift.pop();
-                        }
-                    }
-                    let res = wasm_idx2evm_idx
-                        .get(&idx)
-                        .and_then(|x| evm_idx2offs.get(x))
-                        .map_or_else(
-                            || format!("{}{}", shift, instr,),
-                            |offs| {
-                                format!(
-                                    "{}{} {}0x{:02x}",
-                                    shift,
-                                    instr,
-                                    make_tab(&shift, instr),
-                                    offs
-                                )
-                            },
-                        );
+    // fn debug_only_exec_func(
+    //     wasm: &[Instruction],
+    //     evm_idx2offs: HashMap<usize, usize>,
+    //     wasm_idx2evm_idx: HashMap<usize, usize>,
+    // ) {
+    //     let make_tab = |shift: &String, instr: &Instruction| -> String {
+    //         let length = 80 - format!("{}{}", shift, instr).len();
+    //         let mut res = "".to_string();
+    //         for _ in 0..length {
+    //             res.push(' ');
+    //         }
+    //         res
+    //     };
+    //     let mut shift = String::default();
+    //     std::fs::write(
+    //         "compiled.wat",
+    //         wasm.iter()
+    //             .enumerate()
+    //             .map(|(idx, instr)| {
+    //                 if instr == &Instruction::Else || instr == &Instruction::End {
+    //                     for _ in 0..2 {
+    //                         shift.pop();
+    //                     }
+    //                 }
+    //                 let res = wasm_idx2evm_idx
+    //                     .get(&idx)
+    //                     .and_then(|x| evm_idx2offs.get(x))
+    //                     .map_or_else(
+    //                         || format!("{}{}", shift, instr,),
+    //                         |offs| {
+    //                             format!(
+    //                                 "{}{} {}0x{:02x}",
+    //                                 shift,
+    //                                 instr,
+    //                                 make_tab(&shift, instr),
+    //                                 offs
+    //                             )
+    //                         },
+    //                     );
 
-                    match instr {
-                        Instruction::Block(_)
-                        | Instruction::Else
-                        | Instruction::If(_)
-                        | Instruction::Loop(_) => {
-                            shift.push_str("  ");
-                        }
-                        _ => {}
-                    }
-                    res
-                })
-                .collect::<Vec<String>>()
-                .join("\n"),
+    //                 match instr {
+    //                     Instruction::Block(_)
+    //                     | Instruction::Else
+    //                     | Instruction::If(_)
+    //                     | Instruction::Loop(_) => {
+    //                         shift.push_str("  ");
+    //                     }
+    //                     _ => {}
+    //                 }
+    //                 res
+    //             })
+    //             .collect::<Vec<String>>()
+    //             .join("\n"),
+    //     )
+    //     .expect("fs error");
+    // }
+
+    fn evm_wasm_dot_debug(
+        program: &Program,
+        basic_cfg: &BasicCfg,
+        input_cfg: &ReSeq<SLabel<CaterpillarLabel<EvmLabel>>>,
+        wasm: &[Instruction],
+        wasm_idx2evm_idx: &HashMap<usize, usize>,
+    ) {
+        let evm_idx2offs = evm_idx_to_offs(program);
+
+        let mut code_ranges: Vec<_> = basic_cfg.code_ranges.values().collect();
+        code_ranges.sort_by_key(|x| x.start);
+
+        let todo = code_ranges.iter().map(|range| {
+            let start_end_str = format!("{}_{}", range.start, range.end);
+            let range_nodes: Vec<String> = vec![];
+            // let range_nodes: Vec<_> = range
+            //     .map(|idx| {
+            //         let op_offs = evm_idx2offs.get(&idx).unwrap();
+            //         let e_op = program.0[idx];
+            //         format!("evm_{}[label=\"0x{:x}: {}\"];", idx, op_offs, e_op)
+            //     })
+            //     .collect();
+            format!(
+                "subgraph cluster_evm_{} {{ label = \"{}\"
+{}
+}}",
+                start_end_str,
+                start_end_str,
+                range_nodes.join("\n")
+            )
+        });
+
+        let evm_nodes: Vec<_> = program
+            .0
+            .iter()
+            .enumerate()
+            .map(|(i, e_op)| {
+                let op_offs = evm_idx2offs.get(&i).unwrap();
+                format!("evm_{}[label=\"0x{:x}: {}\"];", i, op_offs, e_op)
+            })
+            .collect();
+
+        let evm_links: Vec<_> = (0..program.0.len())
+            .collect::<Vec<_>>()
+            .windows(2) // TODO use `array_windows` (unstable for now)
+            .map(|pair| {
+                let a = pair[0];
+                let b = pair[1];
+                format!("evm_{a} -> evm_{b};")
+            })
+            .collect();
+
+        let mut evm_lines = Vec::default();
+        evm_lines.extend(evm_nodes);
+        evm_lines.extend(evm_links);
+
+        std::fs::write(
+            "dbg.dot",
+            format!(
+                "digraph {{
+subgraph cluster_evm {{ label = \"evm\"
+{}
+}}
+}}",
+                evm_lines.join("\n")
+            ),
         )
         .expect("fs error");
     }
 
     /// Compiles the program's control-flow graph.
-    fn compile_cfg(
-        self: &mut Compiler,
-        input_cfg: &ReSeq<SLabel<CaterpillarLabel<EvmLabel>>>,
-        input_program: &Program,
-    ) {
+    fn compile_cfg(self: &mut Compiler, program: &Program) {
         assert_ne!(self.evm_start_function, 0); // filled in during emit_start()
         assert_eq!(self.evm_exec_function, 0); // filled in below
 
+        let basic_cfg = basic_cfg(program);
+        let relooped_cfg = relooped_cfg(&basic_cfg);
+
         let mut wasm: Vec<Instruction> = Default::default();
         let mut wasm_idx2evm_idx = Default::default();
-        self.unfold_cfg(input_program, input_cfg, &mut wasm, &mut wasm_idx2evm_idx);
+        self.unfold_cfg(program, &relooped_cfg, &mut wasm, &mut wasm_idx2evm_idx);
         wasm.push(Instruction::End);
 
-        // let evm_idx2offs = evm_idx_to_offs(input_program);
-        // Self::debug_only_exec_func(&wasm, evm_idx2offs, wasm_idx2evm_idx);
+        Self::evm_wasm_dot_debug(program, &basic_cfg, &relooped_cfg, &wasm, &wasm_idx2evm_idx);
 
         let func_id = self.emit_function(Some("_evm_exec".to_string()), wasm);
         self.evm_exec_function = func_id;
