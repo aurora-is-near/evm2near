@@ -2,15 +2,34 @@
 
 use evm_rs::{Opcode, Program};
 use relooper::graph::{
-    caterpillar::{unfold_dyn_edges, EvmCfgLabel},
+    caterpillar::{unfold_dyn_edges, CaterpillarLabel, EvmCfgLabel},
     cfg::{Cfg, CfgEdge},
-    relooper::ReSeq,
+    relooper::{reloop, ReSeq},
+    supergraph::{reduce, SLabel},
 };
-use std::{collections::HashMap, ops::Range};
+use std::{
+    collections::HashMap,
+    fmt::{Debug, Display},
+    ops::Range,
+};
 
-use relooper::graph::caterpillar::CaterpillarLabel;
-use relooper::graph::relooper::reloop;
-use relooper::graph::supergraph::{reduce, SLabel};
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Offs(pub usize);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Idx(pub usize);
+
+impl Display for Offs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "0x{:x}", self.0)
+    }
+}
+
+impl Display for Idx {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct EvmLabel {
@@ -28,33 +47,20 @@ impl EvmLabel {
         }
     }
 }
-use std::fmt::Display;
+
 impl Display for EvmLabel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}_to_{:?}", self.code_start, self.code_end)
+        write!(f, "{}_{}_to_{}", self.label, self.code_start, self.code_end)
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Offs(pub usize);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Idx(pub usize);
-
-impl Display for Offs {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl Display for Idx {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-#[derive(Debug)]
 struct BlockStart(Offs, Idx, bool);
+
+impl Debug for BlockStart {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "offs: {}, idx: {}, jumpdest? {}", self.0, self.1, self.2)
+    }
+}
 
 #[derive(Debug)]
 pub struct BasicCfg {
@@ -64,7 +70,7 @@ pub struct BasicCfg {
 }
 
 pub fn basic_cfg(program: &Program) -> BasicCfg {
-    let mut cfg = Cfg::from_edges(Offs(0), &Default::default()).unwrap();
+    let mut cfg = Cfg::new(Offs(0));
     let mut node_info: HashMap<Offs, (bool, bool)> = Default::default(); // label => (is_jumpdest, is_dynamic);
     let mut code_ranges: HashMap<Offs, Range<Idx>> = Default::default();
 
@@ -103,6 +109,9 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
                 };
                 node_info.insert(start_offs, (is_jmpdest, is_dyn));
                 code_ranges.insert(start_offs, start_idx..next_idx);
+                if is_jmpdest && is_dyn {
+                    cfg.add_node(start_offs);
+                }
 
                 None
             }
@@ -165,6 +174,5 @@ pub fn relooped_cfg(basic_cfg: &BasicCfg) -> ReSeq<SLabel<CaterpillarLabel<EvmLa
     let mut undyned = unfold_dyn_edges(&cfg);
     undyned.strip_unreachable();
     let reduced = reduce(&undyned);
-    let res = reloop(&reduced);
-    res
+    reloop(&reduced)
 }

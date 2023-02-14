@@ -10,9 +10,12 @@ impl<TLabel: CfgLabel + Display> Cfg<TLabel> {
         lines.push(format!("{name}_nstart[label=\"start\"]"));
         lines.push(format!("{name}_nend[label=\"end\"]"));
 
-        let mut edges: Vec<String> = Vec::new();
-        for (n, edge) in &self.out_edges {
+        for n in self.nodes() {
             lines.push(format!("{name}_n{n}[label=\"{n}\"];"));
+        }
+
+        let mut edges: Vec<String> = Vec::new();
+        for (n, edge) in self.edges() {
             match edge {
                 CfgEdge::Uncond(u) => {
                     edges.push(format!("{name}_n{n} -> {name}_n{u};"));

@@ -301,7 +301,7 @@ mod test {
             origin_mapping.entry(x.origin).or_default().insert(*x);
         }
 
-        origin_cfg.out_edges.iter().all(|(from, &e)| {
+        origin_cfg.edges().iter().all(|(from, &e)| {
             origin_mapping
                 .get(from)
                 .unwrap()
@@ -312,7 +312,7 @@ mod test {
 
     #[test]
     fn simplest() {
-        let cfg = Cfg::from_vec(0, &[(0, Cond(1, 2)), (1, Uncond(2)), (2, Cond(3, 1))]).unwrap();
+        let cfg = Cfg::from_vec(0, &[(0, Cond(1, 2)), (1, Uncond(2)), (2, Cond(3, 1))]);
         let reduced = reduce(&cfg);
 
         assert!(test_reduce(cfg, reduced));
@@ -328,8 +328,7 @@ mod test {
                 (4, Uncond(2)),
                 (2, Cond(3, 1)),
             ],
-        )
-        .unwrap();
+        );
         let reduced = reduce(&cfg);
 
         assert!(test_reduce(cfg, reduced));

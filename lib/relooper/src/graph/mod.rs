@@ -49,7 +49,7 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
                 }
             }
 
-            if let CfgEdge::Cond(_, _) = cfg.out_edges.get(&n).unwrap() {
+            if let CfgEdge::Cond(_, _) = cfg.edges().get(&n).unwrap() {
                 if_nodes.insert(n);
             }
         }

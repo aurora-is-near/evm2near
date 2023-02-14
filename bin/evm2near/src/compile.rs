@@ -247,18 +247,18 @@ impl Compiler {
         for block in cfg_part.0.iter() {
             match block {
                 ReBlock::Block(inner_seq) => {
-                    res.push(Instruction::Block(BlockType::NoResult)); //TODO block type?
+                    res.push(Instruction::Block(BlockType::NoResult));
                     self.unfold_cfg(program, inner_seq, res, wasm_idx2evm_idx);
                     res.push(Instruction::End);
                 }
                 ReBlock::Loop(inner_seq) => {
-                    res.push(Instruction::Loop(BlockType::NoResult)); //TODO block type?
+                    res.push(Instruction::Loop(BlockType::NoResult));
                     self.unfold_cfg(program, inner_seq, res, wasm_idx2evm_idx);
                     res.push(Instruction::End);
                 }
                 ReBlock::If(true_branch, false_branch) => {
                     res.push(Instruction::Call(self.evm_pop_function));
-                    res.push(Instruction::If(BlockType::NoResult)); //TODO block type?
+                    res.push(Instruction::If(BlockType::NoResult));
                     self.unfold_cfg(program, true_branch, res, wasm_idx2evm_idx);
                     res.push(Instruction::Else);
                     self.unfold_cfg(program, false_branch, res, wasm_idx2evm_idx);
@@ -277,6 +277,7 @@ impl Compiler {
                                 &program.0[orig_label.code_start.0..orig_label.code_end.0];
                             let block_len = orig_label.code_end.0 - orig_label.code_start.0;
                             let mut curr_idx = 0;
+                            let mut evm_offset: usize = 0;
                             while curr_idx < block_len {
                                 match &block_code[curr_idx..] {
                                     [p, j, ..] if p.is_push() && j.is_jump() => {
@@ -289,6 +290,7 @@ impl Compiler {
                                             Instruction::Call(self.evm_burn_gas),
                                         ]);
                                         curr_idx += 2;
+                                        evm_offset += p.size() + j.size();
                                     }
                                     [j, ..] if j.is_jump() => {
                                         // this is dynamic jump
@@ -300,12 +302,20 @@ impl Compiler {
                                             Instruction::Call(self.evm_burn_gas),
                                         ]);
                                         curr_idx += 1;
+                                        evm_offset += j.size();
                                     }
                                     [op, ..] => {
                                         wasm_idx2evm_idx.insert(
                                             Idx(res.len()),
                                             Idx(curr_idx + orig_label.code_start.0),
                                         );
+                                        if self.config.program_counter {
+                                            let pc = orig_label.label.0 + evm_offset;
+                                            res.extend(vec![
+                                                Instruction::I32Const(pc.try_into().unwrap()),
+                                                Instruction::Call(self.evm_pc_function),
+                                            ]);
+                                        }
                                         if op.is_push() {
                                             let operands = encode_push(op);
                                             res.extend(operands);
@@ -317,6 +327,7 @@ impl Compiler {
                                             res.push(Instruction::Return);
                                         }
                                         curr_idx += 1;
+                                        evm_offset += op.size();
                                     }
                                     [] => {}
                                 }
@@ -401,6 +412,13 @@ impl Compiler {
         wasm_idx2evm_idx: &HashMap<Idx, Idx>,
     ) {
         let evm_idx2offs = evm_idx_to_offs(program);
+
+        let mut opcode_lines: Vec<String> = vec![];
+        program.0.iter().fold(Offs(0), |offs, opcode| {
+            opcode_lines.push(format!("0x{:02x}\t{}", offs.0, opcode));
+            Offs(offs.0 + opcode.size())
+        });
+        std::fs::write("opcodes.evm", opcode_lines.join("\n")).expect("fs error");
 
         let mut code_ranges: Vec<_> = basic_cfg.code_ranges.iter().collect();
         code_ranges.sort_by_key(|&(Offs(offs), r)| offs);
@@ -502,13 +520,18 @@ subgraph cluster_wasm {{ label = \"wasm\"
 
         let basic_cfg = basic_cfg(program);
         let relooped_cfg = relooped_cfg(&basic_cfg);
+        std::fs::write(
+            "relooped.dot",
+            format!("digraph {{{}}}", relooped_cfg.to_dot()),
+        )
+        .unwrap();
 
         let mut wasm: Vec<Instruction> = Default::default();
         let mut wasm_idx2evm_idx = Default::default();
         self.unfold_cfg(program, &relooped_cfg, &mut wasm, &mut wasm_idx2evm_idx);
         wasm.push(Instruction::End);
 
-        // Self::evm_wasm_dot_debug(program, &basic_cfg, &relooped_cfg, &wasm, &wasm_idx2evm_idx);
+        Self::evm_wasm_dot_debug(program, &basic_cfg, &relooped_cfg, &wasm, &wasm_idx2evm_idx);
 
         let func_id = self.emit_function(Some("_evm_exec".to_string()), wasm);
         self.evm_exec_function = func_id;

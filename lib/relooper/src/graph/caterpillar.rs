@@ -116,7 +116,7 @@ mod tests {
         edges.insert(nodes[4], CfgEdge::Cond(nodes[5], nodes[6]));
         edges.insert(nodes[5], CfgEdge::Uncond(nodes[6]));
         edges.insert(nodes[8], CfgEdge::Cond(nodes[7], nodes[9]));
-        let cfg = Cfg::from_edges(nodes[0], &edges).unwrap();
+        let cfg = Cfg::from_edges(nodes[0], &edges);
         let _caterpillar = unfold_dyn_edges(&cfg);
     }
 }

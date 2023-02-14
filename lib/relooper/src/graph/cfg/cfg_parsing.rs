@@ -44,9 +44,7 @@ where
 
         let entry_str = strings.first().unwrap();
         let entry = TLabel::from_str(entry_str)?;
-
-        let mut out_edges: HashMap<TLabel, CfgEdge<TLabel>> =
-            HashMap::with_capacity(strings.len() - 1);
+        let mut cfg = Cfg::new(entry);
 
         for edge_str in &strings[1..] {
             let (from, edge) = edge_str
@@ -54,14 +52,9 @@ where
                 .ok_or_else(|| format_err!("invalid label-edge format".to_string()))?;
             let from = TLabel::from_str(from)?;
             let edge = CfgEdge::from_str(edge)?;
-            for to in edge.to_vec() {
-                if !out_edges.contains_key(to) {
-                    out_edges.insert(to.clone(), Terminal);
-                }
-            }
-            out_edges.insert(from, edge);
+            cfg.add_edge(from, edge);
         }
 
-        Ok(Self { entry, out_edges })
+        Ok(cfg)
     }
 }
