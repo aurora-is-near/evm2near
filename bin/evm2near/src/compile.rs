@@ -10,8 +10,8 @@ use evm_rs::{parse_opcode, Opcode, Program};
 use parity_wasm::{
     builder::{FunctionBuilder, ModuleBuilder, SignatureBuilder},
     elements::{
-        BlockType, ElementSegment, ExportEntry, FuncBody, ImportCountType, InitExpr, Instruction,
-        Instructions, Internal, Local, Module, TableType, Type, ValueType,
+        BlockType, ExportEntry, FuncBody, ImportCountType, Instruction, Instructions, Internal,
+        Local, Module, TableType, ValueType,
     },
 };
 use relooper::graph::relooper::ReBlock;
@@ -84,14 +84,12 @@ pub fn compile(
 
 type DataOffset = i32;
 type FunctionIndex = u32;
-type TypeIndex = u32;
 
 struct Compiler {
     config: CompilerConfig,
     abi_buffer_off: DataOffset,
     abi_buffer_len: usize,
     op_table: HashMap<Opcode, FunctionIndex>,
-    function_type: TypeIndex,
     evm_start_function: FunctionIndex,     // _evm_start
     evm_init_function: FunctionIndex,      // _evm_init
     evm_call_function: FunctionIndex,      // _evm_call
@@ -113,8 +111,6 @@ impl Compiler {
             abi_buffer_off: find_abi_buffer(&runtime_library).unwrap(),
             abi_buffer_len: 0xFFFF, // TODO: ensure this matches _abi_buffer.len() in evmlib
             op_table: make_op_table(&runtime_library),
-            // jump_table: HashMap::new(),
-            function_type: find_runtime_function_type(&runtime_library).unwrap(),
             evm_start_function: 0, // filled in during emit_start()
             evm_init_function: find_runtime_function(&runtime_library, "_evm_init").unwrap(),
             evm_call_function: find_runtime_function(&runtime_library, "_evm_call").unwrap(),
@@ -407,7 +403,7 @@ impl Compiler {
     fn evm_wasm_dot_debug(
         program: &Program,
         basic_cfg: &BasicCfg,
-        input_cfg: &ReSeq<SLabel<CaterpillarLabel<EvmLabel>>>,
+        _input_cfg: &ReSeq<SLabel<CaterpillarLabel<EvmLabel>>>,
         wasm: &[Instruction],
         wasm_idx2evm_idx: &HashMap<Idx, Idx>,
     ) {
@@ -421,7 +417,7 @@ impl Compiler {
         std::fs::write("opcodes.evm", opcode_lines.join("\n")).expect("fs error");
 
         let mut code_ranges: Vec<_> = basic_cfg.code_ranges.iter().collect();
-        code_ranges.sort_by_key(|&(Offs(offs), r)| offs);
+        code_ranges.sort_by_key(|&(Offs(offs), _r)| offs);
 
         let evm_blocks: Vec<_> = code_ranges
             .iter()
@@ -605,19 +601,6 @@ fn find_runtime_function(module: &Module, name: &str) -> Option<FunctionIndex> {
                 }
             }
             _ => continue,
-        }
-    }
-    None // not found
-}
-
-fn find_runtime_function_type(module: &Module) -> Option<TypeIndex> {
-    for (type_id, r#type) in module.type_section().unwrap().types().iter().enumerate() {
-        match r#type {
-            Type::Function(function_type) => {
-                if function_type.params().is_empty() && function_type.results().is_empty() {
-                    return Some(type_id.try_into().unwrap());
-                }
-            }
         }
     }
     None // not found

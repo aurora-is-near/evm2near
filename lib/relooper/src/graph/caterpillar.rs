@@ -28,15 +28,6 @@ pub enum CaterpillarLabel<T> {
     Generated(T), // (unique_id, offset of associated jumpdest)
 }
 
-impl<T: Copy> CaterpillarLabel<T> {
-    fn label(&self) -> T {
-        match self {
-            Self::Original(l) => *l,
-            Self::Generated(l) => *l,
-        }
-    }
-}
-
 impl<T: Display> Display for CaterpillarLabel<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self {

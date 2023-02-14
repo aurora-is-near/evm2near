@@ -1,7 +1,6 @@
-use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
+use crate::graph::cfg::CfgEdge::{Cond, Uncond};
 use crate::graph::cfg::{Cfg, CfgEdge};
 use anyhow::{ensure, format_err};
-use std::collections::HashMap;
 use std::hash::Hash;
 use std::str::FromStr;
 
