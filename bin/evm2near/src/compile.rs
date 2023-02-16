@@ -27,18 +27,15 @@ use crate::{
 const TABLE_OFFSET: i32 = 0x1000;
 
 fn evm_idx_to_offs(program: &Program) -> HashMap<Idx, Offs> {
-    // let mut opcode_lines: Vec<String> = vec![];
     let mut idx2offs: HashMap<Idx, Offs> = Default::default();
     program
         .0
         .iter()
         .enumerate()
         .fold(Offs(0), |offs, (cnt, opcode)| {
-            // opcode_lines.push(format!("0x{:02x}\t{}", offs, opcode));
             idx2offs.insert(Idx(cnt), offs);
             Offs(offs.0 + opcode.size())
         });
-    // std::fs::write("opcodes.evm", opcode_lines.join("\n")).expect("fs error");
     idx2offs
 }
 
@@ -78,7 +75,6 @@ pub fn compile(
             break; // found it
         }
     }
-
     output_module
 }
 
@@ -342,63 +338,6 @@ impl Compiler {
             }
         }
     }
-
-    // fn debug_only_exec_func(
-    //     wasm: &[Instruction],
-    //     evm_idx2offs: HashMap<usize, usize>,
-    //     wasm_idx2evm_idx: HashMap<usize, usize>,
-    // ) {
-    //     let make_tab = |shift: &String, instr: &Instruction| -> String {
-    //         let length = 80 - format!("{}{}", shift, instr).len();
-    //         let mut res = "".to_string();
-    //         for _ in 0..length {
-    //             res.push(' ');
-    //         }
-    //         res
-    //     };
-    //     let mut shift = String::default();
-    //     std::fs::write(
-    //         "compiled.wat",
-    //         wasm.iter()
-    //             .enumerate()
-    //             .map(|(idx, instr)| {
-    //                 if instr == &Instruction::Else || instr == &Instruction::End {
-    //                     for _ in 0..2 {
-    //                         shift.pop();
-    //                     }
-    //                 }
-    //                 let res = wasm_idx2evm_idx
-    //                     .get(&idx)
-    //                     .and_then(|x| evm_idx2offs.get(x))
-    //                     .map_or_else(
-    //                         || format!("{}{}", shift, instr,),
-    //                         |offs| {
-    //                             format!(
-    //                                 "{}{} {}0x{:02x}",
-    //                                 shift,
-    //                                 instr,
-    //                                 make_tab(&shift, instr),
-    //                                 offs
-    //                             )
-    //                         },
-    //                     );
-
-    //                 match instr {
-    //                     Instruction::Block(_)
-    //                     | Instruction::Else
-    //                     | Instruction::If(_)
-    //                     | Instruction::Loop(_) => {
-    //                         shift.push_str("  ");
-    //                     }
-    //                     _ => {}
-    //                 }
-    //                 res
-    //             })
-    //             .collect::<Vec<String>>()
-    //             .join("\n"),
-    //     )
-    //     .expect("fs error");
-    // }
 
     fn evm_wasm_dot_debug(
         program: &Program,

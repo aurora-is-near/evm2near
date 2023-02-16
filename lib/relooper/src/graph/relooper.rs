@@ -148,7 +148,7 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
     }
 }
 
-use crate::graph::cfg::{Cfg};
+use crate::graph::cfg::Cfg;
 use std::fmt::Debug;
 
 pub fn reloop<TLabel: CfgLabel + Debug>(cfg: &Cfg<TLabel>) -> ReSeq<TLabel> {

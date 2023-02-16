@@ -16,18 +16,6 @@ where
     T: Eq + Hash,
 {
     pub fn start_from(root: &'a T, get_children: ChFun) -> Self {
-        // let mut res: Vec<Vec<T>> = Vec::new();
-        // let mut visited: HashSet<T> = HashSet::new();
-        //
-        // let mut path: Vec<(T, Vec<T>)> = Vec::new();
-        // let mut path_set: HashSet<T> = HashSet::new();
-        //
-        // let mut cur = root;
-        // loop {
-        //     let mut cur_ch: Vec<_> = get_children(cur).collect();
-        //     path.push()
-        // }
-
         Cycles {
             queue: VecDeque::from([root]),
             path: VecDeque::new(),
@@ -51,11 +39,8 @@ where
             self.visited.insert(current);
             self.path_set.insert(current);
             self.path.push_back(current);
-
             let children = (self.get_children)(current);
-
             self.queue.extend(children); //todo filter?
-
             todo!()
         })
     }
