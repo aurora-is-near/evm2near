@@ -4,6 +4,7 @@ use std::{
     collections::{HashMap, HashSet},
     convert::TryInto,
     io::Write,
+    path::PathBuf,
 };
 
 use evm_rs::{parse_opcode, Opcode, Program};
@@ -119,6 +120,15 @@ impl Compiler {
             evm_pc_function: find_runtime_function(&runtime_library, "_evm_set_pc").unwrap(),
             function_import_count: runtime_library.import_count(ImportCountType::Function),
             builder: parity_wasm::builder::from_module(runtime_library),
+        }
+    }
+
+    fn debug<TPath: Into<PathBuf>>(&self, path: TPath, contents: String) {
+        if let Some(base_path) = &self.config.debug_path {
+            let mut full_path = base_path.clone();
+            full_path.push(path.into());
+
+            std::fs::write(full_path, contents).expect("fs error while writing debug file");
         }
     }
 
@@ -340,6 +350,7 @@ impl Compiler {
     }
 
     fn evm_wasm_dot_debug(
+        &self,
         program: &Program,
         basic_cfg: &BasicCfg,
         _input_cfg: &ReSeq<SLabel<CaterpillarLabel<EvmLabel>>>,
@@ -353,7 +364,7 @@ impl Compiler {
             opcode_lines.push(format!("0x{:02x}\t{}", offs.0, opcode));
             Offs(offs.0 + opcode.size())
         });
-        std::fs::write("opcodes.evm", opcode_lines.join("\n")).expect("fs error");
+        self.debug("opcodes.evm", opcode_lines.join("\n"));
 
         let mut code_ranges: Vec<_> = basic_cfg.code_ranges.iter().collect();
         code_ranges.sort_by_key(|&(Offs(offs), _r)| offs);
@@ -428,7 +439,7 @@ impl Compiler {
             })
             .collect();
 
-        std::fs::write(
+        self.debug(
             "dbg.dot",
             format!(
                 "digraph {{
@@ -444,8 +455,7 @@ subgraph cluster_wasm {{ label = \"wasm\"
                 wasm_lines.join("\n"),
                 wasm2evm_lines.join("\n")
             ),
-        )
-        .expect("fs error");
+        );
     }
 
     /// Compiles the program's control-flow graph.
@@ -454,19 +464,22 @@ subgraph cluster_wasm {{ label = \"wasm\"
         assert_eq!(self.evm_exec_function, 0); // filled in below
 
         let basic_cfg = basic_cfg(program);
+        self.debug(
+            "basic_cfg.dot",
+            format!("digraph {{{}}}", basic_cfg.cfg.cfg_to_dot("basic")),
+        );
         let relooped_cfg = relooped_cfg(&basic_cfg);
-        std::fs::write(
+        self.debug(
             "relooped.dot",
             format!("digraph {{{}}}", relooped_cfg.to_dot()),
-        )
-        .unwrap();
+        );
 
         let mut wasm: Vec<Instruction> = Default::default();
         let mut wasm_idx2evm_idx = Default::default();
         self.unfold_cfg(program, &relooped_cfg, &mut wasm, &mut wasm_idx2evm_idx);
         wasm.push(Instruction::End);
 
-        Self::evm_wasm_dot_debug(program, &basic_cfg, &relooped_cfg, &wasm, &wasm_idx2evm_idx);
+        self.evm_wasm_dot_debug(program, &basic_cfg, &relooped_cfg, &wasm, &wasm_idx2evm_idx);
 
         let func_id = self.emit_function(Some("_evm_exec".to_string()), wasm);
         self.evm_exec_function = func_id;
