@@ -83,7 +83,7 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
         bfs.push_back(begin); // should be next. upd: i dont think so
         visited.insert(begin);
         loop {
-            if bfs.len() == 0 {
+            if bfs.is_empty() {
                 break;
             }
             let &cur_id = bfs.front().unwrap();
@@ -96,7 +96,7 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
                 }
             }
         }
-        return result;
+        result
     }
 
     fn update_dominators(

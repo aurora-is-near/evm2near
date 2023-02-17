@@ -239,14 +239,16 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
         'outer: loop {
             let order: Vec<SLabel<TLabel>> = self.snode_order();
 
-            let mut splits: Vec<(SLabel<TLabel>, SplitInto<TLabel>)> = Vec::new();
+            let mut splits: HashMap<SLabel<TLabel>, SplitInto<TLabel>> = Default::default();
 
             for snode_label in order {
                 let n = self.nodes.get(&snode_label).unwrap();
                 let in_edges = in_edges.get_or_insert_with(|| self.cfg.in_edges());
                 match self.node_action(n, in_edges) {
                     None => {}
-                    Some(SplitFor(split)) => splits.push((n.head, split)),
+                    Some(SplitFor(split)) => {
+                        splits.insert(n.head, split);
+                    }
                     Some(MergeInto(to)) => {
                         self.merge(n.head, to);
                         continue 'outer;
@@ -254,19 +256,21 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
                 }
             }
 
-            let mut split_len: BTreeMap<usize, Vec<(SLabel<TLabel>, SplitInto<TLabel>)>> =
-                BTreeMap::new();
+            let mut split_len: BTreeMap<usize, Vec<&SLabel<TLabel>>> = BTreeMap::new();
 
-            for n_split in splits {
-                let (_, split_for) = &n_split;
-                split_len.entry(split_for.len()).or_default().push(n_split);
+            for (split_node, split_for) in splits.iter() {
+                split_len
+                    .entry(split_for.len())
+                    .or_default()
+                    .push(split_node);
             }
 
             if let Some((_, biggest_splits)) = split_len.last_key_value() {
                 // let split_internal_nodes = biggest_splits.iter().map(|(n, split_for)|); // TODO select by internal node count?
-                let (n, split) = biggest_splits.first().unwrap();
+                let split_node = biggest_splits.first().unwrap();
+                let split_for = splits.get(split_node).unwrap();
 
-                self.split(*n, split);
+                self.split(**split_node, split_for);
                 in_edges = None;
 
                 continue;
