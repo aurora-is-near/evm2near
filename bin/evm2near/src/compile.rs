@@ -123,12 +123,12 @@ impl Compiler {
         }
     }
 
-    fn debug<TPath: Into<PathBuf>>(&self, path: TPath, contents: String) {
+    fn debug<TPath: Into<PathBuf>, CF: Fn() -> String>(&self, path: TPath, contents: CF) {
         if let Some(base_path) = &self.config.debug_path {
             let mut full_path = base_path.clone();
             full_path.push(path.into());
 
-            std::fs::write(full_path, contents).expect("fs error while writing debug file");
+            std::fs::write(full_path, contents()).expect("fs error while writing debug file");
         }
     }
 
@@ -364,7 +364,7 @@ impl Compiler {
             opcode_lines.push(format!("0x{:02x}\t{}", offs.0, opcode));
             Offs(offs.0 + opcode.size())
         });
-        self.debug("opcodes.evm", opcode_lines.join("\n"));
+        self.debug("opcodes.evm", || opcode_lines.join("\n"));
 
         let mut code_ranges: Vec<_> = basic_cfg.code_ranges.iter().collect();
         code_ranges.sort_by_key(|&(Offs(offs), _r)| offs);
@@ -439,8 +439,7 @@ impl Compiler {
             })
             .collect();
 
-        self.debug(
-            "dbg.dot",
+        self.debug("dbg.dot", || {
             format!(
                 "digraph {{
 subgraph cluster_evm {{ label = \"evm\"
@@ -454,8 +453,8 @@ subgraph cluster_wasm {{ label = \"wasm\"
                 evm_lines.join("\n"),
                 wasm_lines.join("\n"),
                 wasm2evm_lines.join("\n")
-            ),
-        );
+            )
+        });
     }
 
     /// Compiles the program's control-flow graph.
@@ -464,15 +463,13 @@ subgraph cluster_wasm {{ label = \"wasm\"
         assert_eq!(self.evm_exec_function, 0); // filled in below
 
         let basic_cfg = basic_cfg(program);
-        self.debug(
-            "basic_cfg.dot",
-            format!("digraph {{{}}}", basic_cfg.cfg.cfg_to_dot("basic")),
-        );
+        self.debug("basic_cfg.dot", || {
+            format!("digraph {{{}}}", basic_cfg.cfg.cfg_to_dot("basic"))
+        });
         let relooped_cfg = relooped_cfg(&basic_cfg);
-        self.debug(
-            "relooped.dot",
-            format!("digraph {{{}}}", relooped_cfg.to_dot()),
-        );
+        self.debug("relooped.dot", || {
+            format!("digraph {{{}}}", relooped_cfg.to_dot())
+        });
 
         let mut wasm: Vec<Instruction> = Default::default();
         let mut wasm_idx2evm_idx = Default::default();
