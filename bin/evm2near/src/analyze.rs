@@ -1,12 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 
 use evm_rs::{Opcode, Program};
-use relooper::graph::{
-    caterpillar::{unfold_dyn_edges, CaterpillarLabel, EvmCfgLabel},
-    cfg::{Cfg, CfgEdge},
-    relooper::{reloop, ReSeq},
-    supergraph::{reduce, SLabel},
-};
+use relooper::graph::cfg::{Cfg, CfgEdge};
 use std::{
     collections::HashMap,
     fmt::{Debug, Display},
@@ -28,29 +23,6 @@ impl Display for Offs {
 impl Display for Idx {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub struct EvmLabel {
-    pub label: Offs,
-    pub code_start: Idx,
-    pub code_end: Idx,
-}
-
-impl EvmLabel {
-    fn new(label: Offs, code_start: Idx, code_end: Idx) -> Self {
-        Self {
-            label,
-            code_start,
-            code_end,
-        }
-    }
-}
-
-impl Display for EvmLabel {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}_{}_to_{}", self.label, self.code_start, self.code_end)
     }
 }
 
@@ -154,25 +126,4 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
         node_info,
         code_ranges,
     }
-}
-
-pub fn relooped_cfg(basic_cfg: &BasicCfg) -> ReSeq<SLabel<CaterpillarLabel<EvmLabel>>> {
-    let cfg = basic_cfg.cfg.map_label(|label| {
-        let code_range = basic_cfg
-            .code_ranges
-            .get(label)
-            .unwrap_or_else(|| panic!("no code ranges for {}", *label));
-        let &(is_jumpdest, is_dynamic) = basic_cfg.node_info.get(label).unwrap();
-        let evm_label = EvmLabel::new(*label, code_range.start, code_range.end);
-        EvmCfgLabel {
-            cfg_label: evm_label,
-            is_jumpdest,
-            is_dynamic,
-        }
-    });
-
-    let mut undyned = unfold_dyn_edges(&cfg);
-    undyned.strip_unreachable();
-    let reduced = reduce(&undyned);
-    reloop(&reduced)
 }

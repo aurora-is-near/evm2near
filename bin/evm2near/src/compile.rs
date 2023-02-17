@@ -3,6 +3,7 @@
 use std::{
     collections::{HashMap, HashSet},
     convert::TryInto,
+    fmt::Display,
     io::Write,
     path::PathBuf,
 };
@@ -15,17 +16,48 @@ use parity_wasm::{
         Local, Module, TableType, ValueType,
     },
 };
-use relooper::graph::relooper::ReBlock;
-use relooper::graph::{caterpillar::CaterpillarLabel, relooper::ReSeq, supergraph::SLabel};
+use relooper::graph::{
+    caterpillar::EvmCfgLabel,
+    relooper::{reloop, ReBlock},
+    supergraph::reduce,
+};
+use relooper::graph::{
+    caterpillar::{unfold_dyn_edges, CaterpillarLabel},
+    relooper::ReSeq,
+    supergraph::SLabel,
+};
 
 use crate::{
     abi::Functions,
-    analyze::{basic_cfg, relooped_cfg, BasicCfg, EvmLabel, Idx, Offs},
+    analyze::{basic_cfg, BasicCfg, Idx, Offs},
     config::CompilerConfig,
     encode::encode_push,
 };
 
 const TABLE_OFFSET: i32 = 0x1000;
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct EvmBlock {
+    pub label: Offs,
+    pub code_start: Idx,
+    pub code_end: Idx,
+}
+
+impl EvmBlock {
+    fn new(label: Offs, code_start: Idx, code_end: Idx) -> Self {
+        Self {
+            label,
+            code_start,
+            code_end,
+        }
+    }
+}
+
+impl Display for EvmBlock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}_{}_to_{}", self.label, self.code_start, self.code_end)
+    }
+}
 
 fn evm_idx_to_offs(program: &Program) -> HashMap<Idx, Offs> {
     let mut idx2offs: HashMap<Idx, Offs> = Default::default();
@@ -238,11 +270,32 @@ impl Compiler {
         Ok(data)
     }
 
+    fn relooped_cfg(&self, basic_cfg: &BasicCfg) -> ReSeq<SLabel<CaterpillarLabel<EvmBlock>>> {
+        let cfg = basic_cfg.cfg.map_label(|label| {
+            let code_range = basic_cfg
+                .code_ranges
+                .get(label)
+                .unwrap_or_else(|| panic!("no code ranges for {}", *label));
+            let &(is_jumpdest, is_dynamic) = basic_cfg.node_info.get(label).unwrap();
+            let evm_label = EvmBlock::new(*label, code_range.start, code_range.end);
+            EvmCfgLabel {
+                cfg_label: evm_label,
+                is_jumpdest,
+                is_dynamic,
+            }
+        });
+
+        let mut dynamic_materialized = unfold_dyn_edges(&cfg);
+        dynamic_materialized.strip_unreachable();
+        let reduced = reduce(&dynamic_materialized);
+        reloop(&reduced)
+    }
+
     //TODO self is only used for `evm_pop_function`
     fn unfold_cfg(
         &self,
         program: &Program,
-        cfg_part: &ReSeq<SLabel<CaterpillarLabel<EvmLabel>>>,
+        cfg_part: &ReSeq<SLabel<CaterpillarLabel<EvmBlock>>>,
         res: &mut Vec<Instruction>,
         wasm_idx2evm_idx: &mut HashMap<Idx, Idx>,
     ) {
@@ -353,7 +406,7 @@ impl Compiler {
         &self,
         program: &Program,
         basic_cfg: &BasicCfg,
-        _input_cfg: &ReSeq<SLabel<CaterpillarLabel<EvmLabel>>>,
+        _input_cfg: &ReSeq<SLabel<CaterpillarLabel<EvmBlock>>>,
         wasm: &[Instruction],
         wasm_idx2evm_idx: &HashMap<Idx, Idx>,
     ) {
@@ -466,7 +519,7 @@ subgraph cluster_wasm {{ label = \"wasm\"
         self.debug("basic_cfg.dot", || {
             format!("digraph {{{}}}", basic_cfg.cfg.cfg_to_dot("basic"))
         });
-        let relooped_cfg = relooped_cfg(&basic_cfg);
+        let relooped_cfg = self.relooped_cfg(&basic_cfg);
         self.debug("relooped.dot", || {
             format!("digraph {{{}}}", relooped_cfg.to_dot())
         });
