@@ -3,7 +3,7 @@
 use evm_rs::Opcode;
 use parity_wasm::elements::Instruction;
 
-pub fn encode_operands(op: &Opcode) -> Vec<Instruction> {
+pub fn encode_push(op: &Opcode) -> Vec<Instruction> {
     let mut result = vec![];
     use Opcode::*;
     match op {
@@ -52,7 +52,7 @@ pub fn encode_operands(op: &Opcode) -> Vec<Instruction> {
             result.push(Instruction::I64Const(word_2));
             result.push(Instruction::I64Const(word_3));
         }
-        _ => {}
+        _ => unreachable!("should not be called for instructions different from push")
     }
     result
 }
@@ -65,7 +65,7 @@ mod tests {
     #[test]
     fn push1() {
         let op = Opcode::PUSH1(0x01);
-        let insns = encode_operands(&op);
+        let insns = encode_push(&op);
         assert_eq!(insns.len(), 1);
         match insns[0] {
             Instruction::I32Const(v) => assert_eq!(v, 0x01),
@@ -76,7 +76,7 @@ mod tests {
     #[test]
     fn push2() {
         let op = Opcode::PUSHn(2, u256::from(0x0123_u16), vec![0x01, 0x23]);
-        let insns = encode_operands(&op);
+        let insns = encode_push(&op);
         assert_eq!(insns.len(), 1);
         match insns[0] {
             Instruction::I32Const(v) => assert_eq!(v, 0x0123),
@@ -87,7 +87,7 @@ mod tests {
     #[test]
     fn push4() {
         let op = Opcode::PUSHn(4, u256::from(0x01234567_u32), vec![0x01, 0x23, 0x45, 0x67]);
-        let insns = encode_operands(&op);
+        let insns = encode_push(&op);
         assert_eq!(insns.len(), 1);
         match insns[0] {
             Instruction::I32Const(v) => assert_eq!(v, 0x01234567),
@@ -102,7 +102,7 @@ mod tests {
             u256::from(0x0123456789ABCDEF_u64),
             vec![0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF],
         );
-        let insns = encode_operands(&op);
+        let insns = encode_push(&op);
         assert_eq!(insns.len(), 1);
         match insns[0] {
             Instruction::I64Const(v) => assert_eq!(v, 0x0123456789ABCDEF),
@@ -120,7 +120,7 @@ mod tests {
                 0x32, 0x10,
             ],
         );
-        let insns = encode_operands(&op);
+        let insns = encode_push(&op);
         assert_eq!(insns.len(), 2);
         match insns[0] {
             Instruction::I64Const(v) => assert_eq!(v as u64, 0xFEDCBA9876543210),
@@ -140,7 +140,7 @@ mod tests {
             0xCC, 0xDD, 0xEE, 0xFF,
         ];
         let op = Opcode::PUSHn(32, u256::from_be_bytes(bs.clone().try_into().unwrap()), bs);
-        let insns = encode_operands(&op);
+        let insns = encode_push(&op);
         assert_eq!(insns.len(), 4);
         match insns[0] {
             Instruction::I64Const(v) => assert_eq!(v as u64, 0x8899AABBCCDDEEFF),

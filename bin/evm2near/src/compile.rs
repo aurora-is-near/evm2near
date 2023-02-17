@@ -1,28 +1,76 @@
 // This is free and unencumbered software released into the public domain.
 
 use std::{
-    collections::{BTreeSet, HashMap},
+    collections::{HashMap, HashSet},
     convert::TryInto,
+    fmt::Display,
     io::Write,
+    path::PathBuf,
 };
 
 use evm_rs::{parse_opcode, Opcode, Program};
 use parity_wasm::{
     builder::{FunctionBuilder, ModuleBuilder, SignatureBuilder},
     elements::{
-        BlockType, ElementSegment, ExportEntry, FuncBody, ImportCountType, InitExpr, Instruction,
-        Instructions, Internal, Local, Module, TableType, Type, ValueType,
+        BlockType, ExportEntry, FuncBody, ImportCountType, Instruction, Instructions, Internal,
+        Local, Module, TableType, ValueType,
     },
+};
+use relooper::graph::{
+    caterpillar::EvmCfgLabel,
+    relooper::{reloop, ReBlock},
+    supergraph::reduce,
+};
+use relooper::graph::{
+    caterpillar::{unfold_dyn_edges, CaterpillarLabel},
+    relooper::ReSeq,
+    supergraph::SLabel,
 };
 
 use crate::{
     abi::Functions,
-    analyze::{analyze_cfg, Block, CFGProgram, Edge, Label},
+    analyze::{basic_cfg, BasicCfg, Idx, Offs},
     config::CompilerConfig,
-    encode::encode_operands,
+    encode::encode_push,
 };
 
 const TABLE_OFFSET: i32 = 0x1000;
+
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct EvmBlock {
+    pub label: Offs,
+    pub code_start: Idx,
+    pub code_end: Idx,
+}
+
+impl EvmBlock {
+    fn new(label: Offs, code_start: Idx, code_end: Idx) -> Self {
+        Self {
+            label,
+            code_start,
+            code_end,
+        }
+    }
+}
+
+impl Display for EvmBlock {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}_{}_to_{}", self.label, self.code_start, self.code_end)
+    }
+}
+
+fn evm_idx_to_offs(program: &Program) -> HashMap<Idx, Offs> {
+    let mut idx2offs: HashMap<Idx, Offs> = Default::default();
+    program
+        .0
+        .iter()
+        .enumerate()
+        .fold(Offs(0), |offs, (cnt, opcode)| {
+            idx2offs.insert(Idx(cnt), offs);
+            Offs(offs.0 + opcode.size())
+        });
+    idx2offs
+}
 
 pub fn compile(
     input_program: &Program,
@@ -30,34 +78,17 @@ pub fn compile(
     runtime_library: Module,
     config: CompilerConfig,
 ) -> Module {
-    let input_cfg = analyze_cfg(input_program);
-
     let mut compiler = Compiler::new(runtime_library, config);
     compiler.emit_wasm_start();
     compiler.emit_evm_start();
-    compiler.compile_cfg(&input_cfg, input_program);
+    compiler.compile_cfg(input_program);
     compiler.emit_abi_execute();
     let abi_data = compiler.emit_abi_methods(input_abi).unwrap();
 
     let mut output_module = compiler.builder.build();
 
     let tables = output_module.table_section_mut().unwrap().entries_mut();
-    //let table_size = tables.first().unwrap().limits().initial();
     tables[0] = TableType::new(0xFFFF, Some(0xFFFF)); // grow the table to 65,535 elements
-
-    let elements = output_module.elements_section_mut().unwrap().entries_mut();
-    for (label, func_idx) in &compiler.jump_table {
-        // TODO: sorted by label
-        use Instruction::*;
-        elements.push(ElementSegment::new(
-            0, // table
-            Some(InitExpr::new(vec![
-                I32Const((*label as i32) + TABLE_OFFSET),
-                End,
-            ])),
-            vec![*func_idx],
-        ));
-    }
 
     // Overwrite the `_abi_buffer` data segment in evmlib with the ABI data
     // (function parameter names and types) for all public Solidity contract
@@ -77,27 +108,25 @@ pub fn compile(
             break; // found it
         }
     }
-
     output_module
 }
 
 type DataOffset = i32;
 type FunctionIndex = u32;
-type TypeIndex = u32;
 
 struct Compiler {
     config: CompilerConfig,
     abi_buffer_off: DataOffset,
     abi_buffer_len: usize,
     op_table: HashMap<Opcode, FunctionIndex>,
-    jump_table: HashMap<Label, FunctionIndex>,
-    function_type: TypeIndex,
     evm_start_function: FunctionIndex,     // _evm_start
     evm_init_function: FunctionIndex,      // _evm_init
     evm_call_function: FunctionIndex,      // _evm_call
     evm_exec_function: FunctionIndex,      // _evm_exec
     evm_post_exec_function: FunctionIndex, // _evm_post_exec
     evm_pop_function: FunctionIndex,       // _evm_pop_u32
+    evm_push_function: FunctionIndex,      // _evm_push_u32
+    evm_burn_gas: FunctionIndex,           // _evm_burn_gas
     evm_pc_function: FunctionIndex,        // _evm_set_pc
     function_import_count: usize,
     builder: ModuleBuilder,
@@ -111,8 +140,6 @@ impl Compiler {
             abi_buffer_off: find_abi_buffer(&runtime_library).unwrap(),
             abi_buffer_len: 0xFFFF, // TODO: ensure this matches _abi_buffer.len() in evmlib
             op_table: make_op_table(&runtime_library),
-            jump_table: HashMap::new(),
-            function_type: find_runtime_function_type(&runtime_library).unwrap(),
             evm_start_function: 0, // filled in during emit_start()
             evm_init_function: find_runtime_function(&runtime_library, "_evm_init").unwrap(),
             evm_call_function: find_runtime_function(&runtime_library, "_evm_call").unwrap(),
@@ -120,9 +147,20 @@ impl Compiler {
                 .unwrap(),
             evm_exec_function: 0, // filled in during compile_cfg()
             evm_pop_function: find_runtime_function(&runtime_library, "_evm_pop_u32").unwrap(),
+            evm_push_function: find_runtime_function(&runtime_library, "_evm_push_u32").unwrap(),
+            evm_burn_gas: find_runtime_function(&runtime_library, "_evm_burn_gas").unwrap(),
             evm_pc_function: find_runtime_function(&runtime_library, "_evm_set_pc").unwrap(),
             function_import_count: runtime_library.import_count(ImportCountType::Function),
             builder: parity_wasm::builder::from_module(runtime_library),
+        }
+    }
+
+    fn debug<TPath: Into<PathBuf>, CF: Fn() -> String>(&self, path: TPath, contents: CF) {
+        if let Some(base_path) = &self.config.debug_path {
+            let mut full_path = base_path.clone();
+            full_path.push(path.into());
+
+            std::fs::write(full_path, contents()).expect("fs error while writing debug file");
         }
     }
 
@@ -232,253 +270,269 @@ impl Compiler {
         Ok(data)
     }
 
+    fn relooped_cfg(&self, basic_cfg: &BasicCfg) -> ReSeq<SLabel<CaterpillarLabel<EvmBlock>>> {
+        let cfg = basic_cfg.cfg.map_label(|label| {
+            let code_range = basic_cfg
+                .code_ranges
+                .get(label)
+                .unwrap_or_else(|| panic!("no code ranges for {}", *label));
+            let &(is_jumpdest, is_dynamic) = basic_cfg.node_info.get(label).unwrap();
+            let evm_label = EvmBlock::new(*label, code_range.start, code_range.end);
+            EvmCfgLabel {
+                cfg_label: evm_label,
+                is_jumpdest,
+                is_dynamic,
+            }
+        });
+
+        let mut dynamic_materialized = unfold_dyn_edges(&cfg);
+        dynamic_materialized.strip_unreachable();
+        let reduced = reduce(&dynamic_materialized);
+        reloop(&reduced)
+    }
+
+    //TODO self is only used for `evm_pop_function`
+    fn unfold_cfg(
+        &self,
+        program: &Program,
+        cfg_part: &ReSeq<SLabel<CaterpillarLabel<EvmBlock>>>,
+        res: &mut Vec<Instruction>,
+        wasm_idx2evm_idx: &mut HashMap<Idx, Idx>,
+    ) {
+        for block in cfg_part.0.iter() {
+            match block {
+                ReBlock::Block(inner_seq) => {
+                    res.push(Instruction::Block(BlockType::NoResult));
+                    self.unfold_cfg(program, inner_seq, res, wasm_idx2evm_idx);
+                    res.push(Instruction::End);
+                }
+                ReBlock::Loop(inner_seq) => {
+                    res.push(Instruction::Loop(BlockType::NoResult));
+                    self.unfold_cfg(program, inner_seq, res, wasm_idx2evm_idx);
+                    res.push(Instruction::End);
+                }
+                ReBlock::If(true_branch, false_branch) => {
+                    res.push(Instruction::Call(self.evm_pop_function));
+                    res.push(Instruction::If(BlockType::NoResult));
+                    self.unfold_cfg(program, true_branch, res, wasm_idx2evm_idx);
+                    res.push(Instruction::Else);
+                    self.unfold_cfg(program, false_branch, res, wasm_idx2evm_idx);
+                    res.push(Instruction::End);
+                }
+                ReBlock::Br(levels) => {
+                    res.push(Instruction::Br((*levels).try_into().unwrap()));
+                }
+                ReBlock::Return => {
+                    res.push(Instruction::Return);
+                }
+                ReBlock::Actions(block) => {
+                    match block.origin {
+                        CaterpillarLabel::Original(orig_label) => {
+                            let block_code =
+                                &program.0[orig_label.code_start.0..orig_label.code_end.0];
+                            let block_len = orig_label.code_end.0 - orig_label.code_start.0;
+                            let mut curr_idx = 0;
+                            let mut evm_offset: usize = 0;
+                            while curr_idx < block_len {
+                                match &block_code[curr_idx..] {
+                                    [p, j, ..] if p.is_push() && j.is_jump() => {
+                                        // this is static jump, already accounted during cfg analysis. we only need to burn gas there
+                                        let jump_gas = if j == &Opcode::JUMP { 8 } else { 10 };
+                                        res.extend(vec![
+                                            Instruction::I32Const(3),             // any push costs 3 gas
+                                            Instruction::Call(self.evm_burn_gas), // burn it
+                                            Instruction::I32Const(jump_gas),
+                                            Instruction::Call(self.evm_burn_gas),
+                                        ]);
+                                        curr_idx += 2;
+                                        evm_offset += p.size() + j.size();
+                                    }
+                                    [j, ..] if j.is_jump() => {
+                                        // this is dynamic jump
+                                        let jump_gas = if j == &Opcode::JUMP { 8 } else { 10 };
+                                        res.extend(vec![
+                                            Instruction::Call(self.evm_pop_function),
+                                            Instruction::SetLocal(0),
+                                            Instruction::I32Const(jump_gas),
+                                            Instruction::Call(self.evm_burn_gas),
+                                        ]);
+                                        curr_idx += 1;
+                                        evm_offset += j.size();
+                                    }
+                                    [op, ..] => {
+                                        wasm_idx2evm_idx.insert(
+                                            Idx(res.len()),
+                                            Idx(curr_idx + orig_label.code_start.0),
+                                        );
+                                        if self.config.program_counter {
+                                            let pc = orig_label.label.0 + evm_offset;
+                                            res.extend(vec![
+                                                Instruction::I32Const(pc.try_into().unwrap()),
+                                                Instruction::Call(self.evm_pc_function),
+                                            ]);
+                                        }
+                                        if op.is_push() {
+                                            let operands = encode_push(op);
+                                            res.extend(operands);
+                                        }
+                                        let call = self.compile_operator(op);
+                                        res.push(call);
+                                        if op == &Opcode::RETURN {
+                                            //TODO idk
+                                            res.push(Instruction::Return);
+                                        }
+                                        curr_idx += 1;
+                                        evm_offset += op.size();
+                                    }
+                                    [] => {}
+                                }
+                            }
+                        }
+                        CaterpillarLabel::Generated(a) => {
+                            res.extend(vec![
+                                Instruction::GetLocal(0),
+                                Instruction::I32Const(a.label.0.try_into().unwrap()),
+                                Instruction::I32Eq,
+                                Instruction::Call(self.evm_push_function),
+                            ]);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn evm_wasm_dot_debug(
+        &self,
+        program: &Program,
+        basic_cfg: &BasicCfg,
+        _input_cfg: &ReSeq<SLabel<CaterpillarLabel<EvmBlock>>>,
+        wasm: &[Instruction],
+        wasm_idx2evm_idx: &HashMap<Idx, Idx>,
+    ) {
+        let evm_idx2offs = evm_idx_to_offs(program);
+
+        let mut opcode_lines: Vec<String> = vec![];
+        program.0.iter().fold(Offs(0), |offs, opcode| {
+            opcode_lines.push(format!("0x{:02x}\t{}", offs.0, opcode));
+            Offs(offs.0 + opcode.size())
+        });
+        self.debug("opcodes.evm", || opcode_lines.join("\n"));
+
+        let mut code_ranges: Vec<_> = basic_cfg.code_ranges.iter().collect();
+        code_ranges.sort_by_key(|&(Offs(offs), _r)| offs);
+
+        let evm_blocks: Vec<_> = code_ranges
+            .iter()
+            .map(|(offs, range)| {
+                let range_nodes: Vec<_> = (range.start.0..range.end.0)
+                    .map(|idx| {
+                        let idx = Idx(idx);
+                        let op_offs = evm_idx2offs.get(&idx).unwrap();
+                        let e_op = &program.0[idx.0];
+                        format!("evm_{}[label=\"0x{:x}: {}\"];", idx, op_offs.0, e_op)
+                    })
+                    .collect();
+                format!(
+                    "subgraph cluster_evm_{} {{ label = \"{}-{}, 0x{:x}\";
+{}
+}}",
+                    offs.0,
+                    range.start,
+                    range.end,
+                    offs.0,
+                    range_nodes.join("\n")
+                )
+            })
+            .collect();
+
+        let evm_seq_links: Vec<_> = (0..program.0.len())
+            .collect::<Vec<_>>()
+            .windows(2) // TODO use `array_windows` (unstable for now)
+            .map(|pair| {
+                let a = pair[0];
+                let b = pair[1];
+                format!("evm_{a} -> evm_{b};")
+            })
+            .collect();
+
+        let mut evm_lines = Vec::default();
+        evm_lines.extend(evm_blocks);
+        evm_lines.extend(evm_seq_links);
+
+        let wasm_nodes: Vec<_> = wasm
+            .iter()
+            .enumerate()
+            .map(|(idx, w_op)| format!("wasm_{}[label=\"{}\"];", idx, w_op))
+            .collect();
+
+        let wasm_seq_links: Vec<_> = (0..wasm.len())
+            .collect::<Vec<_>>()
+            .windows(2)
+            .map(|pair| {
+                let a = pair[0];
+                let b = pair[1];
+                format!("wasm_{a} -> wasm_{b};")
+            })
+            .collect();
+
+        let mut wasm_lines = Vec::default();
+        wasm_lines.extend(wasm_nodes);
+        wasm_lines.extend(wasm_seq_links);
+
+        let evm_block_starts: HashSet<_> = code_ranges.iter().map(|(_, b)| b.start).collect();
+        let wasm2evm_lines: Vec<_> = wasm_idx2evm_idx
+            .iter()
+            .filter_map(|(w, e)| {
+                if evm_block_starts.contains(e) {
+                    Some(format!("wasm_{w} -> evm_{e}[constraint=false];"))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        self.debug("dbg.dot", || {
+            format!(
+                "digraph {{
+subgraph cluster_evm {{ label = \"evm\"
+{}
+}}
+subgraph cluster_wasm {{ label = \"wasm\"
+{}
+}}
+{}
+}}",
+                evm_lines.join("\n"),
+                wasm_lines.join("\n"),
+                wasm2evm_lines.join("\n")
+            )
+        });
+    }
+
     /// Compiles the program's control-flow graph.
-    fn compile_cfg(self: &mut Compiler, input_cfg: &CFGProgram, input_program: &Program) {
+    fn compile_cfg(self: &mut Compiler, program: &Program) {
         assert_ne!(self.evm_start_function, 0); // filled in during emit_start()
         assert_eq!(self.evm_exec_function, 0); // filled in below
 
-        self.jump_table = self.make_jump_table(input_cfg);
+        let basic_cfg = basic_cfg(program);
+        self.debug("basic_cfg.dot", || {
+            format!("digraph {{{}}}", basic_cfg.cfg.cfg_to_dot("basic"))
+        });
+        let relooped_cfg = self.relooped_cfg(&basic_cfg);
+        self.debug("relooped.dot", || {
+            format!("digraph {{{}}}", relooped_cfg.to_dot())
+        });
 
-        for (block_label, block) in input_cfg.0.iter() {
-            let block_id = make_block_id(block);
+        let mut wasm: Vec<Instruction> = Default::default();
+        let mut wasm_idx2evm_idx = Default::default();
+        self.unfold_cfg(program, &relooped_cfg, &mut wasm, &mut wasm_idx2evm_idx);
+        wasm.push(Instruction::End);
 
-            let mut block_pc: usize = 0;
-            let mut block_wasm = vec![];
-            let mut emit = |block_pc: usize, evm: Option<&Opcode>, wasm: Vec<Instruction>| {
-                let pc = block_label + block_pc;
-                if wasm.is_empty() {
-                    if self.config.debug {
-                        eprintln!(
-                            "{:06x} {:<71}",
-                            pc,
-                            evm.map(|op| op.to_string()).unwrap_or_default()
-                        ); // DEBUG
-                    }
-                } else {
-                    for wasm_op in wasm {
-                        if self.config.debug {
-                            eprintln!(
-                                "{:06x} {:<71} {}",
-                                pc,
-                                evm.map(|op| op.to_string()).unwrap_or_default(),
-                                wasm_op
-                            ); // DEBUG
-                        }
-                        block_wasm.push(wasm_op);
-                    }
-                }
-            };
+        self.evm_wasm_dot_debug(program, &basic_cfg, &relooped_cfg, &wasm, &wasm_idx2evm_idx);
 
-            let block_code = block.code(&input_program.0);
-            let mut block_pos = 0;
-            let mut emitted_jump = false;
-            while block_pos < block_code.len() {
-                use Opcode::*;
-                let code = &block_code[block_pos..];
-                if self.config.program_counter {
-                    let pc = block_label + block_pc;
-                    emit(
-                        block_pc,
-                        None,
-                        vec![
-                            Instruction::I32Const(pc.try_into().unwrap()),
-                            Instruction::Call(self.evm_pc_function),
-                        ],
-                    );
-                }
-                match code {
-                    [op @ JUMPDEST, ..] => {
-                        emit(
-                            block_pc,
-                            Some(op),
-                            if self.config.optimize_level == 0 {
-                                vec![self.compile_operator(op)]
-                            } else {
-                                vec![] // omit JUMPDEST tracing at -O1 or higher
-                            },
-                        );
-                        block_pc += op.size();
-                        block_pos += 1;
-                    }
-                    [push @ PUSH1(label), jump @ (JUMP | JUMPI), ..] => {
-                        // Static unconditional/conditional branch:
-                        let label = usize::from(*label);
-                        emit(block_pc, Some(push), vec![]);
-                        emit(
-                            block_pc,
-                            Some(jump),
-                            match jump {
-                                JUMP => self.compile_static_jump(label),
-                                JUMPI => self.compile_static_jumpi(label, &block.succ),
-                                _ => unreachable!("impossible match"),
-                            },
-                        );
-                        block_pc += push.size() + jump.size();
-                        block_pos += 2;
-                        emitted_jump = true;
-                    }
-                    [push @ PUSHn(_, label, _), jump @ (JUMP | JUMPI), ..] => {
-                        // Static unconditional/conditional branch:
-                        let label = label.as_usize();
-                        emit(block_pc, Some(push), vec![]);
-                        emit(
-                            block_pc,
-                            Some(jump),
-                            match jump {
-                                JUMP => self.compile_static_jump(label),
-                                JUMPI => self.compile_static_jumpi(label, &block.succ),
-                                _ => unreachable!("impossible match"),
-                            },
-                        );
-                        block_pc += push.size() + jump.size();
-                        block_pos += 2;
-                        emitted_jump = true;
-                    }
-                    [jump @ JUMP, ..] => {
-                        // Dynamic unconditional branch:
-                        emit(block_pc, Some(jump), self.compile_dynamic_jump());
-                        block_pc += jump.size();
-                        block_pos += 1;
-                        emitted_jump = true;
-                    }
-                    [jump @ JUMPI, ..] => {
-                        // Dynamic conditional branch:
-                        emit(
-                            block_pc,
-                            Some(jump),
-                            self.compile_dynamic_jumpi(&block.succ),
-                        );
-                        block_pc += jump.size();
-                        block_pos += 1;
-                        emitted_jump = true;
-                    }
-                    [op, ..] => {
-                        let operands = encode_operands(op);
-                        if !operands.is_empty() {
-                            emit(block_pc, Some(op), operands);
-                        }
-                        let call = self.compile_operator(op);
-                        emit(block_pc, Some(op), vec![call]);
-                        block_pc += op.size();
-                        block_pos += 1;
-                        if op == &RETURN {
-                            emit(block_pc, Some(op), vec![Instruction::Return]);
-                        }
-                    }
-                    [] => unreachable!("impossible match"),
-                }
-            }
-
-            if !emitted_jump && !block.succ.contains(&Edge::Exit) {
-                assert_eq!(block.succ.len(), 1);
-                match block.succ.iter().next() {
-                    Some(Edge::Static(succ)) => {
-                        // Fall through to the next block:
-                        emit(block_pc, None, vec![self.compile_jump_to_block(*succ)]);
-                    }
-                    _ => unreachable!("nonstatic successor"),
-                }
-            }
-
-            emit(block_pc, None, vec![Instruction::End]);
-
-            let func_id = self.emit_function(Some(block_id), block_wasm);
-            if block.label == 0 {
-                self.evm_exec_function = func_id
-            }
-        }
-    }
-
-    /// Compiles a static unconditional branch (`PUSH target; JUMP`).
-    fn compile_static_jump(&self, target: Label) -> Vec<Instruction> {
-        vec![
-            self.compile_operator(&Opcode::JUMP), // TODO: omit with --fno-gas-accounting
-            self.compile_jump_to_block(target),
-        ]
-    }
-
-    /// Compiles a dynamic unconditional branch (`...; JUMP`).
-    fn compile_dynamic_jump(&self) -> Vec<Instruction> {
-        use Instruction::*;
-        vec![
-            self.compile_operator(&Opcode::JUMP), // TODO: omit with --fno-gas-accounting
-            Call(self.evm_pop_function),
-            I32Const(TABLE_OFFSET),
-            I32Add,
-            CallIndirect(self.function_type, 0),
-        ]
-    }
-
-    /// Compiles a static conditional branch (`PUSH target; JUMPI`).
-    fn compile_static_jumpi(&self, target: Label, succ: &BTreeSet<Edge>) -> Vec<Instruction> {
-        assert!(succ
-            .iter()
-            .all(|e| matches!(e, Edge::Static(_) /*| Edge::Exit*/)));
-
-        let else_branch = succ.iter().find(|e| {
-            matches!(e, Edge::Static(label) if *label != target) /*|| matches!(e, Edge::Exit)*/
-        }); // FIXME
-
-        use Instruction::*;
-        vec![
-            self.compile_operator(&Opcode::JUMPI),
-            If(BlockType::NoResult),
-            self.compile_jump_to_block(target),
-            Else,
-            match else_branch {
-                Some(Edge::Static(target)) => self.compile_jump_to_block(*target), // JUMPI has static successor branch
-                Some(Edge::Exit) => Instruction::Return,
-                _ => unreachable!("invalid preconditions"),
-            },
-            End,
-        ]
-    }
-
-    /// Compiles a dynamic conditional branch (`...; JUMPI`).
-    fn compile_dynamic_jumpi(&self, succ: &BTreeSet<Edge>) -> Vec<Instruction> {
-        assert!(succ.iter().any(|e| matches!(e, Edge::Dynamic))); // then branch
-        assert!(succ
-            .iter()
-            .any(|e| matches!(e, Edge::Static(_) /*| Edge::Exit*/))); // else branch
-
-        let else_branch = succ
-            .iter()
-            .find(|e| matches!(e, Edge::Static(_) /*| Edge::Exit*/));
-
-        use Instruction::*;
-        vec![
-            Call(self.evm_pop_function),
-            SetLocal(0),
-            self.compile_operator(&Opcode::JUMPI),
-            If(BlockType::NoResult),
-            GetLocal(0),
-            I32Const(TABLE_OFFSET),
-            I32Add,
-            CallIndirect(self.function_type, 0),
-            Else,
-            match else_branch {
-                Some(Edge::Static(target)) => self.compile_jump_to_block(*target), // JUMPI has static successor branch
-                Some(Edge::Exit) => Instruction::Return,
-                _ => unreachable!("invalid preconditions"),
-            },
-            End,
-        ]
-    }
-
-    /// Compiles the transfer of control flow to another block.
-    fn compile_jump_to_block(&self, target: Label) -> Instruction {
-        let jump_idx = self.jump_table.get(&target).unwrap(); // FIXME?
-        Instruction::Call(*jump_idx)
-    }
-
-    fn make_jump_table(&mut self, input_cfg: &CFGProgram) -> HashMap<Label, FunctionIndex> {
-        let mut result: HashMap<Label, FunctionIndex> = HashMap::new();
-        let base_id = self.emit_function(None, vec![]); // a dummy function
-        for (block_num, block) in input_cfg.0.values().enumerate() {
-            let jump_idx = (base_id as usize + block_num + 1).try_into().unwrap();
-            result.insert(block.label, jump_idx);
-        }
-        result
+        let func_id = self.emit_function(Some("_evm_exec".to_string()), wasm);
+        self.evm_exec_function = func_id;
     }
 
     /// Compiles the invocation of an EVM operator (operands must be already pushed).
@@ -521,20 +575,14 @@ impl Compiler {
     }
 }
 
-fn make_block_id(block: &Block) -> String {
-    match block.label {
-        0 => "_evm_exec".to_string(),
-        pc => format!("_{:04x}", pc),
-    }
-}
-
 fn make_op_table(module: &Module) -> HashMap<Opcode, FunctionIndex> {
     let mut result: HashMap<Opcode, FunctionIndex> = HashMap::new();
     for export in module.export_section().unwrap().entries() {
         match export.internal() {
             &Internal::Function(op_idx) => match export.field() {
                 "_abi_buffer" | "_evm_start" | "_evm_init" | "_evm_call" | "_evm_exec"
-                | "_evm_post_exec" | "_evm_pop_u32" | "_evm_set_pc" | "execute" => {}
+                | "_evm_post_exec" | "_evm_pop_u32" | "_evm_push_u32" | "_evm_burn_gas"
+                | "_evm_set_pc" | "execute" => {}
                 export_sym => match parse_opcode(&export_sym.to_ascii_uppercase()) {
                     None => unreachable!(), // TODO
                     Some(op) => _ = result.insert(op, op_idx),
@@ -555,19 +603,6 @@ fn find_runtime_function(module: &Module, name: &str) -> Option<FunctionIndex> {
                 }
             }
             _ => continue,
-        }
-    }
-    None // not found
-}
-
-fn find_runtime_function_type(module: &Module) -> Option<TypeIndex> {
-    for (type_id, r#type) in module.type_section().unwrap().types().iter().enumerate() {
-        match r#type {
-            Type::Function(function_type) => {
-                if function_type.params().is_empty() && function_type.results().is_empty() {
-                    return Some(type_id.try_into().unwrap());
-                }
-            }
         }
     }
     None // not found

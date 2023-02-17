@@ -35,9 +35,9 @@ struct Options {
     #[clap(value_name = "ID", long, value_parser, default_value = "mainnet")]
     chain_id: String,
 
-    /// Enable debugging
-    #[clap(short = 'd', long, value_parser)]
-    debug: bool,
+    /// Debug files base path
+    #[clap(value_name = "DEBUG_DIR", short = 'd', long, value_parser)]
+    debug_folder: Option<PathBuf>,
 
     /// The input format
     #[clap(short = 'f', long, value_parser, default_value = "auto")]
@@ -90,9 +90,6 @@ macro_rules! abort {
 
 fn main() -> impl std::process::Termination {
     let options = Options::parse_from(wild::args());
-    if options.debug {
-        eprintln!("{:?}", options);
-    }
 
     let input_path = options.input.as_path();
     let input_ext = input_path.extension().and_then(OsStr::to_str);
@@ -142,9 +139,6 @@ fn main() -> impl std::process::Termination {
             ),
         },
     };
-    if options.debug {
-        eprintln!("{:?}", input_program.0);
-    }
 
     let input_abi = match input_format {
         InputFormat::Auto | InputFormat::Bin => None,
@@ -187,12 +181,12 @@ fn main() -> impl std::process::Termination {
         &input_program,
         input_abi,
         runtime_library,
-        CompilerConfig {
-            debug: options.debug,
-            optimize_level: 0, // TODO: -O{0,1,2}
-            gas_accounting: !options.no_gas_accounting,
-            program_counter: !options.no_program_counter,
-            chain_id: match options.chain_id.as_str() {
+        CompilerConfig::new(
+            options.debug_folder,
+            0, // TODO: -O{0,1,2}
+            !options.no_gas_accounting,
+            !options.no_program_counter,
+            match options.chain_id.as_str() {
                 "mainnet" => 1313161554,
                 "testnet" => 1313161555,
                 "betanet" => 1313161556,
@@ -201,11 +195,8 @@ fn main() -> impl std::process::Termination {
                     Err(err) => abort!("Could not parse `{}': {}", s, err),
                 },
             },
-        },
+        ),
     );
-    if options.debug {
-        eprintln!("{:?}", output_program); // TODO
-    }
 
     output_program
         .serialize(&mut output)
