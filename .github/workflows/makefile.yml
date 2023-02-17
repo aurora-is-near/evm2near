@@ -13,9 +13,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    
-    - name: Install wasm tools
-      run: sudo apt-get install -y wabt
+
+    - name: Install solidity & wasm tools
+      run: |
+        sudo add-apt-repository ppa:ethereum/ethereum
+        sudo apt-get update
+        sudo apt-get install -y wabt solc
 
     - name: Add wasi target
       run: rustup target add wasm32-wasi
@@ -28,9 +31,6 @@ jobs:
       
     - name: Build
       run: make
-      
-    - name: Install solc
-      run: sudo snap install solc
 
     - name: Compile const
       run: ./evm2near test/const.sol -o const.wasm -b wasi
