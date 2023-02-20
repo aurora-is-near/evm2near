@@ -21,29 +21,26 @@ pub unsafe fn _evm_init(_table_offset: u32, chain_id: u64, balance: u64) {
     {
         let mut args = std::env::args();
 
-        // Remove fluff from the command-line arguments:
+        let wasm_file = args.next().unwrap();
+        assert!(wasm_file.ends_with(".wasm") || wasm_file.ends_with(".wasi"));
+
         let mut arg = args.next();
-        let mut arg_pos = 0;
         loop {
             match &arg {
                 None => break, // no more arguments
                 Some(s) => {
-                    if arg_pos == 0 && (s.ends_with(".wasm") || s.ends_with(".wasi")) {
-                        // consume the program name
-                    } else {
-                        match s.as_str() {
-                            "--" => {
-                                arg = args.next(); // start of actual arguments
-                                break;
-                            }
-                            "--func" | "--invoke" => _ = args.next(), // skip interpreter options
-                            _ => break,                               // start of actual arguments
+                    match s.as_str() {
+                        "--trace" => {
+                            EVM.trace_level = args
+                                .next()
+                                .and_then(|level| level.parse::<u8>().ok())
+                                .expect("trace level expected to be 'u8'");
                         }
+                        _ => break, // start of actual arguments
                     }
                 }
             }
             arg = args.next();
-            arg_pos += 1;
         }
 
         ENV.call_data = match arg {
@@ -62,8 +59,6 @@ pub unsafe fn _evm_init(_table_offset: u32, chain_id: u64, balance: u64) {
                 }
             }
         };
-
-        EVM.trace_level = 2; // TODO: look for --trace in args
 
         EVM.call_value = match args.next() {
             None => crate::state::ZERO,
