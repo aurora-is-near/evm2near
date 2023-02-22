@@ -32,6 +32,9 @@ jobs:
     - name: Build
       run: make
 
+    - name: Run unit tests
+      run: make check
+
     - name: Compile const
       run: ./evm2near test/const.sol -o const.wasm -b wasi
 
