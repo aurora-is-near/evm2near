@@ -29,7 +29,7 @@ use relooper::graph::{
 
 use crate::{
     abi::Functions,
-    analyze::{basic_cfg, BasicCfg, Idx, Offs, NodeInfo},
+    analyze::{basic_cfg, BasicCfg, Idx, NodeInfo, Offs},
     config::CompilerConfig,
     encode::encode_push,
 };
@@ -383,7 +383,9 @@ impl Compiler {
                                         curr_idx += 1;
                                         evm_offset += op.size();
                                     }
-                                    [] => {unreachable!()}
+                                    [] => {
+                                        unreachable!()
+                                    }
                                 }
                             }
                         }
