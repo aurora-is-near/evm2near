@@ -29,32 +29,6 @@ impl Display for Idx {
     }
 }
 
-struct BlockStart {
-    start_offs: Offs,
-    start_idx: Idx,
-    is_jumpdest: bool,
-}
-
-impl BlockStart {
-    pub fn new(start_offs: Offs, start_idx: Idx, is_jumpdest: bool) -> BlockStart {
-        BlockStart {
-            start_offs,
-            start_idx,
-            is_jumpdest,
-        }
-    }
-}
-
-impl Debug for BlockStart {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "offs: {}, idx: {}, jumpdest? {}",
-            self.start_offs, self.start_idx, self.is_jumpdest
-        )
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NodeInfo {
     pub is_jumpdest: bool,
@@ -78,6 +52,32 @@ pub struct BasicCfg {
 }
 
 pub fn basic_cfg(program: &Program) -> BasicCfg {
+    struct BlockStart {
+        start_offs: Offs,
+        start_idx: Idx,
+        is_jumpdest: bool,
+    }
+
+    impl BlockStart {
+        pub fn new(start_offs: Offs, start_idx: Idx, is_jumpdest: bool) -> BlockStart {
+            BlockStart {
+                start_offs,
+                start_idx,
+                is_jumpdest,
+            }
+        }
+    }
+
+    impl Debug for BlockStart {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(
+                f,
+                "offs: {}, idx: {}, jumpdest? {}",
+                self.start_offs, self.start_idx, self.is_jumpdest
+            )
+        }
+    }
+
     let mut cfg = Cfg::new(Offs(0));
     let mut node_info: HashMap<Offs, NodeInfo> = Default::default();
     let mut code_ranges: HashMap<Offs, Range<Idx>> = Default::default();
