@@ -35,6 +35,16 @@ struct BlockStart {
     is_jumpdest: bool,
 }
 
+impl BlockStart {
+    pub fn new(offs: Offs, idx: Idx, is_jumpdest: bool) -> BlockStart {
+        BlockStart {
+            offs,
+            idx,
+            is_jumpdest,
+        }
+    }
+}
+
 impl Debug for BlockStart {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -49,6 +59,15 @@ impl Debug for BlockStart {
 pub struct NodeInfo {
     pub is_jumpdest: bool,
     pub is_dynamic: bool,
+}
+
+impl NodeInfo {
+    pub fn new(is_jumpdest: bool, is_dynamic: bool) -> NodeInfo {
+        NodeInfo {
+            is_jumpdest,
+            is_dynamic,
+        }
+    }
 }
 
 #[derive(Debug)]
