@@ -30,16 +30,16 @@ impl Display for Idx {
 }
 
 struct BlockStart {
-    offs: Offs,
-    idx: Idx,
+    start_offs: Offs,
+    start_idx: Idx,
     is_jumpdest: bool,
 }
 
 impl BlockStart {
-    pub fn new(offs: Offs, idx: Idx, is_jumpdest: bool) -> BlockStart {
+    pub fn new(start_offs: Offs, start_idx: Idx, is_jumpdest: bool) -> BlockStart {
         BlockStart {
-            offs,
-            idx,
+            start_offs,
+            start_idx,
             is_jumpdest,
         }
     }
@@ -50,7 +50,7 @@ impl Debug for BlockStart {
         write!(
             f,
             "offs: {}, idx: {}, jumpdest? {}",
-            self.offs, self.idx, self.is_jumpdest
+            self.start_offs, self.start_idx, self.is_jumpdest
         )
     }
 }
@@ -95,8 +95,8 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
         block_start = match op {
             JUMP | JUMPI => {
                 let BlockStart {
-                    offs: start_offs,
-                    idx: start_idx,
+                    start_offs,
+                    start_idx,
                     is_jumpdest,
                 } = block_start.expect("block should be present at any jump opcode");
 
@@ -134,8 +134,8 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
             }
             JUMPDEST => {
                 if let Some(BlockStart {
-                    offs: start_offs,
-                    idx: start_idx,
+                    start_offs,
+                    start_idx,
                     is_jumpdest,
                 }) = block_start
                 {
@@ -152,24 +152,24 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
                 }
 
                 Some(BlockStart {
-                    offs: curr_offs,
-                    idx: curr_idx,
+                    start_offs: curr_offs,
+                    start_idx: curr_idx,
                     is_jumpdest: true,
                 })
             }
             _ => {
                 let bs @ BlockStart {
-                    offs: start_offs,
-                    idx: start_idx,
+                    start_offs,
+                    start_idx,
                     is_jumpdest,
                 } = block_start.unwrap_or(BlockStart {
-                    offs: curr_offs,
-                    idx: curr_idx,
+                    start_offs: curr_offs,
+                    start_idx: curr_idx,
                     is_jumpdest: false,
                 });
 
                 if op.is_halt() {
-                    cfg.add_edge(bs.offs, CfgEdge::Terminal);
+                    cfg.add_edge(bs.start_offs, CfgEdge::Terminal);
                     node_info.insert(
                         start_offs,
                         NodeInfo {
@@ -190,8 +190,8 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
     }
 
     if let Some(BlockStart {
-        offs: start_offs,
-        idx: start_idx,
+        start_offs,
+        start_idx,
         is_jumpdest,
     }) = block_start
     {
