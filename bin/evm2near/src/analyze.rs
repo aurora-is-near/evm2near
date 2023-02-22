@@ -8,6 +8,12 @@ use std::{
     ops::Range,
 };
 
+
+/// This struct represents offset of instruction in EVM bytecode.
+/// Mostly used for easy mapping between generated wasm instruction 
+/// and its EVM image. Also it's a good label for CFG block
+/// because it's unique for each block and provide some extra information
+/// about the block
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Offs(pub usize);
 
