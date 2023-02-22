@@ -378,7 +378,6 @@ impl Compiler {
                                         let call = self.compile_operator(op);
                                         res.push(call);
                                         if op == &Opcode::RETURN {
-                                            //TODO idk
                                             res.push(Instruction::Return);
                                         }
                                         curr_idx += 1;
