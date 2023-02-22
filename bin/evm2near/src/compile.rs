@@ -528,7 +528,9 @@ subgraph cluster_wasm {{ label = \"wasm\"
         self.unfold_cfg(program, &relooped_cfg, &mut wasm, &mut wasm_idx2evm_idx);
         wasm.push(Instruction::End);
 
-        self.evm_wasm_dot_debug(program, &basic_cfg, &relooped_cfg, &wasm, &wasm_idx2evm_idx);
+        if self.config.debug_path.is_some() {
+            self.evm_wasm_dot_debug(program, &basic_cfg, &relooped_cfg, &wasm, &wasm_idx2evm_idx);
+        }
 
         let func_id = self.emit_function(Some("_evm_exec".to_string()), wasm);
         self.evm_exec_function = func_id;
