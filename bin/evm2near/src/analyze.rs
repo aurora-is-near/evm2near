@@ -35,15 +35,6 @@ pub struct NodeInfo {
     pub is_dynamic: bool,
 }
 
-impl NodeInfo {
-    pub fn new(is_jumpdest: bool, is_dynamic: bool) -> NodeInfo {
-        NodeInfo {
-            is_jumpdest,
-            is_dynamic,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct BasicCfg {
     pub cfg: Cfg<Offs>,
@@ -56,26 +47,6 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
         start_offs: Offs,
         start_idx: Idx,
         is_jumpdest: bool,
-    }
-
-    impl BlockStart {
-        pub fn new(start_offs: Offs, start_idx: Idx, is_jumpdest: bool) -> BlockStart {
-            BlockStart {
-                start_offs,
-                start_idx,
-                is_jumpdest,
-            }
-        }
-    }
-
-    impl Debug for BlockStart {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(
-                f,
-                "offs: {}, idx: {}, jumpdest? {}",
-                self.start_offs, self.start_idx, self.is_jumpdest
-            )
-        }
     }
 
     let mut cfg = Cfg::new(Offs(0));
@@ -118,7 +89,13 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
                     }
                     None => true,
                 };
-                node_info.insert(start_offs, NodeInfo::new(is_jumpdest, is_dynamic));
+                node_info.insert(
+                    start_offs,
+                    NodeInfo {
+                        is_jumpdest,
+                        is_dynamic,
+                    },
+                );
                 code_ranges.insert(start_offs, start_idx..next_idx);
                 if is_jumpdest && is_dynamic {
                     cfg.add_node(start_offs);
@@ -135,22 +112,42 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
                 {
                     let edge = CfgEdge::Uncond(curr_offs);
                     cfg.add_edge(start_offs, edge);
-                    node_info.insert(start_offs, NodeInfo::new(is_jumpdest, false));
+                    node_info.insert(
+                        start_offs,
+                        NodeInfo {
+                            is_jumpdest,
+                            is_dynamic: false,
+                        },
+                    );
                     code_ranges.insert(start_offs, start_idx..curr_idx);
                 }
 
-                Some(BlockStart::new(curr_offs, curr_idx, true))
+                Some(BlockStart {
+                    start_offs: curr_offs,
+                    start_idx: curr_idx,
+                    is_jumpdest: true,
+                })
             }
             _ => {
                 let bs @ BlockStart {
                     start_offs,
                     start_idx,
                     is_jumpdest,
-                } = block_start.unwrap_or(BlockStart::new(curr_offs, curr_idx, false));
+                } = block_start.unwrap_or(BlockStart {
+                    start_offs: curr_offs,
+                    start_idx: curr_idx,
+                    is_jumpdest: false,
+                });
 
                 if op.is_halt() {
                     cfg.add_edge(bs.start_offs, CfgEdge::Terminal);
-                    node_info.insert(start_offs, NodeInfo::new(is_jumpdest, false));
+                    node_info.insert(
+                        start_offs,
+                        NodeInfo {
+                            is_jumpdest,
+                            is_dynamic: false,
+                        },
+                    );
                     code_ranges.insert(start_offs, start_idx..next_idx);
                     None
                 } else {
@@ -172,7 +169,7 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
         node_info.insert(
             start_offs,
             NodeInfo {
-                is_jumpdest: is_jumpdest,
+                is_jumpdest,
                 is_dynamic: false,
             },
         );
