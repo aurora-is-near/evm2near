@@ -118,13 +118,7 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
                     }
                     None => true,
                 };
-                node_info.insert(
-                    start_offs,
-                    NodeInfo {
-                        is_jumpdest,
-                        is_dynamic,
-                    },
-                );
+                node_info.insert(start_offs, NodeInfo::new(is_jumpdest, is_dynamic));
                 code_ranges.insert(start_offs, start_idx..next_idx);
                 if is_jumpdest && is_dynamic {
                     cfg.add_node(start_offs);
@@ -141,42 +135,22 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
                 {
                     let edge = CfgEdge::Uncond(curr_offs);
                     cfg.add_edge(start_offs, edge);
-                    node_info.insert(
-                        start_offs,
-                        NodeInfo {
-                            is_jumpdest: is_jumpdest,
-                            is_dynamic: false,
-                        },
-                    );
+                    node_info.insert(start_offs, NodeInfo::new(is_jumpdest, false));
                     code_ranges.insert(start_offs, start_idx..curr_idx);
                 }
 
-                Some(BlockStart {
-                    start_offs: curr_offs,
-                    start_idx: curr_idx,
-                    is_jumpdest: true,
-                })
+                Some(BlockStart::new(curr_offs, curr_idx, true))
             }
             _ => {
                 let bs @ BlockStart {
                     start_offs,
                     start_idx,
                     is_jumpdest,
-                } = block_start.unwrap_or(BlockStart {
-                    start_offs: curr_offs,
-                    start_idx: curr_idx,
-                    is_jumpdest: false,
-                });
+                } = block_start.unwrap_or(BlockStart::new(curr_offs, curr_idx, false));
 
                 if op.is_halt() {
                     cfg.add_edge(bs.start_offs, CfgEdge::Terminal);
-                    node_info.insert(
-                        start_offs,
-                        NodeInfo {
-                            is_jumpdest,
-                            is_dynamic: false,
-                        },
-                    );
+                    node_info.insert(start_offs, NodeInfo::new(is_jumpdest, false));
                     code_ranges.insert(start_offs, start_idx..next_idx);
                     None
                 } else {
