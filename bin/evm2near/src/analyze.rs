@@ -9,16 +9,11 @@ use std::{
 };
 
 /// This struct represents offset of instruction in EVM bytecode.
-/// Mostly used for easy mapping between generated wasm instruction
-/// and its EVM image. Also it's a good label for CFG block
-/// because it's unique for each block and provide some extra information
-/// about the block
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Offs(pub usize);
 
-/// This struct represents the serial number of instruction in EVM bytecode.
-/// Same as Offs struct it is very useful to know this number of instruction
-/// during the debug.
+/// This struct represents the serial number of instruction.
+/// Serial number and offset are two different numbers
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Idx(pub usize);
 
@@ -34,7 +29,6 @@ impl Display for Idx {
     }
 }
 
-// struct BlockStart(Offs, Idx, bool);
 struct BlockStart {
     offs: Offs,
     idx: Idx,
@@ -84,7 +78,7 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
                 let BlockStart {
                     offs: start_offs,
                     idx: start_idx,
-                    is_jumpdest: is_jumpdest,
+                    is_jumpdest,
                 } = block_start.expect("block should be present at any jump opcode");
 
                 let label = match prev_op {
