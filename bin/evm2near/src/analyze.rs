@@ -66,7 +66,7 @@ pub struct BasicCfg {
 
 pub fn basic_cfg(program: &Program) -> BasicCfg {
     let mut cfg = Cfg::new(Offs(0));
-    let mut node_info: HashMap<Offs, NodeInfo> = Default::default(); // label => (is_jumpdest, is_dynamic);
+    let mut node_info: HashMap<Offs, NodeInfo> = Default::default();
     let mut code_ranges: HashMap<Offs, Range<Idx>> = Default::default();
 
     let mut curr_offs = Offs(0);
@@ -84,7 +84,7 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
                 let BlockStart {
                     offs: start_offs,
                     idx: start_idx,
-                    is_jumpdest: is_jmpdest,
+                    is_jumpdest: is_jumpdest,
                 } = block_start.expect("block should be present at any jump opcode");
 
                 let label = match prev_op {
@@ -93,7 +93,7 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
                     Some(_) => None,
                     None => unreachable!(),
                 };
-                let is_dyn = match label {
+                let is_dynamic = match label {
                     Some(l) => {
                         let edge = if op == &JUMP {
                             CfgEdge::Uncond(l)
@@ -108,12 +108,12 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
                 node_info.insert(
                     start_offs,
                     NodeInfo {
-                        is_jumpdest: is_jmpdest,
-                        is_dynamic: is_dyn,
+                        is_jumpdest,
+                        is_dynamic,
                     },
                 );
                 code_ranges.insert(start_offs, start_idx..next_idx);
-                if is_jmpdest && is_dyn {
+                if is_jumpdest && is_dynamic {
                     cfg.add_node(start_offs);
                 }
 
@@ -123,7 +123,7 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
                 if let Some(BlockStart {
                     offs: start_offs,
                     idx: start_idx,
-                    is_jumpdest: is_jmpdest,
+                    is_jumpdest,
                 }) = block_start
                 {
                     let edge = CfgEdge::Uncond(curr_offs);
@@ -131,7 +131,7 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
                     node_info.insert(
                         start_offs,
                         NodeInfo {
-                            is_jumpdest: is_jmpdest,
+                            is_jumpdest: is_jumpdest,
                             is_dynamic: false,
                         },
                     );
@@ -148,7 +148,7 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
                 let bs @ BlockStart {
                     offs: start_offs,
                     idx: start_idx,
-                    is_jumpdest: is_jmpdest,
+                    is_jumpdest,
                 } = block_start.unwrap_or(BlockStart {
                     offs: curr_offs,
                     idx: curr_idx,
@@ -160,7 +160,7 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
                     node_info.insert(
                         start_offs,
                         NodeInfo {
-                            is_jumpdest: is_jmpdest,
+                            is_jumpdest,
                             is_dynamic: false,
                         },
                     );
@@ -179,13 +179,13 @@ pub fn basic_cfg(program: &Program) -> BasicCfg {
     if let Some(BlockStart {
         offs: start_offs,
         idx: start_idx,
-        is_jumpdest: is_jmpdest,
+        is_jumpdest,
     }) = block_start
     {
         node_info.insert(
             start_offs,
             NodeInfo {
-                is_jumpdest: is_jmpdest,
+                is_jumpdest: is_jumpdest,
                 is_dynamic: false,
             },
         );

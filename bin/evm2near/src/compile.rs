@@ -29,7 +29,7 @@ use relooper::graph::{
 
 use crate::{
     abi::Functions,
-    analyze::{basic_cfg, BasicCfg, Idx, NodeInfo, Offs},
+    analyze::{basic_cfg, BasicCfg, Idx, Offs},
     config::CompilerConfig,
     encode::encode_push,
 };
