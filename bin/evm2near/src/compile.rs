@@ -166,7 +166,7 @@ impl Compiler {
 
     /// Emit an empty `_start` function to make all WebAssembly runtimes happy.
     fn emit_wasm_start(self: &mut Compiler) {
-        _ = self.emit_function(Some("_start".to_string()), vec![Instruction::Unreachable]);
+        _ = self.emit_function(Some("_start".to_string()), vec![]);
     }
 
     /// Synthesizes a start function that initializes the EVM state with the
