@@ -383,7 +383,7 @@ impl Compiler {
                                         curr_idx += 1;
                                         evm_offset += op.size();
                                     }
-                                    [] => {}
+                                    [] => {unreachable!()}
                                 }
                             }
                         }
