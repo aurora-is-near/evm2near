@@ -4,4 +4,3 @@
 2) Find optimal order of split and merge in reducing algorithm
      Different orders generate different graphs and different graphs provide different performance (both gas and time)
      of output programs
-3) `TLabel` or `&TLabel` or should we rely on `TLabel` only (giving user possibility to choose between structs/references)?

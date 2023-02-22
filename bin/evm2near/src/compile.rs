@@ -276,12 +276,12 @@ impl Compiler {
                 .code_ranges
                 .get(label)
                 .unwrap_or_else(|| panic!("no code ranges for {}", *label));
-            let &(is_jumpdest, is_dynamic) = basic_cfg.node_info.get(label).unwrap();
+            let &node_info = basic_cfg.node_info.get(label).unwrap();
             let evm_label = EvmBlock::new(*label, code_range.start, code_range.end);
             EvmCfgLabel {
                 cfg_label: evm_label,
-                is_jumpdest,
-                is_dynamic,
+                is_jumpdest: node_info.is_jumpdest,
+                is_dynamic: node_info.is_dynamic,
             }
         });
 
@@ -378,13 +378,14 @@ impl Compiler {
                                         let call = self.compile_operator(op);
                                         res.push(call);
                                         if op == &Opcode::RETURN {
-                                            //TODO idk
                                             res.push(Instruction::Return);
                                         }
                                         curr_idx += 1;
                                         evm_offset += op.size();
                                     }
-                                    [] => {}
+                                    [] => {
+                                        unreachable!()
+                                    }
                                 }
                             }
                         }
@@ -529,7 +530,9 @@ subgraph cluster_wasm {{ label = \"wasm\"
         self.unfold_cfg(program, &relooped_cfg, &mut wasm, &mut wasm_idx2evm_idx);
         wasm.push(Instruction::End);
 
-        self.evm_wasm_dot_debug(program, &basic_cfg, &relooped_cfg, &wasm, &wasm_idx2evm_idx);
+        if self.config.debug_path.is_some() {
+            self.evm_wasm_dot_debug(program, &basic_cfg, &relooped_cfg, &wasm, &wasm_idx2evm_idx);
+        }
 
         let func_id = self.emit_function(Some("_evm_exec".to_string()), wasm);
         self.evm_exec_function = func_id;

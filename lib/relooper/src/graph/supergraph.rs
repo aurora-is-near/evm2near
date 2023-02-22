@@ -147,7 +147,6 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
         // if given node have internal edges ending in its head, it will be seen as incoming supernode, which isn't useful
         incoming.remove(node);
 
-        // TODO hate there is no pattern-match adapters for simple collections, or is there?
         match incoming.len() {
             0 => None,
             1 => Some(MergeInto(incoming.first().unwrap().head)),
@@ -266,7 +265,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
             }
 
             if let Some((_, biggest_splits)) = split_len.last_key_value() {
-                // let split_internal_nodes = biggest_splits.iter().map(|(n, split_for)|); // TODO select by internal node count?
+                // TODO select by internal node count?
                 let split_node = biggest_splits.first().unwrap();
                 let split_for = splits.get(split_node).unwrap();
 
