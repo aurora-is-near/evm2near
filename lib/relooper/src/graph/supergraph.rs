@@ -147,7 +147,6 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
         // if given node have internal edges ending in its head, it will be seen as incoming supernode, which isn't useful
         incoming.remove(node);
 
-        // TODO hate there is no pattern-match adapters for simple collections, or is there?
         match incoming.len() {
             0 => None,
             1 => Some(MergeInto(incoming.first().unwrap().head)),
