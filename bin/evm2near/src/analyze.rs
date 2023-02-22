@@ -19,7 +19,7 @@ pub struct Offs(pub usize);
 /// 0x00  PUSH
 /// 0x03  PUSH
 /// 0x06  ADD
-/// 
+///
 /// Then,  first PUSH will have idx = 0 and offs = 0x00, second idx = 1 and offs = 0x03,
 ///  ADD will have idx = 2 and offs = 0x06
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

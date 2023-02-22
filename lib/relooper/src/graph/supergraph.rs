@@ -315,7 +315,12 @@ mod test {
 
     #[test]
     fn simplest() {
-        let cfg = Cfg::from_vec(0, &[(0, Cond(1, 2)), (1, Uncond(2)), (2, Cond(3, 1))]);
+        let cfg = Cfg::from_edges(
+            0,
+            &vec!((0, Cond(1, 2)), (1, Uncond(2)), (2, Cond(3, 1)))
+                .into_iter()
+                .collect()
+        );
         let reduced = reduce(&cfg);
 
         assert!(test_reduce(cfg, reduced));
@@ -323,14 +328,16 @@ mod test {
 
     #[test]
     fn irreducible() {
-        let cfg = Cfg::from_vec(
+        let cfg = Cfg::from_edges(
             0,
-            &[
+            &vec!(
                 (0, Cond(1, 2)),
                 (1, Uncond(4)),
                 (4, Uncond(2)),
                 (2, Cond(3, 1)),
-            ],
+            )
+            .into_iter()
+            .collect()
         );
         let reduced = reduce(&cfg);
 

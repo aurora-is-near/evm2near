@@ -140,12 +140,6 @@ impl<TLabel: Eq + Hash + Copy> Cfg<TLabel> {
 
         cfg
     }
-
-    #[deprecated]
-    pub fn from_vec(entry: TLabel, edges: &[(TLabel, CfgEdge<TLabel>)]) -> Self {
-        let edges_map: HashMap<TLabel, CfgEdge<TLabel>> = edges.iter().copied().collect();
-        Self::from_edges(entry, &edges_map)
-    }
 }
 
 impl<TLabel: CfgLabel> Cfg<TLabel> {
@@ -166,10 +160,10 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
     }
 
     pub fn strip_unreachable(&mut self) {
-        let nodes: HashSet<TLabel> = self.nodes().into_iter().copied().collect(); // TODO get rid of copies
-        let reachable: HashSet<TLabel> = self.reachable_nodes().into_iter().copied().collect();
+        let nodes: HashSet<&TLabel> = self.nodes().into_iter().collect(); // TODO get rid of copies
+        let reachable: HashSet<&TLabel> = self.reachable_nodes().into_iter().collect();
         for unreachable in nodes.difference(&reachable) {
-            self.out_edges.remove(unreachable);
+            self.to_borrowed().out_edges.remove(*unreachable);
         }
     }
 }
