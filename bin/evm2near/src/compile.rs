@@ -29,7 +29,7 @@ use relooper::graph::{
 
 use crate::{
     abi::Functions,
-    analyze::{basic_cfg, BasicCfg, Idx, Offs},
+    analyze::{basic_cfg, BasicCfg, Idx, Offs, NodeInfo},
     config::CompilerConfig,
     encode::encode_push,
 };
@@ -276,12 +276,12 @@ impl Compiler {
                 .code_ranges
                 .get(label)
                 .unwrap_or_else(|| panic!("no code ranges for {}", *label));
-            let &(is_jumpdest, is_dynamic) = basic_cfg.node_info.get(label).unwrap();
+            let &node_info = basic_cfg.node_info.get(label).unwrap();
             let evm_label = EvmBlock::new(*label, code_range.start, code_range.end);
             EvmCfgLabel {
                 cfg_label: evm_label,
-                is_jumpdest,
-                is_dynamic,
+                is_jumpdest: node_info.is_jumpdest,
+                is_dynamic: node_info.is_dynamic,
             }
         });
 
