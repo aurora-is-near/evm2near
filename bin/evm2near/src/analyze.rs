@@ -17,6 +17,9 @@ use std::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Offs(pub usize);
 
+/// This struct represents the serial number of instruction in EVM bytecode.
+/// Same as Offs struct it is very useful to know this number of instruction 
+/// during the debug.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Idx(pub usize);
 
