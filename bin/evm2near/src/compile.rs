@@ -275,7 +275,7 @@ impl Compiler {
             let code_range = basic_cfg
                 .code_ranges
                 .get(label)
-                .unwrap_or_else(|| panic!("no code ranges for {}", *label));
+                .unwrap_or_else(|| panic!("no code ranges for {}", label));
             let &node_info = basic_cfg.node_info.get(label).unwrap();
             let evm_label = EvmBlock::new(*label, code_range.start, code_range.end);
             EvmCfgLabel {
