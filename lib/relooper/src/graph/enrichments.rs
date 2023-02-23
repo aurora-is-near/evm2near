@@ -60,7 +60,6 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
         }
     }
 
-    //TODO move to enrichments' DomTree constructor
     pub fn domination_tree(
         cfg: &Cfg<TLabel>,
         node_ordering: &NodeOrdering<TLabel>,
