@@ -1,6 +1,6 @@
 use crate::graph::cfg::{CfgEdge::*, CfgLabel};
 use crate::graph::relooper::ReBlock::*;
-use crate::graph::EnrichedCfg;
+use crate::graph::enrichments::EnrichedCfg;
 
 #[derive(Debug)]
 pub struct ReSeq<TLabel: CfgLabel>(pub Vec<ReBlock<TLabel>>);

@@ -1,6 +1,6 @@
 use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel};
 use crate::graph::relooper::{ReBlock, ReSeq};
-use crate::graph::EnrichedCfg;
+use crate::graph::enrichments::EnrichedCfg;
 use std::fmt::Display;
 
 impl<TLabel: CfgLabel + Display> Cfg<TLabel> {
