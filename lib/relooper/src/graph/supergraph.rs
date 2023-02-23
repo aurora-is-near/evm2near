@@ -202,7 +202,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
                 .contained
                 .iter()
                 .map(|&l| (l, *self.cfg.edge(&l)))
-                .filter(|(_l, e)| e.to_vec().into_iter().any(|&to| to == split_snode.head))
+                .filter(|(_l, e)| e.iter().any(|&to| to == split_snode.head))
                 .collect();
 
             for (f, e) in from_split {

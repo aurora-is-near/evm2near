@@ -18,11 +18,20 @@ pub enum CfgEdge<TLabel> {
 }
 
 impl<TLabel> CfgEdge<TLabel> {
-    pub fn to_vec(&self) -> Vec<&TLabel> {
+    pub fn iter(&self) -> CfgEdgeIter<&TLabel> {
         match self {
-            Uncond(u) => vec![u],
-            Cond(cond, fallthrough) => vec![cond, fallthrough],
-            Terminal => vec![],
+            Self::Uncond(u) => CfgEdgeIter {
+                inner: [Some(u), None],
+                index: 0,
+            },
+            Self::Cond(cond, fallthrough) => CfgEdgeIter {
+                inner: [Some(cond), Some(fallthrough)],
+                index: 0,
+            },
+            Self::Terminal => CfgEdgeIter {
+                inner: [None, None],
+                index: 0,
+            },
         }
     }
 
@@ -31,6 +40,50 @@ impl<TLabel> CfgEdge<TLabel> {
             Uncond(t) => Uncond(mapping(t)),
             Cond(t, f) => Cond(mapping(t), mapping(f)),
             Terminal => Terminal,
+        }
+    }
+}
+
+/// A struct which enables iterating over the nodes that make up a `CfgEdge`.
+/// Internally it stores the data as a 2-array as opposed to a `Vec` to avoid heap allocation.
+#[derive(Debug, Clone, Copy)]
+pub struct CfgEdgeIter<T> {
+    inner: [Option<T>; 2],
+    index: usize,
+}
+
+impl<T> Iterator for CfgEdgeIter<T> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= 2 {
+            return None;
+        }
+        let result = self.inner[self.index].take();
+        self.index += 1;
+        result
+    }
+}
+
+impl<T> IntoIterator for CfgEdge<T> {
+    type Item = T;
+
+    type IntoIter = CfgEdgeIter<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            Self::Uncond(u) => CfgEdgeIter {
+                inner: [Some(u), None],
+                index: 0,
+            },
+            Self::Cond(cond, fallthrough) => CfgEdgeIter {
+                inner: [Some(cond), Some(fallthrough)],
+                index: 0,
+            },
+            Self::Terminal => CfgEdgeIter {
+                inner: [None, None],
+                index: 0,
+            },
         }
     }
 }
@@ -83,24 +136,20 @@ impl<T: Eq + Hash + Clone> Cfg<T> {
         self.out_edges
             .get(label)
             .into_iter()
-            .flat_map(|edge| edge.to_vec())
+            .flat_map(|edge| edge.iter())
             .collect()
     }
 
     pub fn add_edge(&mut self, from: T, edge: CfgEdge<T>) {
-        let nodes = self.nodes();
-        // todo unncecessary collect
-        for n in edge
-            .to_vec()
-            .into_iter()
-            .filter(|n| !nodes.contains(n))
-            .collect::<Vec<_>>()
-        {
-            // todo clone
-            self.add_node(n.clone());
+        let out_edges = &mut self.out_edges;
+        for n in edge.iter() {
+            if !out_edges.contains_key(n) {
+                // The clone here is required because we use `edge` again in the insert below
+                out_edges.insert(n.clone(), Terminal);
+            }
         }
 
-        let prev_edge = self.out_edges.insert(from, edge);
+        let prev_edge = out_edges.insert(from, edge);
         match prev_edge {
             None | Some(Terminal) => {}
             _ => panic!("adding edge over already present one"),
@@ -147,7 +196,7 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
         let mut in_edges: HashMap<TLabel, HashSet<TLabel>> = HashMap::default();
 
         for (&from, to_edge) in &self.out_edges {
-            for &to in to_edge.to_vec() {
+            for &to in to_edge.iter() {
                 in_edges.entry(to).or_default().insert(from);
             }
         }
@@ -164,6 +213,37 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
         let reachable: HashSet<TLabel> = self.reachable_nodes().into_iter().copied().collect();
         for unreachable in nodes.difference(&reachable) {
             self.out_edges.remove(unreachable);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cfg_edge_iter() {
+        test_cfg_edge_iter_inner(Vec::new());
+        test_cfg_edge_iter_inner(vec![7]);
+        test_cfg_edge_iter_inner(vec![123, 456]);
+    }
+
+    fn test_cfg_edge_iter_inner(input: Vec<usize>) {
+        let edge = cfg_edge_from_slice(&input);
+
+        let reconstructed: Vec<usize> = edge.iter().copied().collect();
+        assert_eq!(input, reconstructed);
+
+        let reconstructed: Vec<usize> = edge.into_iter().collect();
+        assert_eq!(input, reconstructed);
+    }
+
+    fn cfg_edge_from_slice<T: Copy>(values: &[T]) -> CfgEdge<T> {
+        match values {
+            [] => CfgEdge::Terminal,
+            [x] => CfgEdge::Uncond(*x),
+            [x, y] => CfgEdge::Cond(*x, *y),
+            _ => panic!("cfg_edge_from_slice: Slice must have two or fewer values!"),
         }
     }
 }
