@@ -1,10 +1,8 @@
-use crate::graph::cfg::{Cfg, CfgLabel, CfgEdge};
+use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel};
+use crate::traversal::graph::bfs::Bfs;
 use crate::traversal::graph::dfs::{dfs_post, Dfs};
 use std::collections::{HashMap, HashSet, VecDeque};
-use crate::traversal::graph::bfs::Bfs;
 use std::vec::Vec;
-
-
 
 pub struct EnrichedCfg<TLabel: CfgLabel> {
     pub cfg: Cfg<TLabel>,
@@ -119,7 +117,6 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
         }
     }
 }
-
 
 #[derive(Default)]
 /// Node A dominate node B if you can't reach B without visiting A. For example, entry node dominates all nodes.
