@@ -140,6 +140,13 @@ impl<T: Eq + Hash + Clone> Cfg<T> {
             .collect()
     }
 
+    fn check_previous_edge(edge: Option<CfgEdge<T>>) {
+        match edge {
+            None | Some(Terminal) => {}
+            _ => panic!("adding edge over already present one"),
+        }
+    }
+
     pub fn add_edge(&mut self, from: T, edge: CfgEdge<T>) {
         let out_edges = &mut self.out_edges;
         for n in edge.iter() {
@@ -150,14 +157,12 @@ impl<T: Eq + Hash + Clone> Cfg<T> {
         }
 
         let prev_edge = out_edges.insert(from, edge);
-        match prev_edge {
-            None | Some(Terminal) => {}
-            _ => panic!("adding edge over already present one"),
-        }
+        Self::check_previous_edge(prev_edge);
     }
 
     pub fn add_node(&mut self, n: T) {
-        self.out_edges.insert(n, Terminal);
+        let prev_edge = self.out_edges.insert(n, Terminal);
+        Self::check_previous_edge(prev_edge);
     }
 
     pub fn remove_edge(&mut self, from: T, edge: CfgEdge<T>) {
@@ -209,14 +214,10 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
     }
 
     pub fn strip_unreachable(&mut self) {
-        let unreachable_nodes: HashSet<TLabel> = self
-            .nodes()
-            .difference(&self.reachable_nodes())
-            .into_iter()
-            .map(|n| **n)
-            .collect();
-        for unreachable in unreachable_nodes {
-            self.out_edges.remove(&unreachable);
+        let nodes: HashSet<TLabel> = self.nodes().into_iter().copied().collect(); // TODO get rid of copies
+        let reachable: HashSet<TLabel> = self.reachable_nodes().into_iter().copied().collect();
+        for unreachable in nodes.difference(&reachable) {
+            self.out_edges.remove(unreachable);
         }
     }
 }
