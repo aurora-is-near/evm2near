@@ -2,7 +2,7 @@ name: Compile CI
 
 on:
   push:
-    branches: [ "master", "*" ]
+    branches: [ "master" ]
   pull_request:
     branches: [ "master", "*" ]
 
@@ -27,7 +27,7 @@ jobs:
       run: rustup target add wasm32-unknown-unknown
       
     - name: Install dependecies
-      run: cargo build || true
+      run:  cargo fetch
       
     - name: Build
       run: make
@@ -35,11 +35,23 @@ jobs:
     - name: Run unit tests
       run: make check
 
+    - name: Install dependencies for lints
+      run: |
+        rustup component add rustfmt --toolchain nightly-2022-09-07-x86_64-unknown-linux-gnu
+        rustup component add clippy --toolchain nightly-2022-09-07-x86_64-unknown-linux-gnu
+
+    - name: Lints
+      run: |
+        cargo fmt --check
+        cargo clippy --workspace -- -D warnings
+
     - name: Compile const
       run: ./evm2near test/const.sol -o const.wasm -b wasi
 
-    - name: Compile calc
-      run: ./evm2near test/calc.sol -o calc.wasm -b wasi
-      
-    - name: Compile bench
-      run: ./evm2near test/bench.sol -o bench.wasm -b wasi
+    - name: Install Wasmtime & Run tests
+      run: |
+        curl https://wasmtime.dev/install.sh -sSf | bash
+        export WASMTIME_HOME="$HOME/.wasmtime"
+        export PATH="$WASMTIME_HOME/bin:$PATH"SELENIUM_JAR_PATH=/usr/share/java/selenium-server.jar
+
+        bash -c "python3 tools/tests.py"

@@ -59,7 +59,7 @@ evmlib.wasi: lib/evmlib/Cargo.toml $(EVMLIB_FILES) Makefile
 	ln -sf target/wasm32-wasi/release/evmlib.wasm $@
 
 check:
-	$(CARGO) test -- --nocapture --test-threads=1 --color=always
+	$(CARGO) test --workspace -- --nocapture --test-threads=1 --color=always
 
 clean:
 	$(CARGO) clean
