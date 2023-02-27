@@ -214,10 +214,14 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
     }
 
     pub fn strip_unreachable(&mut self) {
-        let nodes: HashSet<TLabel> = self.nodes().into_iter().copied().collect(); // TODO get rid of copies
-        let reachable: HashSet<TLabel> = self.reachable_nodes().into_iter().copied().collect();
-        for unreachable in nodes.difference(&reachable) {
-            self.out_edges.remove(unreachable);
+        let unreachable_nodes: HashSet<TLabel> = self
+            .nodes()
+            .difference(&self.reachable_nodes())
+            .into_iter()
+            .map(|n| **n)
+            .collect();
+        for unreachable in unreachable_nodes {
+            self.out_edges.remove(&unreachable);
         }
     }
 }
