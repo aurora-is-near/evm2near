@@ -17,9 +17,7 @@ use parity_wasm::{
     },
 };
 use relooper::graph::{
-    caterpillar::EvmCfgLabel,
-    relooper::{reloop, ReBlock},
-    supergraph::reduce,
+    caterpillar::EvmCfgLabel, enrichments::EnrichedCfg, relooper::ReBlock, supergraph::reduce,
 };
 use relooper::graph::{
     caterpillar::{unfold_dyn_edges, CaterpillarLabel},
@@ -286,9 +284,25 @@ impl Compiler {
         });
 
         let mut dynamic_materialized = unfold_dyn_edges(&cfg);
+        self.debug("dynamic_materialized.dot", || {
+            format!("digraph {{{}}}", dynamic_materialized.cfg_to_dot("dyn"))
+        });
         dynamic_materialized.strip_unreachable();
+        self.debug("stripped.dot", || {
+            format!(
+                "digraph {{{}}}",
+                dynamic_materialized.cfg_to_dot("stripped")
+            )
+        });
         let reduced = reduce(&dynamic_materialized);
-        reloop(&reduced)
+        self.debug("reduced.dot", || {
+            format!("digraph {{{}}}", dynamic_materialized.cfg_to_dot("reduced"))
+        });
+        let enriched = EnrichedCfg::new(reduced);
+        self.debug("enriched.dot", || {
+            format!("digraph {{{}}}", enriched.cfg_to_dot("enriched"))
+        });
+        enriched.reloop()
     }
 
     //TODO self is only used for `evm_pop_function`

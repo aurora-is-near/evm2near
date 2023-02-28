@@ -147,11 +147,3 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
         self.do_tree(self.cfg.entry, &Vec::new())
     }
 }
-
-use crate::graph::cfg::Cfg;
-use std::fmt::Debug;
-
-pub fn reloop<TLabel: CfgLabel + Debug>(cfg: &Cfg<TLabel>) -> ReSeq<TLabel> {
-    let enriched: EnrichedCfg<TLabel> = EnrichedCfg::new(cfg.clone());
-    enriched.reloop()
-}
