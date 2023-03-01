@@ -1,6 +1,6 @@
 use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel};
 use crate::traversal::graph::bfs::Bfs;
-use crate::traversal::graph::dfs::{dfs_post_hashable, Dfs};
+use crate::traversal::graph::dfs::{Dfs, DfsPost, DfsPostReverseInstantiator};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::vec::Vec;
 
@@ -171,7 +171,8 @@ pub struct NodeOrdering<TLabel: CfgLabel> {
 
 impl<TLabel: CfgLabel> NodeOrdering<TLabel> {
     pub fn new(cfg: &Cfg<TLabel>, entry: TLabel) -> Self {
-        let vec = dfs_post_hashable(entry, |x| cfg.children(x).into_iter().copied());
+        let vec =
+            DfsPost::<_, _, HashSet<_>>::reverse(entry, |x| cfg.children(x).into_iter().copied());
         let idx: HashMap<TLabel, usize> = vec.iter().enumerate().map(|(i, &n)| (n, i)).collect();
         Self { vec, idx }
     }

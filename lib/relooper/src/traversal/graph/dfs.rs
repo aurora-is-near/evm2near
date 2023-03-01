@@ -57,7 +57,6 @@ where
 pub trait Contains<T> {
     fn contains(&self, item: &T) -> bool;
     fn insert(&mut self, item: T);
-    fn default() -> Self;
 }
 
 impl<T> Contains<T> for HashSet<T>
@@ -70,10 +69,6 @@ where
 
     fn insert(&mut self, item: T) {
         HashSet::insert(self, item);
-    }
-
-    fn default() -> Self {
-        HashSet::new()
     }
 }
 
@@ -88,10 +83,6 @@ where
     fn insert(&mut self, item: T) {
         BTreeSet::insert(self, item);
     }
-
-    fn default() -> Self {
-        BTreeSet::new()
-    }
 }
 
 #[derive(Debug)]
@@ -100,25 +91,6 @@ pub struct DfsPost<T, ChFun, TContains> {
     queued: TContains,
     stack: Vec<VecDeque<T>>,
     get_children: ChFun,
-}
-
-impl<T, ChIt, ChFun, TContains> DfsPost<T, ChFun, TContains>
-where
-    T: Eq + Copy,
-    ChIt: IntoIterator<Item = T>,
-    ChFun: FnMut(&T) -> ChIt,
-    TContains: Contains<T>,
-{
-    pub fn new(start: T, get_children: ChFun) -> Self {
-        let visited = TContains::default();
-        let queued = TContains::default();
-        Self {
-            visited,
-            queued,
-            stack: vec![VecDeque::from(vec![start])],
-            get_children,
-        }
-    }
 }
 
 impl<T, ChIt, ChFun, TContains> Iterator for DfsPost<T, ChFun, TContains>
@@ -165,33 +137,78 @@ where
     }
 }
 
-pub fn dfs_post_hashable<T, ChIt, ChFun>(start: T, get_children: ChFun) -> Vec<T>
-where
-    T: Hash + Eq + Copy,
-    ChIt: IntoIterator<Item = T>,
-    ChFun: FnMut(&T) -> ChIt,
-{
-    let mut vec = DfsPost::<T, ChFun, HashSet<T>>::new(start, get_children).collect::<Vec<_>>();
-    vec.reverse();
-    vec
+pub trait DfsPostInstantiator<T, ChFun> {
+    type Contains: Contains<T>;
+    fn new(start: T, get_children: ChFun) -> DfsPost<T, ChFun, Self::Contains>;
 }
 
-pub fn dfs_post_comparable<T, ChIt, ChFun>(start: T, get_children: ChFun) -> Vec<T>
+pub trait DfsPostReverseInstantiator<T, ChFun, ChIt>: DfsPostInstantiator<T, ChFun>
 where
-    T: Ord + Eq + Copy,
+    T: Eq + Copy,
     ChIt: IntoIterator<Item = T>,
     ChFun: FnMut(&T) -> ChIt,
 {
-    let mut vec = DfsPost::<T, ChFun, BTreeSet<T>>::new(start, get_children).collect::<Vec<_>>();
-    vec.reverse();
-    vec
+    fn reverse(start: T, get_children: ChFun) -> Vec<T> {
+        let mut vec: Vec<_> = Self::new(start, get_children).collect();
+        vec.reverse();
+        vec
+    }
+}
+
+impl<T, ChIt, ChFun> DfsPostInstantiator<T, ChFun> for DfsPost<T, ChFun, HashSet<T>>
+where
+    T: Eq + Copy + Hash,
+    ChIt: IntoIterator<Item = T>,
+    ChFun: FnMut(&T) -> ChIt,
+{
+    type Contains = HashSet<T>;
+
+    fn new(start: T, get_children: ChFun) -> Self {
+        let visited = HashSet::default();
+        let queued = HashSet::default();
+        Self {
+            visited,
+            queued,
+            stack: vec![VecDeque::from(vec![start])],
+            get_children,
+        }
+    }
+}
+
+impl<T, ChIt, ChFun> DfsPostInstantiator<T, ChFun> for DfsPost<T, ChFun, BTreeSet<T>>
+where
+    T: Eq + Copy + Ord,
+    ChIt: IntoIterator<Item = T>,
+    ChFun: FnMut(&T) -> ChIt,
+{
+    type Contains = BTreeSet<T>;
+
+    fn new(start: T, get_children: ChFun) -> Self {
+        let visited = BTreeSet::default();
+        let queued = BTreeSet::default();
+        Self {
+            visited,
+            queued,
+            stack: vec![VecDeque::from(vec![start])],
+            get_children,
+        }
+    }
+}
+
+impl<T, ChIt, ChFun, Inst: DfsPostInstantiator<T, ChFun>> DfsPostReverseInstantiator<T, ChFun, ChIt>
+    for Inst
+where
+    T: Eq + Copy,
+    ChIt: IntoIterator<Item = T>,
+    ChFun: FnMut(&T) -> ChIt,
+{
 }
 
 #[cfg(test)]
 mod test {
-    use std::collections::HashMap;
+    use std::collections::{BTreeSet, HashMap, HashSet};
 
-    use super::dfs_post_hashable;
+    use crate::traversal::graph::dfs::{DfsPost, DfsPostReverseInstantiator};
 
     #[test]
     fn test_simple() {
@@ -209,11 +226,18 @@ mod test {
             (10, vec![]),
         ]);
 
-        let dfs_post: Vec<i32> = dfs_post_hashable(&0, |x| map.get(x).unwrap())
-            .into_iter()
-            .copied()
-            .collect();
-        assert_eq!(dfs_post, vec![0, 2, 8, 1, 4, 3, 6, 5, 7, 9, 10]);
+        let dfs_post_hash: Vec<i32> =
+            DfsPost::<_, _, HashSet<_>>::reverse(&0, |x| map.get(x).unwrap())
+                .into_iter()
+                .copied()
+                .collect();
+        let dfs_post_ord: Vec<i32> =
+            DfsPost::<_, _, BTreeSet<_>>::reverse(&0, |x| map.get(x).unwrap())
+                .into_iter()
+                .copied()
+                .collect();
+        assert_eq!(dfs_post_hash, dfs_post_ord);
+        assert_eq!(dfs_post_hash, vec![0, 2, 8, 1, 4, 3, 6, 5, 7, 9, 10]);
     }
 
     #[test]
@@ -228,12 +252,19 @@ mod test {
             (6, vec![]),
         ]);
 
-        let dfs_post: Vec<i32> = dfs_post_hashable(&0, |x| map.get(x).unwrap())
-            .into_iter()
-            .copied()
-            .collect();
+        let dfs_post_hash: Vec<i32> =
+            DfsPost::<_, _, HashSet<_>>::reverse(&0, |x| map.get(x).unwrap())
+                .into_iter()
+                .copied()
+                .collect();
+        let dfs_post_ord: Vec<i32> =
+            DfsPost::<_, _, BTreeSet<_>>::reverse(&0, |x| map.get(x).unwrap())
+                .into_iter()
+                .copied()
+                .collect();
 
-        assert_eq!(dfs_post, vec![0, 2, 3, 5, 4, 1, 6]);
+        assert_eq!(dfs_post_hash, dfs_post_ord);
+        assert_eq!(dfs_post_hash, vec![0, 2, 3, 5, 4, 1, 6]);
     }
 
     #[test]
@@ -248,12 +279,19 @@ mod test {
             (6, vec![]),
         ]);
 
-        let dfs_post: Vec<i32> = dfs_post_hashable(&0, |x| map.get(x).unwrap())
-            .into_iter()
-            .copied()
-            .collect();
+        let dfs_post_hash: Vec<i32> =
+            DfsPost::<_, _, HashSet<_>>::reverse(&0, |x| map.get(x).unwrap())
+                .into_iter()
+                .copied()
+                .collect();
+        let dfs_post_ord: Vec<i32> =
+            DfsPost::<_, _, BTreeSet<_>>::reverse(&0, |x| map.get(x).unwrap())
+                .into_iter()
+                .copied()
+                .collect();
 
-        assert_eq!(dfs_post, vec![0, 2, 3, 4, 5, 1, 6]);
+        assert_eq!(dfs_post_hash, dfs_post_ord);
+        assert_eq!(dfs_post_hash, vec![0, 2, 3, 4, 5, 1, 6]);
     }
 
     #[test]
@@ -266,11 +304,19 @@ mod test {
             (4, vec![]),
         ]);
 
-        let dfs_post: Vec<i32> = dfs_post_hashable(&0, |x| map.get(x).unwrap())
-            .into_iter()
-            .copied()
-            .collect();
+        let dfs_post_hash: Vec<i32> =
+            DfsPost::<_, _, HashSet<_>>::reverse(&0, |x| map.get(x).unwrap())
+                .into_iter()
+                .copied()
+                .collect();
 
-        assert_eq!(dfs_post, vec![0, 1, 3, 2, 4]);
+        let dfs_post_ord: Vec<i32> =
+            DfsPost::<_, _, BTreeSet<_>>::reverse(&0, |x| map.get(x).unwrap())
+                .into_iter()
+                .copied()
+                .collect();
+
+        assert_eq!(dfs_post_hash, dfs_post_ord);
+        assert_eq!(dfs_post_hash, vec![0, 1, 3, 2, 4]);
     }
 }
