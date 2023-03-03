@@ -32,8 +32,14 @@ jobs:
     - name: Build
       run: make
 
+  unit-tests:
+    needs: build
+
     - name: Run unit tests
       run: make check
+
+  lints:
+    needs: build
 
     - name: Install dependencies for lints
       run: |
@@ -45,8 +51,10 @@ jobs:
         cargo fmt --check
         cargo clippy --workspace -- -D warnings
 
-    - name: Compile const
-      run: ./evm2near test/const.sol -o const.wasm -b wasi
+  
+
+  tests:
+    needs: build
 
     - name: Install Wasmtime & Run tests
       run: |
@@ -56,6 +64,9 @@ jobs:
 
         bash -c "python3 tools/tests.py"
         
+  benchmark:
+    needs: build
+
     - name: Run benchmark
       run: python3 tools/bench.py
 
