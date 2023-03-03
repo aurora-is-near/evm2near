@@ -55,3 +55,15 @@ jobs:
         export PATH="$WASMTIME_HOME/bin:$PATH"SELENIUM_JAR_PATH=/usr/share/java/selenium-server.jar
 
         bash -c "python3 tools/tests.py"
+        
+    - name: Run benchmark
+      run: python3 tools/bench.py
+
+    - name: Commit Benchmark Results
+      run: |
+        git config --global user.email "viktar.makouski@aurora.dev"
+        git config --global user.name "Github Action"
+        git checkout gh-pages
+        git add tools/benchmark/benchmark.csv
+        git commit -m "Generated results"
+        git push origin gh-pages
