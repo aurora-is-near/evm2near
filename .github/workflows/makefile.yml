@@ -34,12 +34,18 @@ jobs:
 
   unit-tests:
     needs: build
+    runs-on: ubuntu-latest
+
+    steps:
 
     - name: Run unit tests
       run: make check
 
   lints:
     needs: build
+    runs-on: ubuntu-latest
+
+    steps:
 
     - name: Install dependencies for lints
       run: |
@@ -55,6 +61,9 @@ jobs:
 
   tests:
     needs: build
+    runs-on: ubuntu-latest
+
+    steps:
 
     - name: Install Wasmtime & Run tests
       run: |
@@ -66,6 +75,9 @@ jobs:
         
   benchmark:
     needs: build
+    runs-on: ubuntu-latest
+
+    steps:
 
     - name: Run benchmark
       run: python3 tools/bench.py
