@@ -57,7 +57,7 @@ jobs:
       run: python3 tools/bench.py
 
     - uses: JamesIves/github-pages-deploy-action@v4.4.1
-        with:
+      with:
           branch: gh-pages
           folder: tools/benchmark/pages
           clean: false
