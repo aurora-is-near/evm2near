@@ -29,6 +29,14 @@ jobs:
     - name: Install dependecies
       run:  cargo fetch
       
+    - name: Cache dependencies
+      uses: actions/cache@v2
+      with:
+        path: ~/.cargo
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+      
     - name: Build
       run: make
 
