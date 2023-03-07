@@ -32,22 +32,8 @@ jobs:
     - name: Build
       run: make
 
-  unit-tests:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v3
-
     - name: Run unit tests
       run: make check
-
-  lints:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v3
 
     - name: Install dependencies for lints
       run: |
@@ -59,15 +45,6 @@ jobs:
         cargo fmt --check
         cargo clippy --workspace -- -D warnings
 
-  
-
-  tests:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v3
-
     - name: Install Wasmtime & Run tests
       run: |
         curl https://wasmtime.dev/install.sh -sSf | bash
@@ -75,22 +52,12 @@ jobs:
         export PATH="$WASMTIME_HOME/bin:$PATH"SELENIUM_JAR_PATH=/usr/share/java/selenium-server.jar
 
         bash -c "python3 tools/tests.py"
-        
-  benchmark:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v3
 
     - name: Run benchmark
       run: python3 tools/bench.py
 
-    - name: Commit Benchmark Results
-      run: |
-        git config --global user.email "viktar.makouski@aurora.dev"
-        git config --global user.name "Github Action"
-        git checkout gh-pages
-        git add tools/benchmark/benchmark.csv
-        git commit -m "Generated results"
-        git push origin gh-pages
+    - uses: JamesIves/github-pages-deploy-action@v4.4.1
+        with:
+          branch: gh-pages
+          folder: tools/benchmark/pages
+          clean: false
