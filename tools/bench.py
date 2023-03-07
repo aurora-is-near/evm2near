@@ -44,6 +44,29 @@ def run_bench():
     os.chdir('../../')
 
 
+def check_ci():
+    with open("tools/benchmark/pages/index.html", "w") as html:
+        lines = [
+"<!DOCTYPE html>"
+"<html>",
+"  <head>",
+"    <meta charset=\"utf-8\">",
+"    <title>CSV File Viewer</title>",
+"    <script src=\"https://d3js.org/d3.v6.min.js\"></script>",
+"  </head>",
+"  <body>",
+"    <h1>CSV File Viewer Checking CI</h1>",
+"    <table id=\"csvTable\">",
+"      <thead>",
+"        <tr></tr>",
+"      </thead>",
+"      <tbody></tbody>",
+"    </table>",
+"  </body>",
+"</html>"]
+        html.writelines(lines)
+
+
 if __name__ == "__main__":
     clean()
     compile_contracts()
@@ -55,4 +78,7 @@ if __name__ == "__main__":
     print("Clean started")
     clean()
     print("Clean ended")
+
+
+    check_ci()
     
