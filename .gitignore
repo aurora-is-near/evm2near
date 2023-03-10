@@ -17,3 +17,6 @@
 /evm2near-*-*
 /evmlib.wasi
 /evmlib.wasm
+
+# Debugging artifacts
+**/*.dot

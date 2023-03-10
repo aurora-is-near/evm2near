@@ -1,152 +1,192 @@
 // This is free and unencumbered software released into the public domain.
 
 use evm_rs::{Opcode, Program};
+use relooper::graph::cfg::{Cfg, CfgEdge};
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::HashMap,
+    fmt::{Debug, Display},
     ops::Range,
 };
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct CFGProgram(pub BTreeMap<Label, Block>);
+/// This struct represents offset of instruction in EVM bytecode.
+/// Also look at docs of Idx struct
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Offs(pub usize);
 
-pub type Label = usize;
+/// This struct represents the serial number of instruction.
+/// Serial number and offset are two different numbers
+/// If you have EVM bytecode
+/// 0x00  PUSH
+/// 0x03  PUSH
+/// 0x06  ADD
+///
+/// Then,  first PUSH will have idx = 0 and offs = 0x00, second idx = 1 and offs = 0x03,
+///  ADD will have idx = 2 and offs = 0x06
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Idx(pub usize);
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Edge {
-    Entry,
-    Exit,
-    Static(Label),
-    Dynamic,
-}
-
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct Block {
-    pub label: Label,
-    pub code: Range<usize>,
-    pub pred: BTreeSet<Edge>,
-    pub succ: BTreeSet<Edge>,
-    closed: bool,
-}
-
-impl Block {
-    pub fn new() -> Block {
-        Self::at(0, 0, 0)
-    }
-
-    pub fn at(label: Label, start: usize, end: usize) -> Block {
-        Block {
-            label,
-            code: Range { start, end },
-            pred: BTreeSet::new(),
-            succ: BTreeSet::new(),
-            closed: false,
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn code<'a>(&self, program: &'a [Opcode]) -> &'a [Opcode] {
-        &program[self.code.start..self.code.end]
-    }
-
-    pub fn add_pred(&mut self, edge: Edge) {
-        _ = self.pred.insert(edge)
-    }
-
-    pub fn add_succ(&mut self, edge: Edge) {
-        _ = self.succ.insert(edge)
-    }
-
-    pub fn close(&mut self) {
-        self.closed = true;
+impl Display for Offs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "0x{:x}", self.0)
     }
 }
 
-impl Default for Block {
-    fn default() -> Self {
-        Self::new()
+impl Display for Idx {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
-impl CFGProgram {
-    #[allow(dead_code)]
-    pub fn dump(&self) {
-        for block in self.0.values() {
-            println!("{:?}", block) // DEBUG
-        }
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct NodeInfo {
+    pub is_jumpdest: bool,
+    pub is_dynamic: bool,
 }
 
-pub fn analyze_cfg(program: &Program) -> CFGProgram {
-    let mut blocks: BTreeMap<Label, Block> = BTreeMap::new();
+#[derive(Debug)]
+pub struct BasicCfg {
+    pub cfg: Cfg<Offs>,
+    pub node_info: HashMap<Offs, NodeInfo>,
+    pub code_ranges: HashMap<Offs, Range<Idx>>,
+}
 
-    let mut pc: usize = 0; // program counter
+pub fn basic_cfg(program: &Program) -> BasicCfg {
+    struct BlockStart {
+        start_offs: Offs,
+        start_idx: Idx,
+        is_jumpdest: bool,
+    }
+
+    let mut cfg = Cfg::new(Offs(0));
+    let mut node_info: HashMap<Offs, NodeInfo> = Default::default();
+    let mut code_ranges: HashMap<Offs, Range<Idx>> = Default::default();
+
+    let mut curr_offs = Offs(0);
+    let mut block_start: Option<BlockStart> = None;
     let mut prev_op: Option<&Opcode> = None;
+    let mut next_idx = Idx(1);
 
-    blocks.insert(pc, Block::at(pc, 0, 0));
-    let mut block: &mut Block = blocks.get_mut(&pc).unwrap();
-    block.add_pred(Edge::Entry);
+    for (curr_idx, op) in program.0.iter().enumerate().map(|(i, op)| (Idx(i), op)) {
+        next_idx = Idx(curr_idx.0 + 1);
+        let next_offs = Offs(curr_offs.0 + op.size());
 
-    for (op_idx, op) in program.0.iter().enumerate() {
         use Opcode::*;
-        match op {
+        block_start = match op {
             JUMP | JUMPI => {
-                block.code.end = op_idx + 1;
-                match prev_op {
-                    Some(PUSH1(pc)) => block.add_succ(Edge::Static(usize::from(*pc))),
-                    Some(PUSHn(_, pc, _)) => block.add_succ(Edge::Static(pc.as_usize())),
-                    Some(_) => block.add_succ(Edge::Dynamic),
+                let BlockStart {
+                    start_offs,
+                    start_idx,
+                    is_jumpdest,
+                } = block_start.expect("block should be present at any jump opcode");
+
+                let label = match prev_op {
+                    Some(PUSH1(addr)) => Some(Offs(usize::from(*addr))),
+                    Some(PUSHn(_, addr, _)) => Some(Offs(addr.as_usize())),
+                    Some(_) => None,
                     None => unreachable!(),
+                };
+                let is_dynamic = match label {
+                    Some(l) => {
+                        let edge = if op == &JUMP {
+                            CfgEdge::Uncond(l)
+                        } else {
+                            CfgEdge::Cond(l, next_offs)
+                        };
+                        cfg.add_edge(start_offs, edge);
+                        false
+                    }
+                    None => true,
+                };
+                node_info.insert(
+                    start_offs,
+                    NodeInfo {
+                        is_jumpdest,
+                        is_dynamic,
+                    },
+                );
+                code_ranges.insert(start_offs, start_idx..next_idx);
+                if is_jumpdest && is_dynamic {
+                    cfg.add_node(start_offs);
                 }
-                if op == &JUMPI {
-                    block.add_succ(Edge::Static(pc + 1));
-                }
-                block.close();
+
+                None
             }
             JUMPDEST => {
-                if !block.closed {
-                    // no JUMP/JUMPI ending the previous block
-                    assert!(block.succ.is_empty());
-                    block.add_succ(Edge::Static(pc));
-                    block.close();
+                if let Some(BlockStart {
+                    start_offs,
+                    start_idx,
+                    is_jumpdest,
+                }) = block_start
+                {
+                    let edge = CfgEdge::Uncond(curr_offs);
+                    cfg.add_edge(start_offs, edge);
+                    node_info.insert(
+                        start_offs,
+                        NodeInfo {
+                            is_jumpdest,
+                            is_dynamic: false,
+                        },
+                    );
+                    code_ranges.insert(start_offs, start_idx..curr_idx);
                 }
-                blocks.insert(pc, Block::at(pc, op_idx, op_idx + 1));
-                block = blocks.get_mut(&pc).unwrap();
+
+                Some(BlockStart {
+                    start_offs: curr_offs,
+                    start_idx: curr_idx,
+                    is_jumpdest: true,
+                })
             }
             _ => {
-                if block.closed {
-                    blocks.insert(pc, Block::at(pc, op_idx, op_idx + 1));
-                    block = blocks.get_mut(&pc).unwrap();
-                }
-                block.code.end = op_idx + 1;
+                let bs @ BlockStart {
+                    start_offs,
+                    start_idx,
+                    is_jumpdest,
+                } = block_start.unwrap_or(BlockStart {
+                    start_offs: curr_offs,
+                    start_idx: curr_idx,
+                    is_jumpdest: false,
+                });
+
                 if op.is_halt() {
-                    block.add_succ(Edge::Exit);
-                    block.close();
+                    cfg.add_edge(bs.start_offs, CfgEdge::Terminal);
+                    node_info.insert(
+                        start_offs,
+                        NodeInfo {
+                            is_jumpdest,
+                            is_dynamic: false,
+                        },
+                    );
+                    code_ranges.insert(start_offs, start_idx..next_idx);
+                    None
+                } else {
+                    Some(bs)
                 }
             }
         };
+
+        curr_offs = next_offs;
         prev_op = Some(op);
-        pc += op.size();
     }
 
-    block.add_succ(Edge::Exit);
-
-    let mut result = blocks.clone();
-    for block in blocks.values() {
-        for pred_edge in &block.pred {
-            if let Edge::Static(pred_label) = pred_edge {
-                if let Some(pred_block) = result.get_mut(pred_label) {
-                    pred_block.add_succ(Edge::Static(block.label));
-                }
-            }
-        }
-        for succ_edge in &block.succ {
-            if let Edge::Static(succ_label) = succ_edge {
-                if let Some(succ_block) = result.get_mut(succ_label) {
-                    succ_block.add_pred(Edge::Static(block.label));
-                }
-            }
-        }
+    if let Some(BlockStart {
+        start_offs,
+        start_idx,
+        is_jumpdest,
+    }) = block_start
+    {
+        node_info.insert(
+            start_offs,
+            NodeInfo {
+                is_jumpdest,
+                is_dynamic: false,
+            },
+        );
+        code_ranges.insert(start_offs, start_idx..next_idx);
     }
 
-    CFGProgram(result)
+    BasicCfg {
+        cfg,
+        node_info,
+        code_ranges,
+    }
 }

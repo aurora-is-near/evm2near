@@ -1,0 +1,69 @@
+entry
+entry 0
+0 12 16
+12 exit
+16 26 43
+26 43 48
+43 exit
+48 155
+62 85
+67 exit
+85 89
+89 98 135
+98 211
+107 259
+117 299
+128 89
+135 211
+146 149
+149 dyn
+155 170 174
+170 exit
+174 dyn
+189 exit
+211 232 239
+232 189
+239 149 252
+252 189
+259 284 291
+284 189
+291 dyn
+299 316 323
+316 189
+323 dyn
+330 exit
+dyn dyn1
+dyn1 291 dyn2
+dyn2 89 dyn3
+dyn3 128 dyn4
+dyn4 85 dyn5
+dyn5 316 dyn6
+dyn6 189 dyn7
+dyn7 284 dyn8
+dyn8 299 dyn9
+dyn9 149 dyn10
+dyn10 0 dyn11
+dyn11 16 dyn12
+dyn12 239 dyn13
+dyn13 43 dyn14
+dyn14 170 dyn15
+dyn15 26 dyn16
+dyn16 107 dyn17
+dyn17 211 dyn18
+dyn18 259 dyn19
+dyn19 48 dyn20
+dyn20 330 dyn21
+dyn21 117 dyn22
+dyn22 dyn dyn23
+dyn23 62 dyn24
+dyn24 155 dyn25
+dyn25 323 dyn26
+dyn26 exit dyn27
+dyn27 135 dyn28
+dyn28 232 dyn29
+dyn29 174 dyn30
+dyn30 67 dyn31
+dyn31 252 dyn32
+dyn32 98 dyn33
+dyn33 12 dyn34
+dyn34 146 dyn35

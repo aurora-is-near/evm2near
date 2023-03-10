@@ -1,0 +1,12 @@
+[
+    {"method": "multiply", "input": {"a": 6, "b": 7}},
+    {"method": "multiply", "input": {"a": 2424, "b": -242552}},
+    {"method": "multiply", "input": {"a": -43222, "b": -23422424}},
+    {"method": "multiply", "input": {"a":-113444, "b": 1344114}},
+    {"method": "multiply", "input": {"a": 0, "b": 133944141}},
+    {"method": "multiply", "input": {"a": 31333, "b": -144422424}},
+    {"method": "multiply", "input": {"a": 2424422442, "b": 242456969}},
+    {"method": "multiply", "input": {"a": -42343435435, "b": -2444224}},
+    {"method": "multiply", "input": {"a": 424242424, "b": 0}},
+    {"method": "multiply", "input": {"a": 0, "b": 0}}
+]

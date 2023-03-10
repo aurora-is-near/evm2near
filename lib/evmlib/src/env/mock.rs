@@ -102,17 +102,17 @@ impl Env for MockEnv {
 
     fn post_exec(&self) {
         match &self.exit_status {
-            Some(ExitStatus::Success) => {
-                eprintln!("RETURN 0x{}", hex::encode(&self.return_data));
-                std::process::exit(0); // EX_OK
-            }
-            Some(ExitStatus::Revert) => {
-                eprintln!("REVERT 0x{}", hex::encode(&self.return_data));
-                std::process::exit(64); // EX_USAGE
-            }
-            Some(ExitStatus::OutOfGas) => {
-                eprintln!("OUT OF GAS");
-                std::process::exit(64); // EX_USAGE
+            Some(status) => {
+                println!(
+                    "Result: {:?}\n{}\n{}",
+                    status,
+                    hex::encode(&self.return_data),
+                    std::str::from_utf8(&self.return_data).unwrap_or("unable to decode bytes")
+                );
+                match status {
+                    ExitStatus::Success => std::process::exit(0), // EX_OK
+                    ExitStatus::Revert | ExitStatus::OutOfGas => std::process::exit(64), // EX_USAGE
+                }
             }
             None => {
                 panic!("Exited without any status being set!")

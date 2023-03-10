@@ -18,37 +18,37 @@ These functions generated based on the ABI are in addition to a general function
 ### Compiling to wasi (for running locally)
 
 ```
-evm2near INPUT_SOLIDITY_CONTRACT -o OUTPUT_WASM_FILE -b wasi
+./evm2near INPUT_SOLIDITY_CONTRACT -o OUTPUT_WASM_FILE -b wasi
 ```
 
 Example:
 
 ```console
-evm2near test/calc.sol -o test.wasm -b wasi
+./evm2near test/calc.sol -o calc.wasm -b wasi
 ```
 
 Running the output in wasmtime:
 
 ```console
-wasmtime --allow-unknown-exports test.wasm --invoke multiply -- '{"a":6, "b": 7}'
+wasmtime --allow-unknown-exports calc.wasm --invoke multiply -- '{"a":6, "b": 7}'
 ```
 
 ### Compiling to NEAR
 
 ```
-evm2near INPUT_SOLIDITY_CONTRACT -o OUTPUT_WASM_FILE -b near
+./evm2near INPUT_SOLIDITY_CONTRACT -o OUTPUT_WASM_FILE -b near
 ```
 
 Example:
 
 ```console
-evm2near test/calc.sol -o test.wasm -b near
+./evm2near test/calc.sol -o calc.wasm -b near
 ```
 
 Running the output using [near-cli](https://github.com/near/near-cli):
 
 ```console
-near --networkId testnet dev-deploy test.wasm
+near --networkId testnet dev-deploy calc.wasm
 near --networkId testnet --accountId $NEAR_ACCOUNT_ID call $DEV_CONTACT_ID multiply '{"a": 7, "b": 6}'
 ```
 
@@ -60,7 +60,7 @@ If you do not have one, you can create it using the [NEAR wallet](https://wallet
 ### Help
 
 ```console
-evm2near --help
+./evm2near --help
 ```
 
 ## Development
@@ -82,11 +82,11 @@ brew install rustup solidity wabt
 ```console
 curl -sSf https://sh.rustup.rs | sh
 
-apt-add-repository ppa:ethereum/ethereum
-apt update
-apt install solc
+sudo apt-add-repository ppa:ethereum/ethereum
+sudo apt update
+sudo apt install solc
 
-apt install wabt
+sudo apt install wabt
 ```
 
 ### Development Builds
@@ -133,3 +133,7 @@ rustup target add aarch64-unknown-linux-musl
 rustup target add x86_64-unknown-linux-musl
 make clean release
 ```
+
+## Benchmarks
+
+You can see results of gas-spent measurements [here](https://mcjohn974.github.io/evm2near/)
