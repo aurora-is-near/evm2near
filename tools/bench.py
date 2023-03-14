@@ -62,10 +62,15 @@ if __name__ == "__main__":
     print("Clean ended")
 
 
+    tables = []
+
+    for file in os.listdir("tools/benchmark"):
+        if file[-4] == ".csv":
+            tables.append(pd.read_csv(file))
 
 
-    a = pd.read_csv("tools/benchmark/benchmark.csv")
-    a.to_html("tools/benchmark/pages/index.html")
-    html_file = a.to_html()
+    res = pd.concat(tables, axis=0)
+    tables.to_html("tools/benchmark/pages/index.html")
+    html_file = tables.to_html()
 
     
