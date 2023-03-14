@@ -2,13 +2,12 @@
 
 import os
 
-contracts = [
-    'calc'
-    # 'bench',
-    # 'Collatz',
-    # 'echo',
-    # 'const'
-]
+
+print(os.listdir("tools/benchmark/inputs"))
+
+contracts = list(map(lambda x: x[:-5], os.listdir("tools/benchmark/inputs")))
+
+print(f"contracts = {contracts}")
 
 
 def compile(name: str):
@@ -62,15 +61,10 @@ if __name__ == "__main__":
     print("Clean ended")
 
 
-    tables = []
 
-    for file in os.listdir("tools/benchmark"):
-        if file[-4] == ".csv":
-            tables.append(pd.read_csv(file))
+    table = pd.read_csv("tools/benchmark/benchmark.csv")
+    table.to_html("tools/benchmark/pages/index.html")
+    html_file = table.to_html()
 
-
-    res = pd.concat(tables, axis=0)
-    tables.to_html("tools/benchmark/pages/index.html")
-    html_file = tables.to_html()
 
     
