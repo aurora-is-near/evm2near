@@ -55,16 +55,19 @@ if __name__ == "__main__":
     copy_contracts()
     print("Benchmark started")
     run_bench()
-    print("Benchmark ended, see results in tools/benchmark/benchmark.csv")
+    print("Benchmark ended, see results in tools/benchmark/pages/index.html")
     print("Clean started")
     clean()
     print("Clean ended")
 
 
 
-    table = pd.read_csv("tools/benchmark/benchmark.csv")
+    tables = []
+    for file in os.listdir("tools/benchmark"):
+        if file[-4:] != ".csv":
+            continue
+        tables.append(pd.read_csv(f"tools/benchmark/{file}"))
+
+    table = pd.concat(tables)
     table.to_html("tools/benchmark/pages/index.html")
     html_file = table.to_html()
-
-
-    
