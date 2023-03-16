@@ -1,0 +1,5 @@
+[
+    {"method": "cpu_ram_soak_test", "input": {"loop_limit": 1000}},
+    {"method": "cpu_ram_soak_test", "input": {"loop_limit": 500}},
+    {"method": "cpu_ram_soak_test", "input": {"loop_limit": 100}}
+]

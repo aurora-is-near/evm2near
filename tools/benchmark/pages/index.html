@@ -1,48 +1,286 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <meta charset="utf-8">
-    <title>CSV File Viewer</title>
-    <script src="https://d3js.org/d3.v6.min.js"></script>
-  </head>
-  <body>
-    <h1>CSV File Viewer Checking CI</h1>
-    <table id="csvTable">
-      <thead>
-        <tr></tr>
-      </thead>
-      <tbody></tbody>
-    </table>
-
-    <script>
-      // Use D3.js to load the CSV file
-      d3.csv("benchmark.csv").then(function(data) {
-        // Get the table header row from the table
-        const tableHeader = d3.select("#csvTable").select("thead").select("tr");
-
-        // Add a table header cell for each column in the CSV file
-        tableHeader.selectAll("th")
-          .data(d3.keys(data[0]))
-          .enter()
-          .append("th")
-          .text(function(column) { return column; });
-
-        // Get the table body from the table
-        const tableBody = d3.select("#csvTable").select("tbody");
-
-        // Add a table row for each row in the CSV file
-        const rows = tableBody.selectAll("tr")
-          .data(data)
-          .enter()
-          .append("tr");
-
-        // Add a table cell for each cell in the row
-        const cells = rows.selectAll("td")
-          .data(function(row) { return d3.values(row); })
-          .enter()
-          .append("td")
-          .text(function(cell) { return cell; });
-      });
-    </script>
-  </body>
-</html>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>Contract</th>
+      <th>Method</th>
+      <th>Gas burned</th>
+      <th>Gas used</th>
+      <th>Tgas burned</th>
+      <th>Tgas used</th>
+      <th>Input</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>0</th>
+      <td>bench_without_memory_allocation</td>
+      <td>cpu_ram_soak_test</td>
+      <td>2428001493624</td>
+      <td>53783710337496</td>
+      <td>2</td>
+      <td>53</td>
+      <td>{"loop_limit":1000}</td>
+    </tr>
+    <tr>
+      <th>1</th>
+      <td>bench_without_memory_allocation</td>
+      <td>cpu_ram_soak_test</td>
+      <td>2427999257690</td>
+      <td>29483554707394</td>
+      <td>2</td>
+      <td>29</td>
+      <td>{"loop_limit":500}</td>
+    </tr>
+    <tr>
+      <th>2</th>
+      <td>bench_without_memory_allocation</td>
+      <td>cpu_ram_soak_test</td>
+      <td>2427999257690</td>
+      <td>10043475939394</td>
+      <td>2</td>
+      <td>10</td>
+      <td>{"loop_limit":100}</td>
+    </tr>
+    <tr>
+      <th>3</th>
+      <td>bench</td>
+      <td>cpu_ram_soak_test</td>
+      <td>2428001493624</td>
+      <td>251894324260668</td>
+      <td>2</td>
+      <td>251</td>
+      <td>{"loop_limit":3000}</td>
+    </tr>
+    <tr>
+      <th>4</th>
+      <td>bench</td>
+      <td>cpu_ram_soak_test</td>
+      <td>2428001493624</td>
+      <td>202013096248668</td>
+      <td>2</td>
+      <td>202</td>
+      <td>{"loop_limit":2000}</td>
+    </tr>
+    <tr>
+      <th>5</th>
+      <td>bench</td>
+      <td>cpu_ram_soak_test</td>
+      <td>2428001493624</td>
+      <td>177072482242668</td>
+      <td>2</td>
+      <td>177</td>
+      <td>{"loop_limit":1500}</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>bench</td>
+      <td>cpu_ram_soak_test</td>
+      <td>2428001493624</td>
+      <td>152131868236668</td>
+      <td>2</td>
+      <td>152</td>
+      <td>{"loop_limit":1000}</td>
+    </tr>
+    <tr>
+      <th>7</th>
+      <td>bench</td>
+      <td>cpu_ram_soak_test</td>
+      <td>2427999257690</td>
+      <td>127191197060566</td>
+      <td>2</td>
+      <td>127</td>
+      <td>{"loop_limit":500}</td>
+    </tr>
+    <tr>
+      <th>8</th>
+      <td>bench</td>
+      <td>cpu_ram_soak_test</td>
+      <td>2427999257690</td>
+      <td>107238705855766</td>
+      <td>2</td>
+      <td>107</td>
+      <td>{"loop_limit":100}</td>
+    </tr>
+    <tr>
+      <th>9</th>
+      <td>const</td>
+      <td>value</td>
+      <td>2427936651538</td>
+      <td>5176979724410</td>
+      <td>2</td>
+      <td>5</td>
+      <td>{}</td>
+    </tr>
+    <tr>
+      <th>10</th>
+      <td>bench_with_writing_in_memory</td>
+      <td>cpu_ram_soak_test</td>
+      <td>2428001493624</td>
+      <td>59294771589996</td>
+      <td>2</td>
+      <td>59</td>
+      <td>{"loop_limit":1000}</td>
+    </tr>
+    <tr>
+      <th>11</th>
+      <td>bench_with_writing_in_memory</td>
+      <td>cpu_ram_soak_test</td>
+      <td>2427999257690</td>
+      <td>32727923179894</td>
+      <td>2</td>
+      <td>32</td>
+      <td>{"loop_limit":500}</td>
+    </tr>
+    <tr>
+      <th>12</th>
+      <td>bench_with_writing_in_memory</td>
+      <td>cpu_ram_soak_test</td>
+      <td>2427999257690</td>
+      <td>11474490187894</td>
+      <td>2</td>
+      <td>11</td>
+      <td>{"loop_limit":100}</td>
+    </tr>
+    <tr>
+      <th>13</th>
+      <td>bench-mini</td>
+      <td>cpu_ram_soak_test</td>
+      <td>2428001493624</td>
+      <td>244884225021840</td>
+      <td>2</td>
+      <td>244</td>
+      <td>{"loop_limit":5000}</td>
+    </tr>
+    <tr>
+      <th>14</th>
+      <td>bench-mini</td>
+      <td>cpu_ram_soak_test</td>
+      <td>2428001493624</td>
+      <td>149047960629840</td>
+      <td>2</td>
+      <td>149</td>
+      <td>{"loop_limit":3000}</td>
+    </tr>
+    <tr>
+      <th>15</th>
+      <td>bench-mini</td>
+      <td>cpu_ram_soak_test</td>
+      <td>2428001493624</td>
+      <td>101129828433840</td>
+      <td>2</td>
+      <td>101</td>
+      <td>{"loop_limit":2000}</td>
+    </tr>
+    <tr>
+      <th>16</th>
+      <td>bench-mini</td>
+      <td>cpu_ram_soak_test</td>
+      <td>2428001493624</td>
+      <td>53211696237840</td>
+      <td>2</td>
+      <td>53</td>
+      <td>{"loop_limit":1000}</td>
+    </tr>
+    <tr>
+      <th>17</th>
+      <td>calc</td>
+      <td>multiply</td>
+      <td>2427967954614</td>
+      <td>5204236993764</td>
+      <td>2</td>
+      <td>5</td>
+      <td>{"a":6,"b":7}</td>
+    </tr>
+    <tr>
+      <th>18</th>
+      <td>calc</td>
+      <td>multiply</td>
+      <td>2427988078020</td>
+      <td>5204848578582</td>
+      <td>2</td>
+      <td>5</td>
+      <td>{"a":2424,"b":-242552}</td>
+    </tr>
+    <tr>
+      <th>19</th>
+      <td>calc</td>
+      <td>multiply</td>
+      <td>2427997021756</td>
+      <td>5204536593713</td>
+      <td>2</td>
+      <td>5</td>
+      <td>{"a":-43222,"b":-23422424}</td>
+    </tr>
+    <tr>
+      <th>20</th>
+      <td>calc</td>
+      <td>multiply</td>
+      <td>2427994785822</td>
+      <td>5204504106291</td>
+      <td>2</td>
+      <td>5</td>
+      <td>{"a":-113444,"b":1344114}</td>
+    </tr>
+    <tr>
+      <th>21</th>
+      <td>calc</td>
+      <td>multiply</td>
+      <td>2427985842086</td>
+      <td>5204679034663</td>
+      <td>2</td>
+      <td>5</td>
+      <td>{"a":0,"b":133944141}</td>
+    </tr>
+    <tr>
+      <th>22</th>
+      <td>calc</td>
+      <td>multiply</td>
+      <td>2427997021756</td>
+      <td>5205173917166</td>
+      <td>2</td>
+      <td>5</td>
+      <td>{"a":31333,"b":-144422424}</td>
+    </tr>
+    <tr>
+      <th>23</th>
+      <td>calc</td>
+      <td>multiply</td>
+      <td>2428005965492</td>
+      <td>5205375842350</td>
+      <td>2</td>
+      <td>5</td>
+      <td>{"a":2424422442,"b":242456969}</td>
+    </tr>
+    <tr>
+      <th>24</th>
+      <td>calc</td>
+      <td>multiply</td>
+      <td>2428008201426</td>
+      <td>5204815122696</td>
+      <td>2</td>
+      <td>5</td>
+      <td>{"a":-42343435435,"b":-2444224}</td>
+    </tr>
+    <tr>
+      <th>25</th>
+      <td>calc</td>
+      <td>multiply</td>
+      <td>2427985842086</td>
+      <td>5205146360071</td>
+      <td>2</td>
+      <td>5</td>
+      <td>{"a":424242424,"b":0}</td>
+    </tr>
+    <tr>
+      <th>26</th>
+      <td>calc</td>
+      <td>multiply</td>
+      <td>2427967954614</td>
+      <td>5205478022259</td>
+      <td>2</td>
+      <td>5</td>
+      <td>{"a":0,"b":0}</td>
+    </tr>
+  </tbody>
+</table>
