@@ -2,13 +2,12 @@
 
 import os
 
-contracts = [
-    'calc'
-    # 'bench',
-    # 'Collatz',
-    # 'echo',
-    # 'const'
-]
+
+print(os.listdir("tools/benchmark/inputs"))
+
+contracts = list(map(lambda x: x[:-5], os.listdir("tools/benchmark/inputs")))
+
+print(f"contracts = {contracts}")
 
 
 def compile(name: str):
@@ -44,27 +43,9 @@ def run_bench():
     os.chdir('../../')
 
 
-def check_ci():
-    with open("tools/benchmark/pages/index.html", "w") as html:
-        lines = [
-"<!DOCTYPE html>"
-"<html>",
-"  <head>",
-"    <meta charset=\"utf-8\">",
-"    <title>CSV File Viewer</title>",
-"    <script src=\"https://d3js.org/d3.v6.min.js\"></script>",
-"  </head>",
-"  <body>",
-"    <h1>CSV File Viewer Checking CI222</h1>",
-"    <table id=\"csvTable\">",
-"      <thead>",
-"        <tr></tr>",
-"      </thead>",
-"      <tbody></tbody>",
-"    </table>",
-"  </body>",
-"</html>"]
-        html.writelines(lines)
+
+
+import pandas as pd
 
 
 if __name__ == "__main__":
@@ -74,11 +55,19 @@ if __name__ == "__main__":
     copy_contracts()
     print("Benchmark started")
     run_bench()
-    print("Benchmark ended, see results in tools/benchmark/benchmark.csv")
+    print("Benchmark ended, see results in tools/benchmark/pages/index.html")
     print("Clean started")
     clean()
     print("Clean ended")
 
 
-    check_ci()
-    
+
+    tables = []
+    for file in os.listdir("tools/benchmark"):
+        if file[-4:] != ".csv":
+            continue
+        tables.append(pd.read_csv(f"tools/benchmark/{file}"))
+
+    table = pd.concat(tables)
+    table.to_html("tools/benchmark/pages/index.html")
+    html_file = table.to_html()
