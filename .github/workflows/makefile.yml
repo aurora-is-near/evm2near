@@ -60,6 +60,10 @@ jobs:
         export PATH="$WASMTIME_HOME/bin:$PATH"SELENIUM_JAR_PATH=/usr/share/java/selenium-server.jar
 
         bash -c "python3 tools/tests.py"
+        
+
+    - name: Install pandas
+      run: pip3 install pandas
 
     - name: Run benchmark
       run: python3 tools/bench.py
