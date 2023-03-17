@@ -31,7 +31,7 @@ async fn bench_contract(wtr: &mut Writer<File>, name_os: OsString, commit: Strin
             .call(&input.method)
             .args_json(json!(input.input))
             .deposit(deposit)
-            .gas(near_units::parse_gas!("300000000000000") as u64)
+            .gas(near_units::parse_gas!("300 TGas") as u64)
             .transact()
             .await?;
         for failure in &outcome.failures() {
