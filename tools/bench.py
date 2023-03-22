@@ -59,6 +59,7 @@ if __name__ == "__main__":
     print("Clean started")
     clean()
     print("Clean ended")
+    print(f"current dir = {os.getcwd()}")
 
 
 
