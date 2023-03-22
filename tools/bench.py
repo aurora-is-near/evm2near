@@ -66,6 +66,7 @@ if __name__ == "__main__":
     for file in os.listdir("tools/benchmark/csvs"):
         if file[-4:] != ".csv":
             continue
+        os.system('ll -la')
         tables.append(pd.read_csv(f"csvs/{file}"))
 
     table = pd.concat(tables)
