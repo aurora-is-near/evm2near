@@ -61,10 +61,6 @@ jobs:
 
         bash -c "python3 tools/tests.py"
         
-
-    - name: Install pandas
-      run: pip3 install pandas
-
     - name: Install pandas
       run: pip3 install pandas
 

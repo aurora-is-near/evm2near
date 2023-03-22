@@ -31,7 +31,9 @@ async fn bench_contract(wtr: &mut Writer<File>, name_os: OsString, commit: Strin
             .call(&input.method)
             .args_json(json!(input.input))
             .deposit(deposit)
+
             .gas(near_units::parse_gas!("300 TGas") as u64)
+
             .transact()
             .await?;
         for failure in &outcome.failures() {
@@ -74,7 +76,9 @@ async fn main() -> anyhow::Result<()> {
 
     
 
+
     let mut wtr = Writer::from_path(format!("csvs/{}.csv", commit).to_string())?;
+
     wtr.write_record([
         "Contract",
         "Method",
