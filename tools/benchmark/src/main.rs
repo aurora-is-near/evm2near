@@ -74,7 +74,7 @@ async fn main() -> anyhow::Result<()> {
 
     
 
-    let mut wtr = Writer::from_path(format!("{}.csv", commit).to_string())?;
+    let mut wtr = Writer::from_path(format!("csvs/{}.csv", commit).to_string())?;
     wtr.write_record([
         "Contract",
         "Method",
