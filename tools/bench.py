@@ -63,7 +63,7 @@ if __name__ == "__main__":
 
 
     tables = []
-    for file in os.listdir("tools/benchmark"):
+    for file in os.listdir("tools/benchmark/csvs"):
         if file[-4:] != ".csv":
             continue
         tables.append(pd.read_csv(f"tools/benchmark/{file}"))
