@@ -67,29 +67,30 @@ jobs:
     - name: Run benchmark
       run: python3 tools/bench.py
 
-    - name: Copy csv
-      env:
-        SRC_FOLDER_PATH: 'tools/benchmark/csvs'
-        TARGET_BRANCH: 'gh-pages'
-      run: |
-        git config --global user.name 'GitHub Action'
-        git config --global user.email 'action@github.com'
-        git commit -a -m "Action csv update"
-        echo 1
 
-        files=$(find $SRC_FOLDER_PATH -type f) # get the file list
-        echo 1
-        git fetch                         # fetch branches
-        echo 1
-        git checkout $TARGET_BRANCH       # checkout to your branch
-        echo 1
-        git checkout ${GITHUB_REF##*/} -- $files # copy files from the source branch
-        echo 1
-        git add -A
-        echo 1
-        git diff-index --quiet HEAD ||  git commit -am "deploy files"  # commit to the repository (ignore if no modification)
-        echo 1
-        git push origin $TARGET_BRANCH # push to remote branch
+    - name: Setup Git
+      run: |
+        git config user.name "${{ github.actor }}"
+        git config user.email "${{ github.actor }}@users.noreply.github.com"
+
+    - name: Switch to gh-pages branch
+      run: |
+        git checkout gh-pages
+
+    - name: Copy csv files
+      run: |
+        mkdir -p csvs
+        cp -r tools/benchmark/csvs/* csvs/
+
+    - name: Commit changes
+      run: |
+        git add csvs/
+        git commit -m "Update csv files"
+          
+    - name: Push changes
+      uses: ad-m/github-push-action@v0.6.0
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
 
     - uses: JamesIves/github-pages-deploy-action@v4.4.1
       with:
