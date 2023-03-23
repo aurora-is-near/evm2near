@@ -68,7 +68,7 @@ if __name__ == "__main__":
         if file[-4:] != ".csv":
             continue
         print(f"current dir = {os.getcwd()}")
-        tables.append(pd.read_csv(f"{file}"))
+        tables.append(pd.read_csv(f"tools/benchmark/csvs/{file}"))
 
     table = pd.concat(tables)
     table.to_html("tools/benchmark/pages/index.html")
