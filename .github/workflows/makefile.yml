@@ -75,14 +75,20 @@ jobs:
         git config --global user.name 'GitHub Action'
         git config --global user.email 'action@github.com'
         git commit -a -m "Action csv update"
+        echo 1
 
         files=$(find $SRC_FOLDER_PATH -type f) # get the file list
-
+        echo 1
         git fetch                         # fetch branches
+        echo 1
         git checkout $TARGET_BRANCH       # checkout to your branch
+        echo 1
         git checkout ${GITHUB_REF##*/} -- $files # copy files from the source branch
+        echo 1
         git add -A
+        echo 1
         git diff-index --quiet HEAD ||  git commit -am "deploy files"  # commit to the repository (ignore if no modification)
+        echo 1
         git push origin $TARGET_BRANCH # push to remote branch
 
     - uses: JamesIves/github-pages-deploy-action@v4.4.1
