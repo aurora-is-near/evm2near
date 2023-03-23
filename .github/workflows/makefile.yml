@@ -72,6 +72,7 @@ jobs:
         SRC_FOLDER_PATH: 'tools/benchmark/csvs'
         TARGET_BRANCH: 'gh-pages'
       run: |
+        git commit -a -m "Action generated csvs"
         files=$(find $SRC_FOLDER_PATH -type f) # get the file list
         git config --global user.name 'GitHub Action'
         git config --global user.email 'action@github.com'
