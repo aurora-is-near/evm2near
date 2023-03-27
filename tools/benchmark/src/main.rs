@@ -109,6 +109,7 @@ async fn main() -> anyhow::Result<()> {
     let mut commit = std::str::from_utf8(&stdout).unwrap().to_string();
     commit.pop();  // to remove \n in the end
 
+    println!("Commit = {}", commit);
     
 
 
