@@ -85,8 +85,8 @@ jobs:
         git commit -m "Benchmark workflow"
         git push origin gh-pages
 
-    - uses: JamesIves/github-pages-deploy-action@v4.4.1
-      with:
-          branch: gh-pages
-          folder: tools/benchmark/pages
-          clean: false
+    # - uses: JamesIves/github-pages-deploy-action@v4.4.1
+    #   with:
+    #       branch: gh-pages
+    #       folder: tools/benchmark/pages
+    #       clean: false
