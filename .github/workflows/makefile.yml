@@ -42,26 +42,26 @@ jobs:
     - name: Build
       run: make
 
-    # - name: Run unit tests
-    #   run: make check
+    - name: Run unit tests
+      run: make check
 
-    # - name: Install dependencies for lints
-    #   run: |
-    #     rustup component add rustfmt --toolchain nightly-2022-09-07-x86_64-unknown-linux-gnu
-    #     rustup component add clippy --toolchain nightly-2022-09-07-x86_64-unknown-linux-gnu
+    - name: Install dependencies for lints
+      run: |
+        rustup component add rustfmt --toolchain nightly-2022-09-07-x86_64-unknown-linux-gnu
+        rustup component add clippy --toolchain nightly-2022-09-07-x86_64-unknown-linux-gnu
 
-    # - name: Lints
-    #   run: |
-    #     cargo fmt --check
-    #     cargo clippy --workspace -- -D warnings
+    - name: Lints
+      run: |
+        cargo fmt --check
+        cargo clippy --workspace -- -D warnings
 
-    # - name: Install Wasmtime & Run tests
-    #   run: |
-    #     curl https://wasmtime.dev/install.sh -sSf | bash
-    #     export WASMTIME_HOME="$HOME/.wasmtime"
-    #     export PATH="$WASMTIME_HOME/bin:$PATH"SELENIUM_JAR_PATH=/usr/share/java/selenium-server.jar
+    - name: Install Wasmtime & Run tests
+      run: |
+        curl https://wasmtime.dev/install.sh -sSf | bash
+        export WASMTIME_HOME="$HOME/.wasmtime"
+        export PATH="$WASMTIME_HOME/bin:$PATH"SELENIUM_JAR_PATH=/usr/share/java/selenium-server.jar
 
-    #     bash -c "python3 tools/tests.py"
+        bash -c "python3 tools/tests.py"
         
     - name: Install pandas
       run: pip3 install pandas
