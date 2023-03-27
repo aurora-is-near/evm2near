@@ -102,7 +102,18 @@ async fn main() -> anyhow::Result<()> {
     // println!("GITHUB_SHA: {}", github_sha);
 
     let commit = match env::var("GITHUB_SHA") {
-        Ok(s) => {println!("ENVVAR exist");s},
+        Ok(s) => { 
+            println!("ENVVAR exist");
+            let output = Command::new("sh")
+                .arg("-c")
+                .arg("git rev-parse --short HEAD~1")
+                .output()
+                .expect("failed to execute process");
+
+            let stdout = output.stdout;
+            let mut tmp = std::str::from_utf8(&stdout).unwrap().to_string();
+            tmp.pop();  // to remove \n in the end
+            tmp},
         Err(_) => {
             println!("ENVVAR don't exist");
             let output = Command::new("sh")
