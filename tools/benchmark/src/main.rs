@@ -1,9 +1,9 @@
 use csv::Writer;
-use serde::{Deserialize};
+use serde::Deserialize;
 use serde_json::{json, Value};
-use std::{fs::File, ffi::OsString};
-use std::process::Command;
 use std::env;
+use std::process::Command;
+use std::{ffi::OsString, fs::File};
 
 #[derive(Debug, Deserialize)]
 struct Input {
@@ -24,12 +24,12 @@ async fn assert_bench() -> anyhow::Result<()> {
     let deposit = 10000000000000000000000_u128;
 
     let outcome = contract
-            .call("cpu_ram_soak_test")
-            .args_json(json!({"loop_limit": 3000}))
-            .deposit(deposit)
-            .gas(near_units::parse_gas!("300 TGas") as u64)
-            .transact()
-            .await?;
+        .call("cpu_ram_soak_test")
+        .args_json(json!({"loop_limit": 3000}))
+        .deposit(deposit)
+        .gas(near_units::parse_gas!("300 TGas") as u64)
+        .transact()
+        .await?;
     for failure in &outcome.failures() {
         println!("{:#?}", failure);
     }
@@ -45,7 +45,11 @@ async fn assert_bench() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn bench_contract(wtr: &mut Writer<File>, name_os: OsString, commit: String) -> anyhow::Result<()> {
+async fn bench_contract(
+    wtr: &mut Writer<File>,
+    name_os: OsString,
+    commit: String,
+) -> anyhow::Result<()> {
     let name = &name_os.to_str().unwrap()[0..name_os.len() - 5];
     println!("Name = {}", name);
     let worker = near_workspaces::sandbox().await?;
@@ -53,8 +57,7 @@ async fn bench_contract(wtr: &mut Writer<File>, name_os: OsString, commit: Strin
     let contract = worker.dev_deploy(&wasm).await?;
 
     let inputs: Vec<Input> = serde_json::from_str(
-        &std::fs::read_to_string(format!("inputs/{}.json", name))
-            .expect("Unable to read file"),
+        &std::fs::read_to_string(format!("inputs/{}.json", name)).expect("Unable to read file"),
     )
     .expect("JSON does not have correct format.");
     let deposit = 10000000000000000000000_u128;
@@ -63,9 +66,7 @@ async fn bench_contract(wtr: &mut Writer<File>, name_os: OsString, commit: Strin
             .call(&input.method)
             .args_json(json!(input.input))
             .deposit(deposit)
-
             .gas(near_units::parse_gas!("300 TGas") as u64)
-
             .transact()
             .await?;
         for failure in &outcome.failures() {
@@ -90,19 +91,20 @@ async fn bench_contract(wtr: &mut Writer<File>, name_os: OsString, commit: Strin
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-
     assert_bench().await?;
 
     let paths = std::fs::read_dir("inputs/").unwrap();
 
-    let contracts = paths.into_iter().map(|dir| dir.unwrap().file_name()).collect::<Vec<_>>();
-
+    let contracts = paths
+        .into_iter()
+        .map(|dir| dir.unwrap().file_name())
+        .collect::<Vec<_>>();
 
     // let github_sha = env::var("GITHUB_SHA").expect("GITHUB_SHA environment variable not found");
     // println!("GITHUB_SHA: {}", github_sha);
 
     let commit = match env::var("GITHUB_SHA") {
-        Ok(s) => { 
+        Ok(_) => {
             println!("ENVVAR exist");
             let output = Command::new("sh")
                 .arg("-c")
@@ -111,9 +113,9 @@ async fn main() -> anyhow::Result<()> {
                 .expect("failed to execute process");
 
             let stdout = output.stdout;
-            let mut tmp = std::str::from_utf8(&stdout).unwrap().to_string();
+            let tmp = std::str::from_utf8(&stdout).unwrap().to_string();
             tmp
-        },
+        }
         Err(_) => {
             println!("ENVVAR don't exist");
             let output = Command::new("sh")
@@ -121,29 +123,16 @@ async fn main() -> anyhow::Result<()> {
                 .arg("git rev-parse --short HEAD")
                 .output()
                 .expect("failed to execute process");
-    
+
             let stdout = output.stdout;
             let mut tmp = std::str::from_utf8(&stdout).unwrap().to_string();
-            tmp.pop();  // to remove \n in the end
+            tmp.pop(); // to remove \n in the end
             tmp
         }
     };
-
-    // let output = Command::new("sh")
-    //             .arg("-c")
-    //             .arg("git rev-parse --short \"$GITHUB_SHA\"")
-    //             .output()
-    //             .expect("failed to execute process");
-    
-    // let stdout = output.stdout;
-    // let mut commit = std::str::from_utf8(&stdout).unwrap().to_string();
-    // commit.pop();  // to remove \n in the end
-
     println!("Commit = {}", commit);
-    
 
-
-    let mut wtr = Writer::from_path(format!("csvs/{}.csv", commit).to_string())?;
+    let mut wtr = Writer::from_path(format!("csvs/{}.csv", commit))?;
 
     wtr.write_record([
         "Contract",
