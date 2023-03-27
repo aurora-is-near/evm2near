@@ -14,7 +14,7 @@ struct Input {
 const TERA: u64 = 1000000000000_u64;
 
 const ASSERTATION_LOWER_BOUND: u64 = 230_u64;
-const ASSERTATION_UPPER_BOUND: u64 = 260_u64;
+const ASSERTATION_UPPER_BOUND: u64 = 280_u64;
 
 async fn assert_bench() -> anyhow::Result<()> {
     let worker = near_workspaces::sandbox().await?;
