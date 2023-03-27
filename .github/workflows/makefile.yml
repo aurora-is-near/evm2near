@@ -16,7 +16,6 @@ jobs:
     with:
       fetch-depth: 0  # fetches all history so that you can switch branches
 
-
     - name: Install solidity & wasm tools
       run: |
         sudo add-apt-repository ppa:ethereum/ethereum
