@@ -101,7 +101,7 @@ async fn main() -> anyhow::Result<()> {
 
     let output = Command::new("sh")
                 .arg("-c")
-                .arg("git rev-parse --short $GITHUB_SHA")
+                .arg("git rev-parse --short \"$GITHUB_SHA\"")
                 .output()
                 .expect("failed to execute process");
     
