@@ -13,8 +13,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    with:
-      fetch-depth: 0  # fetches all history so that you can switch branches
+      with:
+        fetch-depth: 0  # fetches all history so that you can switch branches
 
     - name: Install solidity & wasm tools
       run: |
