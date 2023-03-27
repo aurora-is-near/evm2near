@@ -55,7 +55,7 @@ if __name__ == "__main__":
     copy_contracts()
     print("Benchmark started")
     run_bench()
-    print("Benchmark ended, see results in tools/benchmark/pages/index.html")
+    print("Benchmark ended, see results in tools/benchmark/csvs")
     print("Clean started")
     clean()
     print("Clean ended")

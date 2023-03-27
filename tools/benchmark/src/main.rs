@@ -13,6 +13,38 @@ struct Input {
 
 const TERA: u64 = 1000000000000_u64;
 
+const ASSERTATION_LOWER_BOUND: u64 = 230_u64;
+const ASSERTATION_UPPER_BOUND: u64 = 260_u64;
+
+async fn assert_bench() -> anyhow::Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let wasm = std::fs::read("bench.wasm")?;
+    let contract = worker.dev_deploy(&wasm).await?;
+
+    let deposit = 10000000000000000000000_u128;
+
+    let outcome = contract
+            .call("cpu_ram_soak_test")
+            .args_json(json!({"loop_limit": 3000}))
+            .deposit(deposit)
+            .gas(near_units::parse_gas!("300 TGas") as u64)
+            .transact()
+            .await?;
+    for failure in &outcome.failures() {
+        println!("{:#?}", failure);
+    }
+    assert!(outcome.is_success());
+
+    let gas_used = outcome.total_gas_burnt / TERA;
+
+    println!("GAS USED = {}", gas_used);
+
+    assert!(gas_used >= ASSERTATION_LOWER_BOUND);
+    assert!(gas_used <= ASSERTATION_UPPER_BOUND);
+
+    Ok(())
+}
+
 async fn bench_contract(wtr: &mut Writer<File>, name_os: OsString, commit: String) -> anyhow::Result<()> {
     let name = &name_os.to_str().unwrap()[0..name_os.len() - 5];
     println!("Name = {}", name);
@@ -40,6 +72,7 @@ async fn bench_contract(wtr: &mut Writer<File>, name_os: OsString, commit: Strin
             println!("{:#?}", failure);
         }
         assert!(outcome.is_success());
+
         wtr.write_record(&[
             name.to_string(),
             input.method.to_string(),
@@ -57,6 +90,8 @@ async fn bench_contract(wtr: &mut Writer<File>, name_os: OsString, commit: Strin
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+
+    assert_bench().await?;
 
     let paths = std::fs::read_dir("inputs/").unwrap();
 
