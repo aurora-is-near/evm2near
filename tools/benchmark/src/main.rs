@@ -3,7 +3,7 @@ use serde::{Deserialize};
 use serde_json::{json, Value};
 use std::{fs::File, ffi::OsString};
 use std::process::Command;
-
+use std::env;
 
 #[derive(Debug, Deserialize)]
 struct Input {
@@ -98,16 +98,34 @@ async fn main() -> anyhow::Result<()> {
     let contracts = paths.into_iter().map(|dir| dir.unwrap().file_name()).collect::<Vec<_>>();
 
 
+    // let github_sha = env::var("GITHUB_SHA").expect("GITHUB_SHA environment variable not found");
+    // println!("GITHUB_SHA: {}", github_sha);
 
-    let output = Command::new("sh")
+    let commit = match env::var("GITHUB_SHA") {
+        Ok(s) => s,
+        Err(_) => {
+            let output = Command::new("sh")
                 .arg("-c")
-                .arg("git rev-parse --short \"$GITHUB_SHA\"")
+                .arg("git rev-parse --short HEAD")
                 .output()
                 .expect("failed to execute process");
     
-    let stdout = output.stdout;
-    let mut commit = std::str::from_utf8(&stdout).unwrap().to_string();
-    commit.pop();  // to remove \n in the end
+            let stdout = output.stdout;
+            let mut tmp = std::str::from_utf8(&stdout).unwrap().to_string();
+            tmp.pop();  // to remove \n in the end
+            tmp
+        }
+    };
+
+    // let output = Command::new("sh")
+    //             .arg("-c")
+    //             .arg("git rev-parse --short \"$GITHUB_SHA\"")
+    //             .output()
+    //             .expect("failed to execute process");
+    
+    // let stdout = output.stdout;
+    // let mut commit = std::str::from_utf8(&stdout).unwrap().to_string();
+    // commit.pop();  // to remove \n in the end
 
     println!("Commit = {}", commit);
     
