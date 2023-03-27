@@ -100,9 +100,6 @@ async fn main() -> anyhow::Result<()> {
         .map(|dir| dir.unwrap().file_name())
         .collect::<Vec<_>>();
 
-    // let github_sha = env::var("GITHUB_SHA").expect("GITHUB_SHA environment variable not found");
-    // println!("GITHUB_SHA: {}", github_sha);
-
     let commit = match env::var("GITHUB_SHA") {
         Ok(_) => {
             println!("ENVVAR exist");
