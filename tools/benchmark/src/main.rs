@@ -102,8 +102,9 @@ async fn main() -> anyhow::Result<()> {
     // println!("GITHUB_SHA: {}", github_sha);
 
     let commit = match env::var("GITHUB_SHA") {
-        Ok(s) => s,
+        Ok(s) => {println!("ENVVAR exist");s},
         Err(_) => {
+            println!("ENVVAR don't exist");
             let output = Command::new("sh")
                 .arg("-c")
                 .arg("git rev-parse --short HEAD")
