@@ -39,7 +39,7 @@ def clean():
 
 def run_bench():
     os.chdir('tools/benchmark')
-    os.system('cargo run')
+    assert os.system('cargo run') == 0
     os.chdir('../../')
 
 
