@@ -59,17 +59,3 @@ if __name__ == "__main__":
     print("Clean started")
     clean()
     print("Clean ended")
-    # print(f"current dir = {os.getcwd()}")
-
-
-    ###
-    # tables = []
-    # for file in os.listdir("tools/benchmark/csvs"):
-    #     if file[-4:] != ".csv":
-    #         continue
-    #     print(f"current dir = {os.getcwd()}")
-    #     tables.append(pd.read_csv(f"tools/benchmark/csvs/{file}"))
-
-    # table = pd.concat(tables)
-    # table.to_html("tools/benchmark/pages/index.html")
-    # html_file = table.to_html()

@@ -31,14 +31,6 @@ jobs:
     - name: Install dependecies
       run:  cargo fetch
       
-    # - name: Cache dependencies
-    #   uses: actions/cache@v2
-    #   with:
-    #     path: ~/.cargo
-    #     key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-    #     restore-keys: |
-    #       ${{ runner.os }}-cargo-
-      
     - name: Build
       run: make
 
@@ -89,9 +81,3 @@ jobs:
         git add csvs/
         git commit -m "Benchmark workflow"
         git push origin gh-pages
-
-    # - uses: JamesIves/github-pages-deploy-action@v4.4.1
-    #   with:
-    #       branch: gh-pages
-    #       folder: tools/benchmark/pages
-    #       clean: false
