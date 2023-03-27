@@ -13,6 +13,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    with:
+      fetch-depth: 0  # fetches all history so that you can switch branches
+
 
     - name: Install solidity & wasm tools
       run: |
@@ -29,13 +32,13 @@ jobs:
     - name: Install dependecies
       run:  cargo fetch
       
-    - name: Cache dependencies
-      uses: actions/cache@v2
-      with:
-        path: ~/.cargo
-        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-        restore-keys: |
-          ${{ runner.os }}-cargo-
+    # - name: Cache dependencies
+    #   uses: actions/cache@v2
+    #   with:
+    #     path: ~/.cargo
+    #     key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+    #     restore-keys: |
+    #       ${{ runner.os }}-cargo-
       
     - name: Build
       run: make
@@ -67,30 +70,21 @@ jobs:
     - name: Run benchmark
       run: python3 tools/bench.py
 
-
-    - name: Setup Git
+    - name: Checkout gh-pages branch
       run: |
-        git config user.name "${{ github.actor }}"
-        git config user.email "${{ github.actor }}@users.noreply.github.com"
-
-    - name: Switch to gh-pages branch
-      run: |
+        git fetch origin gh-pages
         git checkout gh-pages
+    
+    - name: Copy generated CSV files
+      run: cp -r tools/benchmark/csvs/* csvs/
 
-    - name: Copy csv files
+    - name: Commit and push changes to gh-pages
       run: |
-        mkdir -p csvs
-        cp -r tools/benchmark/csvs/* csvs/
-
-    - name: Commit changes
-      run: |
+        git config user.name "MCJOHN974"
+        git config user.email "mcviktor@tut.by"
         git add csvs/
-        git commit -m "Update csv files"
-          
-    - name: Push changes
-      uses: ad-m/github-push-action@v0.6.0
-      with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        git commit -m "Benchmark workflow"
+        git push origin gh-pages
 
     - uses: JamesIves/github-pages-deploy-action@v4.4.1
       with:
