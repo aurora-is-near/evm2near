@@ -69,6 +69,11 @@ jobs:
     - name: Run benchmark
       run: python3 tools/bench.py
 
+    - name: Some debug
+      run: |
+        env
+        git log
+
     - name: Checkout gh-pages branch
       run: |
         git fetch origin gh-pages
