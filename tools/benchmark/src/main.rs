@@ -106,7 +106,7 @@ async fn main() -> anyhow::Result<()> {
             println!("ENVVAR exist");
             let output = Command::new("sh")
                 .arg("-c")
-                .arg("git log --pretty=format:"%h" -n 2 | tail -1")
+                .arg("git log --pretty=format:\"%h\" -n 2 | tail -1")
                 .output()
                 .expect("failed to execute process");
 
