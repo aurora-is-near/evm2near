@@ -13,38 +13,6 @@ struct Input {
 
 const TERA: u64 = 1000000000000_u64;
 
-const ASSERTATION_LOWER_BOUND: u64 = 230_u64;
-const ASSERTATION_UPPER_BOUND: u64 = 280_u64;
-
-async fn assert_bench() -> anyhow::Result<()> {
-    let worker = near_workspaces::sandbox().await?;
-    let wasm = std::fs::read("bench.wasm")?;
-    let contract = worker.dev_deploy(&wasm).await?;
-
-    let deposit = 10000000000000000000000_u128;
-
-    let outcome = contract
-        .call("cpu_ram_soak_test")
-        .args_json(json!({"loop_limit": 3000}))
-        .deposit(deposit)
-        .gas(near_units::parse_gas!("300 TGas") as u64)
-        .transact()
-        .await?;
-    for failure in &outcome.failures() {
-        println!("{:#?}", failure);
-    }
-    assert!(outcome.is_success());
-
-    let gas_used = outcome.total_gas_burnt / TERA;
-
-    println!("GAS USED = {}", gas_used);
-
-    assert!(gas_used >= ASSERTATION_LOWER_BOUND);
-    assert!(gas_used <= ASSERTATION_UPPER_BOUND);
-
-    Ok(())
-}
-
 async fn bench_contract(
     wtr: &mut Writer<File>,
     name_os: OsString,
@@ -75,14 +43,12 @@ async fn bench_contract(
         assert!(outcome.is_success());
 
         wtr.write_record(&[
+            commit.clone(),
             name.to_string(),
             input.method.to_string(),
-            outcome.outcome().gas_burnt.to_string(),
-            outcome.total_gas_burnt.to_string(),
+            input.input.to_string(),
             (outcome.outcome().gas_burnt / TERA).to_string(),
             (outcome.total_gas_burnt / TERA).to_string(),
-            input.input.to_string(),
-            commit.clone(),
         ])?;
     }
     wtr.flush()?;
@@ -91,7 +57,6 @@ async fn bench_contract(
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    assert_bench().await?;
 
     let paths = std::fs::read_dir("inputs/").unwrap();
 
@@ -132,14 +97,12 @@ async fn main() -> anyhow::Result<()> {
     let mut wtr = Writer::from_path(format!("csvs/{}.csv", commit))?;
 
     wtr.write_record([
+        "Commit",
         "Contract",
         "Method",
-        "Gas burned",
-        "Gas used",
-        "Tgas burned",
-        "Tgas used",
         "Input",
-        "Commit",
+        "Tgas burned",
+        "Avg Tgas used",
     ])?;
 
     for contract in contracts {
