@@ -69,14 +69,14 @@ if __name__ == "__main__":
 
     dataframes = []
 
-    for i in range(10):
+    for i in range(20):
         clean()
         compile_contracts()
         print("Contracts compiled")
         copy_contracts()
         print("Benchmark started")
         run_bench()
-        print("Benchmark ended, see results in tools/benchmark/csvs/{commit}.csv")
+        print(f"Benchmark ended, see results in tools/benchmark/csvs/{commit}.csv")
         print("Clean started")
         clean()
         print("Clean ended")
@@ -84,34 +84,41 @@ if __name__ == "__main__":
         dataframes.append(pd.read_csv(f'tools/benchmark/csvs/{commit}.csv'))
 
     # Extract the 5th column from each DataFrame
-    fifth_columns = pd.concat([df.iloc[:, 5] for df in dataframes], axis=1)
+    Tgas_used = pd.concat([df.iloc[:, 5] for df in dataframes], axis=1)
 
     # Calculate the mean, variance, min, and max values for each row in the 5th columns
-    mean_5th_column = fifth_columns.mean(axis=1)
-    variance_5th_column = fifth_columns.var(axis=1)
-    min_5th_column = fifth_columns.min(axis=1)
-    max_5th_column = fifth_columns.max(axis=1)
+    mean_Tgas_used = Tgas_used.mean(axis=1)
+    variance_Tgas_used = Tgas_used.var(axis=1)
+    min_Tgas_used = Tgas_used.min(axis=1)
+    max_Tgas_used = Tgas_used.max(axis=1)
 
     # Create a new DataFrame using the first DataFrame as a template
     new_df = dataframes[0].copy()
 
     # Replace the 5th column in the new DataFrame with the mean values
-    new_df.iloc[:, 5] = mean_5th_column
+    new_df.iloc[:, 5] = mean_Tgas_used
 
     # Add columns for variance, min, and max values
-    new_df['Variance'] = variance_5th_column
-    new_df['Min'] = min_5th_column
-    new_df['Max'] = max_5th_column
+    new_df['Variance'] = variance_Tgas_used
+    new_df['Min'] = min_Tgas_used
+    new_df['Max'] = max_Tgas_used
 
-    last_value_5th_column = new_df.iloc[-1, 5]   # mean with {"loop_limit": 3000}
+    # extract mean and variance for bench with loop_limit = 3000
+    mean = new_df.iloc[-1, 5]   
+    variance = new_df.iloc[-1, 6]
+   
+    UPPER_BOUND_MEAN = 252
+    LOWER_BOUND_MEAN = 249
 
+    # I runned code three times and values was 109.6, 77.7, 49.3, so this bounds will be changed soon, I think
+    UPPER_BOUND_VARIANCE = 120
+    LOWER_BOUND_VARIANCE = 40
 
-    # I runned this code 5 times and see next bounds: [249.8; 255.6]
-    UPPER_BOUND = 257
-    LOWER_BOUND = 248
+    assert mean <= UPPER_BOUND_MEAN
+    assert mean >= LOWER_BOUND_MEAN
 
-    assert last_value_5th_column <= UPPER_BOUND
-    assert last_value_5th_column >= LOWER_BOUND
+    assert variance <= UPPER_BOUND_VARIANCE
+    assert variance >= LOWER_BOUND_VARIANCE
 
     # Save the new DataFrame to a CSV file
     new_df.to_csv(f"tools/benchmark/csvs/{commit}.csv", index=False)
