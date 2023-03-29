@@ -118,4 +118,3 @@ jobs:
         git add csvs/
         git commit -m "Benchmark workflow"
         git push origin gh-pages
-
