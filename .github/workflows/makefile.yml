@@ -76,6 +76,7 @@ jobs:
       run: |
         env
         git log
+
     - name: Checkout gh-pages branch
       run: |
         git fetch origin gh-pages
