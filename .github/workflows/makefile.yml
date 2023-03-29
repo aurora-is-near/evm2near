@@ -16,11 +16,31 @@ jobs:
       with:
         fetch-depth: 0  # fetches all history so that you can switch branches
 
+
+    # Cache Solidity & Wasm tools
+    - name: Cache solidity and wasm tools
+      uses: actions/cache@v2
+      with:
+        path: |
+          /usr/bin/solc
+          /usr/bin/wabt
+        key: ${{ runner.os }}-solidity-wasm-tools
+
     - name: Install solidity & wasm tools
       run: |
         sudo add-apt-repository ppa:ethereum/ethereum
         sudo apt-get update
         sudo apt-get install -y wabt solc
+
+    # Cache Rustup targets
+    - name: Cache rustup targets
+      uses: actions/cache@v2
+      with:
+        path: |
+          ~/.rustup/toolchains/*/lib/rustlib/*/lib/*.rmeta
+          ~/.rustup/toolchains/*/lib/rustlib/*/lib/*.rlib
+        key: ${{ runner.os }}-rustup-targets
+
     - name: Add wasi target
       run: rustup target add wasm32-wasi
       
