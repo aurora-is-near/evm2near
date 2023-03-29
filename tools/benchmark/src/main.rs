@@ -112,5 +112,3 @@ async fn main() -> anyhow::Result<()> {
     wtr.flush()?;
     Ok(())
 }
-
-
