@@ -67,19 +67,39 @@ async fn main() -> anyhow::Result<()> {
 
     let commit = match env::var("GITHUB_SHA") {
         Ok(_) => {
-            println!("ENVVAR exist");
-            let output = Command::new("sh")
+            println!("Running in github action");
+
+
+            let event_name = env::var("GITHUB_EVENT_NAME").unwrap_or_default();
+            let ref_name = env::var("GITHUB_REF").unwrap_or_default();
+        
+            if event_name == "push" && ref_name == "refs/heads/master" {
+                // push to master
+                let output = Command::new("sh")
                 .arg("-c")
                 .arg("git log --pretty=format:\"%h\" -n 2 | tail -1")
                 .output()
                 .expect("failed to execute process");
 
-            let stdout = output.stdout;
-            let tmp = std::str::from_utf8(&stdout).unwrap().to_string();
-            tmp
+                let stdout = output.stdout;
+                let tmp = std::str::from_utf8(&stdout).unwrap().to_string();
+                tmp
+            } else {
+                // pull request
+                let output = Command::new("sh")
+                .arg("-c")
+                .arg("git rev-parse --short HEAD")
+                .output()
+                .expect("failed to execute process");
+
+                let stdout = output.stdout;
+                let mut tmp = std::str::from_utf8(&stdout).unwrap().to_string();
+                tmp.pop(); // to remove \n in the end
+                tmp
+            }
         }
         Err(_) => {
-            println!("ENVVAR don't exist");
+            println!("Running locally");
             let output = Command::new("sh")
                 .arg("-c")
                 .arg("git rev-parse --short HEAD")

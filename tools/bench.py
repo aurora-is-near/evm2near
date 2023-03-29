@@ -61,9 +61,19 @@ if __name__ == "__main__":
         commit = commit[:-1]
     else:
         # script running in github actions
-        result = subprocess.run(['bash', '-c', 'git log --pretty=format:\"%h\" -n 2 | tail -1'], stdout=subprocess.PIPE)
-        commit = result.stdout.decode('utf-8')
-        
+        event_name = os.environ.get('GITHUB_EVENT_NAME')
+        ref = os.environ.get('GITHUB_REF')
+
+        if event_name == "push" and ref == "refs/heads/master":
+            # push to master
+            result = subprocess.run(['bash', '-c', 'git rev-parse --short HEAD'], stdout=subprocess.PIPE)
+            commit = result.stdout.decode('utf-8')
+            commit = commit[:-1]
+        else:
+            # pull request
+            result = subprocess.run(['bash', '-c', 'git log --pretty=format:\"%h\" -n 2 | tail -1'], stdout=subprocess.PIPE)
+            commit = result.stdout.decode('utf-8')
+            
 
     print(f'Commit = {commit}')
 
