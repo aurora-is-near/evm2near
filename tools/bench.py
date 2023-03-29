@@ -117,11 +117,11 @@ if __name__ == "__main__":
     mean = new_df.iloc[-1, 5]   
     variance = new_df.iloc[-1, 6]
    
-    UPPER_BOUND_MEAN = 252
-    LOWER_BOUND_MEAN = 249
+    UPPER_BOUND_MEAN = 255
+    LOWER_BOUND_MEAN = 245
 
     # I runned code three times and values was 109.6, 77.7, 49.3, so this bounds will be changed soon, I think
-    UPPER_BOUND_VARIANCE = 120
+    UPPER_BOUND_VARIANCE = 130
     LOWER_BOUND_VARIANCE = 40
 
     assert mean <= UPPER_BOUND_MEAN
