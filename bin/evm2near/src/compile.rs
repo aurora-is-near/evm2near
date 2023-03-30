@@ -12,22 +12,16 @@ use evm_rs::{parse_opcode, Opcode, Program};
 use parity_wasm::{
     builder::{FunctionBuilder, ModuleBuilder, SignatureBuilder},
     elements::{
-        BlockType, ExportEntry, FuncBody, ImportCountType, Instruction, Instructions, Internal,
-        Local, Module, TableType, ValueType,
+        BlockType, BrTableData, ExportEntry, FuncBody, ImportCountType, Instruction, Instructions,
+        Internal, Local, Module, TableType, ValueType,
     },
 };
-use relooper::graph::{
-    caterpillar::EvmCfgLabel, enrichments::EnrichedCfg, relooper::ReBlock, supergraph::reduce,
-};
-use relooper::graph::{
-    caterpillar::{unfold_dyn_edges, CaterpillarLabel},
-    relooper::ReSeq,
-    supergraph::SLabel,
-};
+use relooper::graph::{enrichments::EnrichedCfg, relooper::ReBlock, supergraph::reduce};
+use relooper::graph::{relooper::ReSeq, supergraph::SLabel};
 
 use crate::{
     abi::Functions,
-    analyze::{basic_cfg, BasicCfg, Idx, Offs},
+    analyze::{basic_cfg, BasicCfg, CfgNode, Idx, Offs},
     config::CompilerConfig,
     encode::encode_push,
 };
@@ -123,7 +117,6 @@ struct Compiler {
     evm_exec_function: FunctionIndex,      // _evm_exec
     evm_post_exec_function: FunctionIndex, // _evm_post_exec
     evm_pop_function: FunctionIndex,       // _evm_pop_u32
-    evm_push_function: FunctionIndex,      // _evm_push_u32
     evm_burn_gas: FunctionIndex,           // _evm_burn_gas
     evm_pc_function: FunctionIndex,        // _evm_set_pc
     function_import_count: usize,
@@ -145,7 +138,6 @@ impl Compiler {
                 .unwrap(),
             evm_exec_function: 0, // filled in during compile_cfg()
             evm_pop_function: find_runtime_function(&runtime_library, "_evm_pop_u32").unwrap(),
-            evm_push_function: find_runtime_function(&runtime_library, "_evm_push_u32").unwrap(),
             evm_burn_gas: find_runtime_function(&runtime_library, "_evm_burn_gas").unwrap(),
             evm_pc_function: find_runtime_function(&runtime_library, "_evm_set_pc").unwrap(),
             function_import_count: runtime_library.import_count(ImportCountType::Function),
@@ -268,48 +260,11 @@ impl Compiler {
         Ok(data)
     }
 
-    fn relooped_cfg(&self, basic_cfg: &BasicCfg) -> ReSeq<SLabel<CaterpillarLabel<EvmBlock>>> {
-        let cfg = basic_cfg.cfg.map_label(|label| {
-            let code_range = basic_cfg
-                .code_ranges
-                .get(label)
-                .unwrap_or_else(|| panic!("no code ranges for {}", label));
-            let &node_info = basic_cfg.node_info.get(label).unwrap();
-            let evm_label = EvmBlock::new(*label, code_range.start, code_range.end);
-            EvmCfgLabel {
-                cfg_label: evm_label,
-                is_jumpdest: node_info.is_jumpdest,
-                is_dynamic: node_info.is_dynamic,
-            }
-        });
-
-        let mut dynamic_materialized = unfold_dyn_edges(&cfg);
-        self.debug("dynamic_materialized.dot", || {
-            format!("digraph {{{}}}", dynamic_materialized.cfg_to_dot("dyn"))
-        });
-        dynamic_materialized.strip_unreachable();
-        self.debug("stripped.dot", || {
-            format!(
-                "digraph {{{}}}",
-                dynamic_materialized.cfg_to_dot("stripped")
-            )
-        });
-        let reduced = reduce(&dynamic_materialized);
-        self.debug("reduced.dot", || {
-            format!("digraph {{{}}}", dynamic_materialized.cfg_to_dot("reduced"))
-        });
-        let enriched = EnrichedCfg::new(reduced);
-        self.debug("enriched.dot", || {
-            format!("digraph {{{}}}", enriched.cfg_to_dot("enriched"))
-        });
-        enriched.reloop()
-    }
-
     //TODO self is only used for `evm_pop_function`
     fn unfold_cfg(
         &self,
         program: &Program,
-        cfg_part: &ReSeq<SLabel<CaterpillarLabel<EvmBlock>>>,
+        cfg_part: &ReSeq<SLabel<CfgNode<EvmBlock>>>,
         res: &mut Vec<Instruction>,
         wasm_idx2evm_idx: &mut HashMap<Idx, Idx>,
     ) {
@@ -334,14 +289,14 @@ impl Compiler {
                     res.push(Instruction::End);
                 }
                 ReBlock::Br(levels) => {
-                    res.push(Instruction::Br((*levels).try_into().unwrap()));
+                    res.push(Instruction::Br(*levels));
                 }
                 ReBlock::Return => {
                     res.push(Instruction::Return);
                 }
                 ReBlock::Actions(block) => {
                     match block.origin {
-                        CaterpillarLabel::Original(orig_label) => {
+                        CfgNode::Orig(orig_label) => {
                             let block_code =
                                 &program.0[orig_label.code_start.0..orig_label.code_end.0];
                             let block_len = orig_label.code_end.0 - orig_label.code_start.0;
@@ -365,8 +320,6 @@ impl Compiler {
                                         // this is dynamic jump
                                         let jump_gas = if j == &Opcode::JUMP { 8 } else { 10 };
                                         res.extend(vec![
-                                            Instruction::Call(self.evm_pop_function),
-                                            Instruction::SetLocal(0),
                                             Instruction::I32Const(jump_gas),
                                             Instruction::Call(self.evm_burn_gas),
                                         ]);
@@ -403,36 +356,47 @@ impl Compiler {
                                 }
                             }
                         }
-                        CaterpillarLabel::Generated(a) => {
-                            res.extend(vec![
-                                Instruction::GetLocal(0),
-                                Instruction::I32Const(a.label.0.try_into().unwrap()),
-                                Instruction::I32Eq,
-                                Instruction::Call(self.evm_push_function),
-                            ]);
-                        }
+                        CfgNode::Dynamic => {}
                     }
+                }
+                ReBlock::TableJump(table) => {
+                    let (table_len, _) = table.last_key_value().unwrap(); // should be safe as switch of zero variants is meaningless
+                    let mut linear_table = vec![0; table_len + 1];
+                    for (&cond, &br_num) in table {
+                        linear_table[cond] = br_num + 1; // increment due to additional block wrapping (for unreachable instruction)
+                    }
+
+                    res.push(Instruction::Block(BlockType::NoResult));
+                    res.push(Instruction::Call(self.evm_pop_function));
+                    let br_table = Instruction::BrTable(Box::new(BrTableData {
+                        table: linear_table.into_boxed_slice(),
+                        default: 0,
+                    }));
+                    res.push(br_table);
+                    res.push(Instruction::End);
+                    res.push(Instruction::Unreachable);
                 }
             }
         }
     }
 
-    fn evm_wasm_dot_debug(
-        &self,
-        program: &Program,
-        basic_cfg: &BasicCfg,
-        _input_cfg: &ReSeq<SLabel<CaterpillarLabel<EvmBlock>>>,
-        wasm: &[Instruction],
-        wasm_idx2evm_idx: &HashMap<Idx, Idx>,
-    ) {
-        let evm_idx2offs = evm_idx_to_offs(program);
-
+    fn opcodes_debug(&self, program: &Program) {
         let mut opcode_lines: Vec<String> = vec![];
         program.0.iter().fold(Offs(0), |offs, opcode| {
             opcode_lines.push(format!("0x{:02x}\t{}", offs.0, opcode));
             Offs(offs.0 + opcode.size())
         });
         self.debug("opcodes.evm", || opcode_lines.join("\n"));
+    }
+
+    fn evm_wasm_dot_debug(
+        &self,
+        program: &Program,
+        basic_cfg: &BasicCfg,
+        wasm: &[Instruction],
+        wasm_idx2evm_idx: &HashMap<Idx, Idx>,
+    ) {
+        let evm_idx2offs = evm_idx_to_offs(program);
 
         let mut code_ranges: Vec<_> = basic_cfg.code_ranges.iter().collect();
         code_ranges.sort_by_key(|&(Offs(offs), _r)| offs);
@@ -530,11 +494,39 @@ subgraph cluster_wasm {{ label = \"wasm\"
         assert_ne!(self.evm_start_function, 0); // filled in during emit_start()
         assert_eq!(self.evm_exec_function, 0); // filled in below
 
+        self.opcodes_debug(program);
+
         let basic_cfg = basic_cfg(program);
         self.debug("basic_cfg.dot", || {
             format!("digraph {{{}}}", basic_cfg.cfg.cfg_to_dot("basic"))
         });
-        let relooped_cfg = self.relooped_cfg(&basic_cfg);
+
+        let mut evm_cfg = basic_cfg.cfg.map_label(|n| match n {
+            CfgNode::Orig(l) => {
+                let a = basic_cfg.code_ranges.get(l).unwrap();
+                CfgNode::Orig(EvmBlock::new(*l, a.start, a.end))
+            }
+            CfgNode::Dynamic => CfgNode::Dynamic,
+        });
+
+        evm_cfg.strip_unreachable();
+        self.debug("stripped.dot", || {
+            format!("digraph {{{}}}", evm_cfg.cfg_to_dot("stripped"))
+        });
+        let reduced = reduce(&evm_cfg);
+        self.debug("reduced.dot", || {
+            format!("digraph {{{}}}", evm_cfg.cfg_to_dot("reduced"))
+        });
+        let enriched = EnrichedCfg::new(reduced);
+        self.debug("enriched.dot", || {
+            format!(
+                "digraph {{{} {}}}",
+                enriched.cfg_to_dot("enriched"),
+                enriched.dom_to_dot()
+            )
+        });
+        let relooped_cfg = enriched.reloop();
+
         self.debug("relooped.dot", || {
             format!("digraph {{{}}}", relooped_cfg.to_dot())
         });
@@ -545,7 +537,7 @@ subgraph cluster_wasm {{ label = \"wasm\"
         wasm.push(Instruction::End);
 
         if self.config.debug_path.is_some() {
-            self.evm_wasm_dot_debug(program, &basic_cfg, &relooped_cfg, &wasm, &wasm_idx2evm_idx);
+            self.evm_wasm_dot_debug(program, &basic_cfg, &wasm, &wasm_idx2evm_idx);
         }
 
         let func_id = self.emit_function(Some("_evm_exec".to_string()), wasm);

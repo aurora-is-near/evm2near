@@ -1,5 +1,4 @@
-use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
-use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel};
+use crate::graph::cfg::{Cfg, CfgLabel};
 use crate::graph::supergraph::NodeAction::{MergeInto, SplitFor};
 use crate::traversal::graph::dfs::{DfsPost, DfsPostReverseInstantiator};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -19,7 +18,7 @@ impl<TLabel: CfgLabel + Display> Display for SLabel<TLabel> {
     }
 }
 
-impl<TLabel: CfgLabel + Debug> Debug for SLabel<TLabel> {
+impl<TLabel: CfgLabel> Debug for SLabel<TLabel> {
     // why debug isnt automatically derived from display?
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}_{}", self.origin, self.version)
@@ -61,7 +60,7 @@ impl<TLabel: CfgLabel> SNode<TLabel> {
 
 type SNodeLabel<TLabel> = SLabel<TLabel>;
 
-pub struct SuperGraph<TLabel: CfgLabel + Debug> {
+pub struct SuperGraph<TLabel: CfgLabel> {
     cfg: Cfg<SLabel<TLabel>>,
     versions: BTreeMap<TLabel, usize>,
     nodes: BTreeMap<SNodeLabel<TLabel>, SNode<TLabel>>,
@@ -76,20 +75,7 @@ enum NodeAction<TLabel: CfgLabel> {
     SplitFor(SplitInto<TLabel>),
 }
 
-impl<TLabel: CfgLabel> CfgEdge<TLabel> {
-    fn redirect<F>(&self, redirection: F) -> CfgEdge<TLabel>
-    where
-        F: Fn(TLabel) -> TLabel,
-    {
-        match self {
-            Uncond(to) => Uncond(redirection(*to)),
-            Cond(t, f) => Cond(redirection(*t), redirection(*f)),
-            Terminal => Terminal,
-        }
-    }
-}
-
-impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
+impl<TLabel: CfgLabel> SuperGraph<TLabel> {
     pub(crate) fn new(cfg: &Cfg<TLabel>) -> Self {
         let new_cfg = cfg.map_label(|&l| SLabel::from(l));
 
@@ -170,7 +156,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
             .contained
             .iter()
             .copied()
-            .map(|inner| (inner, *self.cfg.edge(&inner)))
+            .map(|inner| (inner, self.cfg.edge(&inner).clone()))
             .collect();
 
         //duplicate every label in that supernode (for each split except the first one, bc original version can be reused)
@@ -187,25 +173,18 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
             }
 
             // copy internal & outgoing edges
-            for (o_from, &edge) in outgoing_edges.iter() {
+            for (o_from, edge) in &outgoing_edges {
                 let curr_from = versions_mapping[o_from];
                 // in case of internal edge, we should redirect that edge to new copy of internal node
-                let maybe_redirected_edge =
-                    edge.redirect(|l| *versions_mapping.get(&l).unwrap_or(&l));
+                let maybe_redirected_edge = edge.map(|l| *versions_mapping.get(l).unwrap_or(l));
                 self.cfg.add_edge(curr_from, maybe_redirected_edge);
             }
 
-            let from_split: HashMap<_, _> = split_for
-                .contained
-                .iter()
-                .map(|&l| (l, *self.cfg.edge(&l)))
-                .filter(|(_l, e)| e.iter().any(|&to| to == split_snode.head))
-                .collect();
-
-            for (f, e) in from_split {
-                let redirected = e.redirect(|to| *versions_mapping.get(&to).unwrap_or(&to));
-                self.cfg.remove_edge(f, e);
-                self.cfg.add_edge(f, redirected);
+            for &f in &split_for.contained {
+                let e = self.cfg.edge_mut(&f);
+                if e.iter().any(|&to| to == split_snode.head) {
+                    e.apply(|to| *versions_mapping.get(to).unwrap_or(to))
+                }
             }
 
             // populate supernode graph with new node's new version (for each split)
@@ -230,7 +209,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
     /// * remove one supernode (by merging it into another one)
     /// * or duplicate one (by splitting, one dup for each "parent")
     /// in the end, there is only one supernode, which contains all the nodes and whose head is "entry" node
-    pub fn reduce(&mut self) {
+    fn reduce(&mut self) {
         let mut in_edges: Option<HashMap<SLabel<TLabel>, HashSet<SLabel<TLabel>>>> = None;
         'outer: loop {
             let order: Vec<SLabel<TLabel>> = self.snode_order();
@@ -278,7 +257,7 @@ impl<TLabel: CfgLabel + Debug> SuperGraph<TLabel> {
     }
 }
 
-pub fn reduce<TLabel: CfgLabel + Debug>(cfg: &Cfg<TLabel>) -> Cfg<SLabel<TLabel>> {
+pub fn reduce<TLabel: CfgLabel>(cfg: &Cfg<TLabel>) -> Cfg<SLabel<TLabel>> {
     let mut super_graph = SuperGraph::new(cfg);
     super_graph.reduce();
     super_graph.cfg
@@ -301,12 +280,12 @@ mod test {
             origin_mapping.entry(x.origin).or_default().insert(*x);
         }
 
-        origin_cfg.edges().iter().all(|(from, &e)| {
+        origin_cfg.edges().iter().all(|(from, e)| {
             origin_mapping
                 .get(from)
                 .unwrap()
                 .iter()
-                .all(|&r_from| reduced_cfg.edge(&r_from).map(|x| x.origin) == e)
+                .all(|&r_from| &reduced_cfg.edge(&r_from).map(|x| x.origin) == e)
         })
     }
 
@@ -314,7 +293,7 @@ mod test {
     fn simplest() {
         let cfg = Cfg::from_edges(
             0,
-            &vec![(0, Cond(1, 2)), (1, Uncond(2)), (2, Cond(3, 1))]
+            vec![(0, Cond(1, 2)), (1, Uncond(2)), (2, Cond(3, 1))]
                 .into_iter()
                 .collect(),
         );
@@ -327,11 +306,30 @@ mod test {
     fn irreducible() {
         let cfg = Cfg::from_edges(
             0,
-            &vec![
+            vec![
                 (0, Cond(1, 2)),
                 (1, Uncond(4)),
                 (4, Uncond(2)),
                 (2, Cond(3, 1)),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let reduced = reduce(&cfg);
+
+        assert!(test_reduce(cfg, reduced));
+    }
+
+    #[test]
+    fn moderate() {
+        let cfg = Cfg::from_edges(
+            0,
+            vec![
+                (0, Cond(1, 2)),
+                (1, Cond(3, 4)),
+                (2, Cond(3, 5)),
+                (3, Uncond(4)),
+                (4, Cond(2, 5)),
             ]
             .into_iter()
             .collect(),
