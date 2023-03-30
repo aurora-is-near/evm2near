@@ -1,5 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 
+#![feature(map_first_last)]
+
 mod abi;
 mod analyze;
 mod compile;

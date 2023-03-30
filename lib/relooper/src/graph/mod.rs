@@ -1,4 +1,3 @@
-pub mod caterpillar;
 pub mod cfg;
 pub mod dot_debug;
 pub mod enrichments;

@@ -24,6 +24,13 @@ impl<TLabel: CfgLabel + Display> Cfg<TLabel> {
                     edges.push(format!("{name}_n{n} -> {name}_n{t}[style=\"dashed\"];"));
                     edges.push(format!("{name}_n{n} -> {name}_n{f};"));
                 }
+                CfgEdge::Switch(v) => {
+                    for (u, t) in v {
+                        edges.push(format!(
+                            "{name}_n{n} -> {name}_n{t}[style=\"dashed\",text=\"{u}\"]"
+                        ));
+                    }
+                }
                 CfgEdge::Terminal => {
                     edges.push(format!("{name}_n{n} -> {name}_nend;"));
                 }
@@ -69,6 +76,13 @@ impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
                 CfgEdge::Cond(t, f) => {
                     edges.push(format!("{name}_n{n} -> {name}_n{t}[style=\"dashed\"];"));
                     edges.push(format!("{name}_n{n} -> {name}_n{f};"));
+                }
+                CfgEdge::Switch(v) => {
+                    for (u, t) in v {
+                        edges.push(format!(
+                            "{name}_n{n} -> {name}_n{t}[style=\"dashed\",text=\"{u}\"]"
+                        ));
+                    }
                 }
                 CfgEdge::Terminal => {
                     edges.push(format!("{name}_n{n} -> {name}_nend;"));
@@ -159,7 +173,7 @@ impl<TLabel: CfgLabel + Display> ReSeq<TLabel> {
                         res.push(format!("r{current_id}[label=\"Br {current_id}\"];"));
 
                         let branch_to = back_branches
-                            .get(back_branches.len() - 1 - jmp)
+                            .get(back_branches.len() - 1 - (*jmp as usize))
                             .expect("unexpected branch");
                         res.push(format!(
                             "r{current_id} -> r{branch_to}[constraint=false,color=\"blue\"]"
@@ -169,6 +183,20 @@ impl<TLabel: CfgLabel + Display> ReSeq<TLabel> {
                     }
                     ReBlock::Return => {
                         res.push(format!("r{current_id}[label=\"Return {current_id}\"];"));
+
+                        (current_id + 1, None)
+                    }
+                    ReBlock::TableJump(table) => {
+                        res.push(format!("r{current_id}[label=\"BrTable {current_id}\"];"));
+
+                        for &jmp in table.values() {
+                            let branch_to = back_branches
+                                .get(back_branches.len() - 1 - (jmp as usize))
+                                .expect("unexpected branch");
+                            res.push(format!(
+                                "r{current_id} -> r{branch_to}[constraint=false,color=\"blue\"]"
+                            ));
+                        }
 
                         (current_id + 1, None)
                     }
