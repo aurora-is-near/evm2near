@@ -103,9 +103,14 @@ if __name__ == "__main__":
     new_df['Min'] = min_Tgas_used
     new_df['Max'] = max_Tgas_used
 
+    # Save the new DataFrame to a CSV file
+    new_df.to_csv(f"tools/benchmark/csvs/{commit}.csv", index=False)
+
     # extract mean and variance for bench with loop_limit = 3000
     mean = new_df.iloc[-1, 5]   
     variance = new_df.iloc[-1, 6]
+
+    print(f"Mean = {mean}\nVariance = {variance}")
    
     UPPER_BOUND_MEAN = 255
     LOWER_BOUND_MEAN = 245
@@ -120,5 +125,4 @@ if __name__ == "__main__":
     assert variance <= UPPER_BOUND_VARIANCE
     assert variance >= LOWER_BOUND_VARIANCE
 
-    # Save the new DataFrame to a CSV file
-    new_df.to_csv(f"tools/benchmark/csvs/{commit}.csv", index=False)
+
