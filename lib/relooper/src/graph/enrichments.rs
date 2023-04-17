@@ -35,8 +35,7 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
                 merge_nodes.insert(n);
             }
 
-            let reachable: HashSet<_> =
-                Bfs::start_from_except(n, |&l| cfg.children(&l).into_iter().copied()).collect();
+            let reachable: HashSet<_> = Bfs::start_from_except(&n, |&l| cfg.children(&l)).collect();
             for &c in cfg.children(&n).into_iter() {
                 if node_ordering.is_backward(n, c) && reachable.contains(&c) {
                     loop_nodes.insert(c);

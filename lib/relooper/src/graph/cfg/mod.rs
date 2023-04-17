@@ -223,14 +223,12 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
         in_edges
     }
 
-    fn reachable_nodes(&self) -> HashSet<&TLabel> {
-        Bfs::start_from(&self.entry, |label| self.children(label)).collect()
-    }
-
     pub fn strip_unreachable(&mut self) {
+        let reachable_from_start: HashSet<&TLabel> =
+            Bfs::start_from(&self.entry, |label| self.children(label)).collect();
         let unreachable_nodes: HashSet<TLabel> = self
             .nodes()
-            .difference(&self.reachable_nodes())
+            .difference(&reachable_from_start)
             .into_iter()
             .map(|n| **n)
             .collect();
