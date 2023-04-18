@@ -61,7 +61,7 @@ impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
 
     /// either generates branch node or "fallthrough" next node
     fn do_branch(&self, from: TLabel, to: TLabel, context: &Vec<Context<TLabel>>) -> ReSeq<TLabel> {
-        if self.node_ordering.is_backward(from, to) || self.merge_nodes.contains(&to) {
+        if self.node_ordering.is_backward(&from, &to) || self.merge_nodes.contains(&to) {
             let idx_coll = context
                 .iter()
                 .enumerate()

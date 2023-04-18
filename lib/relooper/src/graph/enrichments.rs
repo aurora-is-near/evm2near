@@ -18,32 +18,32 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
     pub fn new(cfg: Cfg<TLabel>) -> Self {
         let node_ordering = NodeOrdering::new(&cfg, cfg.entry);
 
-        let mut merge_nodes: HashSet<TLabel> = HashSet::new();
-        let mut loop_nodes: HashSet<TLabel> = HashSet::new();
-        let mut if_nodes: HashSet<TLabel> = HashSet::new();
+        let mut merge_nodes: HashSet<TLabel> = Default::default();
+        let mut loop_nodes: HashSet<TLabel> = Default::default();
+        let mut if_nodes: HashSet<TLabel> = Default::default();
 
         let in_edges = cfg.in_edges();
 
         let mut start = Instant::now();
-        for &n in cfg.nodes() {
+        for n in cfg.nodes() {
             let in_edges_count = in_edges.get(&n).map_or(0, |v| {
                 v.iter()
-                    .filter(|&&from| node_ordering.is_forward(from, n))
+                    .filter(|&from| node_ordering.is_forward(from, n))
                     .count()
             });
             if in_edges_count > 1 {
-                merge_nodes.insert(n);
+                merge_nodes.insert(*n);
             }
 
-            let reachable: HashSet<_> = Bfs::start_from_except(&n, |&l| cfg.children(&l)).collect();
-            for &c in cfg.children(&n).into_iter() {
+            let reachable: HashSet<_> = Bfs::start_from_except(n, |l| cfg.children(l)).collect();
+            for c in cfg.children(n).into_iter() {
                 if node_ordering.is_backward(n, c) && reachable.contains(&c) {
-                    loop_nodes.insert(c);
+                    loop_nodes.insert(*c);
                 }
             }
 
-            if let CfgEdge::Cond(_, _) = cfg.edges().get(&n).unwrap() {
-                if_nodes.insert(n);
+            if let CfgEdge::Cond(_, _) = cfg.edges().get(n).unwrap() {
+                if_nodes.insert(*n);
             }
         }
         println!("marking nodes {:?}", start.elapsed());
@@ -181,15 +181,15 @@ impl<TLabel: CfgLabel> NodeOrdering<TLabel> {
         Self { vec, idx }
     }
 
-    pub fn is_backward(&self, from: TLabel, to: TLabel) -> bool {
+    pub fn is_backward(&self, from: &TLabel, to: &TLabel) -> bool {
         self.idx
-            .get(&from)
-            .zip(self.idx.get(&to))
+            .get(from)
+            .zip(self.idx.get(to))
             .map(|(&f, &t)| f > t)
             .unwrap()
     }
 
-    pub fn is_forward(&self, from: TLabel, to: TLabel) -> bool {
+    pub fn is_forward(&self, from: &TLabel, to: &TLabel) -> bool {
         !self.is_backward(from, to)
     }
 
