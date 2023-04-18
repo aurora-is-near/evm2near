@@ -7,12 +7,12 @@ pub struct Bfs<T, ChFun> {
     get_children: ChFun,
 }
 
-impl<'a, T, ChIt, ChFun> Bfs<&'a T, ChFun>
+impl<T, ChIt, ChFun> Bfs<T, ChFun>
 where
-    ChIt: IntoIterator<Item = &'a T>,
-    ChFun: FnMut(&T) -> ChIt,
+    ChIt: IntoIterator<Item = T>,
+    ChFun: FnMut(T) -> ChIt,
 {
-    pub fn start_iter<I: Iterator<Item = &'a T>>(iter: I, get_children: ChFun) -> Self {
+    pub fn start_iter<I: Iterator<Item = T>>(iter: I, get_children: ChFun) -> Self {
         Bfs {
             visited: HashSet::new(),
             queue: VecDeque::from_iter(iter),
@@ -20,11 +20,11 @@ where
         }
     }
 
-    pub fn start_from(item: &'a T, get_children: ChFun) -> Self {
+    pub fn start_from(item: T, get_children: ChFun) -> Self {
         Self::start_iter(Some(item).into_iter(), get_children)
     }
 
-    pub fn start_from_except(item: &T, mut get_children: ChFun) -> Self {
+    pub fn start_from_except(item: T, mut get_children: ChFun) -> Self {
         Self::start_iter(get_children(item).into_iter(), get_children)
     }
 }
