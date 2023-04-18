@@ -2,6 +2,7 @@ use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel};
 use crate::traversal::graph::bfs::Bfs;
 use crate::traversal::graph::dfs::{Dfs, DfsPost, DfsPostReverseInstantiator};
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::time::Instant;
 use std::vec::Vec;
 
 pub struct EnrichedCfg<TLabel: CfgLabel> {
@@ -23,6 +24,7 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
 
         let in_edges = cfg.in_edges();
 
+        let mut start = Instant::now();
         for &n in cfg.nodes() {
             let in_edges_count = in_edges.get(&n).map_or(0, |v| {
                 v.iter()
@@ -45,10 +47,13 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
                 if_nodes.insert(n);
             }
         }
+        println!("marking nodes {:?}", start.elapsed());
 
+        start = Instant::now();
         let domination_map = Self::domination_tree(&cfg, &node_ordering, cfg.entry);
         let domination_vec = Vec::from_iter(domination_map);
         let domination = DomTree::from(domination_vec);
+        println!("domination {:?}", start.elapsed());
 
         Self {
             cfg,
