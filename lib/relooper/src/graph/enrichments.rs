@@ -5,6 +5,25 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::Instant;
 use std::vec::Vec;
 
+struct Lazy<T, F> {
+    init: Option<F>,
+    value: Option<T>,
+}
+
+impl<T, F: FnOnce() -> T> Lazy<T, F> {
+    fn new(init: F) -> Self {
+        Self {
+            init: Some(init),
+            value: None,
+        }
+    }
+
+    fn force(&mut self) -> &T {
+        self.value
+            .get_or_insert_with(|| (self.init.take().unwrap())())
+    }
+}
+
 pub struct EnrichedCfg<TLabel: CfgLabel> {
     pub cfg: Cfg<TLabel>,
     pub node_ordering: NodeOrdering<TLabel>,
@@ -35,9 +54,10 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
                 merge_nodes.insert(*n);
             }
 
-            let reachable: HashSet<_> = Bfs::start_from_except(n, |l| cfg.children(l)).collect();
+            let mut reachable: Lazy<HashSet<&TLabel>, _> =
+                Lazy::new(|| Bfs::start_from_except(n, |l| cfg.children(l)).collect());
             for c in cfg.children(n).into_iter() {
-                if node_ordering.is_backward(n, c) && reachable.contains(&c) {
+                if node_ordering.is_backward(n, c) && reachable.force().contains(&c) {
                     loop_nodes.insert(*c);
                 }
             }
