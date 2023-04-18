@@ -126,13 +126,13 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
             reachable_set.insert(node);
         }
 
-        let reached = Dfs::start_from(origin, |&n| {
+        let reached = Dfs::start_from(&origin, |&n| {
             let mut ch = cfg.children(&n);
             ch.remove(&cur_id);
-            ch.into_iter().copied()
+            ch
         });
         for id in reached {
-            reachable_set.remove(&id);
+            reachable_set.remove(id);
         }
         reachable_set.remove(&cur_id);
         for id in reachable_set {

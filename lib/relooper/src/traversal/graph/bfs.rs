@@ -29,13 +29,13 @@ where
     }
 }
 
-impl<'a, T, ChIt, ChFun> Iterator for Bfs<&'a T, ChFun>
+impl<T, ChIt, ChFun> Iterator for Bfs<T, ChFun>
 where
-    T: Hash + Eq,
-    ChIt: IntoIterator<Item = &'a T>,
-    ChFun: FnMut(&T) -> ChIt,
+    T: Hash + Eq + Copy,
+    ChIt: IntoIterator<Item = T>,
+    ChFun: FnMut(T) -> ChIt,
 {
-    type Item = &'a T;
+    type Item = T;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.queue.pop_front().map(|curr| {
