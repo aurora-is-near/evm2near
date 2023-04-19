@@ -5,6 +5,7 @@ use std::{
     collections::{HashMap, HashSet},
     convert::TryInto,
     fmt::Display,
+    fs::File,
     io::Write,
     path::PathBuf,
 };
@@ -69,7 +70,7 @@ pub fn compile<'a>(
     let mut compiler = Compiler::new(runtime_library, config);
     compiler.emit_wasm_start();
     compiler.emit_evm_start();
-    compiler.compile_cfg(input_program);
+    flame::span_of("compiling cfg", || compiler.compile_cfg(input_program));
     compiler.emit_abi_execute();
     let abi_data = compiler.emit_abi_methods(input_abi).unwrap();
 
@@ -92,6 +93,11 @@ pub fn compile<'a>(
             break; // found it
         }
     }
+
+    compiler.debug_write("flamegraph.html", |w| {
+        flame::dump_html(w).expect("flamegraph dump error")
+    });
+
     compiler.builder.build()
 }
 
@@ -141,6 +147,16 @@ impl<'a> Compiler<'a> {
             full_path.push(path.into());
 
             std::fs::write(full_path, contents()).expect("fs error while writing debug file");
+        }
+    }
+
+    fn debug_write<TPath: Into<PathBuf>, CF: Fn(&File)>(&self, path: TPath, writer: CF) {
+        if let Some(base_path) = &self.config.debug_path {
+            let mut full_path = base_path.clone();
+            full_path.push(path.into());
+
+            let w = std::fs::File::create(full_path).expect("fs error while writing debug file");
+            writer(&w);
         }
     }
 
@@ -484,7 +500,7 @@ subgraph cluster_wasm {{ label = \"wasm\"
 
         self.opcodes_debug(program);
 
-        let basic_cfg = basic_cfg(program);
+        let basic_cfg = flame::span_of("building basic cfg", || basic_cfg(program));
         self.debug("basic_cfg.dot", || {
             format!("digraph {{{}}}", basic_cfg.cfg.cfg_to_dot("basic"))
         });
@@ -505,7 +521,7 @@ subgraph cluster_wasm {{ label = \"wasm\"
         self.debug("reduced.dot", || {
             format!("digraph {{{}}}", evm_cfg.cfg_to_dot("reduced"))
         });
-        let enriched = EnrichedCfg::new(reduced);
+        let enriched = flame::span_of("enriching cfg", || EnrichedCfg::new(reduced));
         self.debug("enriched.dot", || {
             format!(
                 "digraph {{{} {}}}",
@@ -513,7 +529,7 @@ subgraph cluster_wasm {{ label = \"wasm\"
                 enriched.dom_to_dot()
             )
         });
-        let relooped_cfg = enriched.reloop();
+        let relooped_cfg = flame::span_of("relooping", || enriched.reloop());
 
         self.debug("relooped.dot", || {
             format!("digraph {{{}}}", relooped_cfg.to_dot())

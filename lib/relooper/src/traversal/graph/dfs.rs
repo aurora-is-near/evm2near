@@ -97,7 +97,7 @@ impl<T, ChIt, ChFun, TContains> Iterator for DfsPost<T, ChFun, TContains>
 where
     T: Eq + Copy,
     ChIt: IntoIterator<Item = T>,
-    ChFun: FnMut(&T) -> ChIt,
+    ChFun: FnMut(T) -> ChIt,
     TContains: Contains<T>,
 {
     type Item = T;
@@ -122,7 +122,7 @@ where
                             }
                         } else {
                             self.visited.insert(*qtop);
-                            let children = (self.get_children)(qtop)
+                            let children = (self.get_children)(*qtop)
                                 .into_iter()
                                 .filter(|x| !self.queued.contains(x) && !self.visited.contains(x))
                                 .collect::<VecDeque<_>>();
@@ -146,7 +146,7 @@ pub trait DfsPostReverseInstantiator<T, ChFun, ChIt>: DfsPostInstantiator<T, ChF
 where
     T: Eq + Copy,
     ChIt: IntoIterator<Item = T>,
-    ChFun: FnMut(&T) -> ChIt,
+    ChFun: FnMut(T) -> ChIt,
 {
     fn reverse(start: T, get_children: ChFun) -> Vec<T> {
         let mut vec: Vec<_> = Self::new(start, get_children).collect();
@@ -159,7 +159,7 @@ impl<T, ChIt, ChFun> DfsPostInstantiator<T, ChFun> for DfsPost<T, ChFun, HashSet
 where
     T: Eq + Copy + Hash,
     ChIt: IntoIterator<Item = T>,
-    ChFun: FnMut(&T) -> ChIt,
+    ChFun: FnMut(T) -> ChIt,
 {
     type Contains = HashSet<T>;
 
@@ -179,7 +179,7 @@ impl<T, ChIt, ChFun> DfsPostInstantiator<T, ChFun> for DfsPost<T, ChFun, BTreeSe
 where
     T: Eq + Copy + Ord,
     ChIt: IntoIterator<Item = T>,
-    ChFun: FnMut(&T) -> ChIt,
+    ChFun: FnMut(T) -> ChIt,
 {
     type Contains = BTreeSet<T>;
 
@@ -200,7 +200,7 @@ impl<T, ChIt, ChFun, Inst: DfsPostInstantiator<T, ChFun>> DfsPostReverseInstanti
 where
     T: Eq + Copy,
     ChIt: IntoIterator<Item = T>,
-    ChFun: FnMut(&T) -> ChIt,
+    ChFun: FnMut(T) -> ChIt,
 {
 }
 

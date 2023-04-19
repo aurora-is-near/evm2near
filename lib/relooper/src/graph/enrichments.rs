@@ -2,7 +2,6 @@ use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel};
 use crate::traversal::graph::bfs::Bfs;
 use crate::traversal::graph::dfs::{Dfs, DfsPost, DfsPostReverseInstantiator};
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::time::Instant;
 use std::vec::Vec;
 
 struct Lazy<T, F> {
@@ -43,36 +42,37 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
 
         let in_edges = cfg.in_edges();
 
-        let mut start = Instant::now();
-        for n in cfg.nodes() {
-            let in_edges_count = in_edges.get(&n).map_or(0, |v| {
-                v.iter()
-                    .filter(|&from| node_ordering.is_forward(from, n))
-                    .count()
-            });
-            if in_edges_count > 1 {
-                merge_nodes.insert(*n);
-            }
+        flame::span_of("marking nodes", || {
+            for n in cfg.nodes() {
+                flame::span_of("marking node", || {
+                    let in_edges_count = in_edges.get(n).map_or(0, |v| {
+                        v.iter()
+                            .filter(|&from| node_ordering.is_forward(from, n))
+                            .count()
+                    });
+                    if in_edges_count > 1 {
+                        merge_nodes.insert(*n);
+                    }
 
-            let mut reachable: Lazy<HashSet<&TLabel>, _> =
-                Lazy::new(|| Bfs::start_from_except(n, |l| cfg.children(l)).collect());
-            for c in cfg.children(n).into_iter() {
-                if node_ordering.is_backward(n, c) && reachable.force().contains(&c) {
-                    loop_nodes.insert(*c);
-                }
-            }
+                    let mut reachable: Lazy<HashSet<&TLabel>, _> =
+                        Lazy::new(|| Bfs::start_from_except(n, |l| cfg.children(l)).collect());
+                    for c in cfg.children(n).into_iter() {
+                        if node_ordering.is_backward(n, c) && reachable.force().contains(&c) {
+                            loop_nodes.insert(*c);
+                        }
+                    }
 
-            if let CfgEdge::Cond(_, _) = cfg.edges().get(n).unwrap() {
-                if_nodes.insert(*n);
+                    if let CfgEdge::Cond(_, _) = cfg.edges().get(n).unwrap() {
+                        if_nodes.insert(*n);
+                    }
+                });
             }
-        }
-        println!("marking nodes {:?}", start.elapsed());
-
-        start = Instant::now();
-        let domination_map = Self::domination_tree(&cfg, &node_ordering, cfg.entry);
-        let domination_vec = Vec::from_iter(domination_map);
-        let domination = DomTree::from(domination_vec);
-        println!("domination {:?}", start.elapsed());
+        });
+        let domination = flame::span_of("building domination", || {
+            let domination_map = Self::domination_tree(&cfg, &node_ordering, cfg.entry);
+            let domination_vec = Vec::from_iter(domination_map);
+            DomTree::from(domination_vec)
+        });
 
         Self {
             cfg,
@@ -195,8 +195,10 @@ pub struct NodeOrdering<TLabel: CfgLabel> {
 
 impl<TLabel: CfgLabel> NodeOrdering<TLabel> {
     pub fn new(cfg: &Cfg<TLabel>, entry: TLabel) -> Self {
-        let vec =
-            DfsPost::<_, _, HashSet<_>>::reverse(entry, |x| cfg.children(x).into_iter().copied());
+        let vec: Vec<TLabel> = DfsPost::<_, _, HashSet<_>>::reverse(&entry, |x| cfg.children(x))
+            .into_iter()
+            .copied()
+            .collect();
         let idx: HashMap<TLabel, usize> = vec.iter().enumerate().map(|(i, &n)| (n, i)).collect();
         Self { vec, idx }
     }
