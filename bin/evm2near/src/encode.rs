@@ -1,7 +1,7 @@
 // This is free and unencumbered software released into the public domain.
 
 use evm_rs::Opcode;
-use parity_wasm::elements::Instruction;
+use wasm_encoder::Instruction;
 
 pub fn encode_push(op: &Opcode) -> Vec<Instruction> {
     let mut result = vec![];
