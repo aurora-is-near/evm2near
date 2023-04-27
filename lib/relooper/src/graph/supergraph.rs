@@ -77,14 +77,10 @@ enum NodeAction<TLabel: CfgLabel> {
 
 impl<TLabel: CfgLabel> SuperGraph<TLabel> {
     pub(crate) fn new(cfg: &Cfg<TLabel>) -> Self {
-        let new_cfg = cfg.map_label(|&l| SLabel::from(l));
+        let cfg = cfg.map_label(|&l| SLabel::from(l));
 
-        let nodes: BTreeMap<SLabel<TLabel>, SNode<TLabel>> = new_cfg
-            .nodes()
-            .iter()
-            .copied()
-            .map(|&l| (l, SNode::from(l)))
-            .collect();
+        let nodes: BTreeMap<SLabel<TLabel>, SNode<TLabel>> =
+            cfg.nodes().iter().map(|&&l| (l, SNode::from(l))).collect();
 
         let label_location: BTreeMap<SLabel<TLabel>, SLabel<TLabel>> =
             nodes.iter().map(|(&l, _n)| (l, l)).collect();
@@ -93,7 +89,7 @@ impl<TLabel: CfgLabel> SuperGraph<TLabel> {
             label_location.iter().map(|(&l, _)| (l.origin, 0)).collect();
 
         Self {
-            cfg: new_cfg,
+            cfg,
             versions,
             nodes,
             label_location,
@@ -101,8 +97,8 @@ impl<TLabel: CfgLabel> SuperGraph<TLabel> {
     }
 
     /// We are using that order for traversing supernodes graph for choosing between merge/split actions
-    fn snode_order(&self) -> Vec<SLabel<TLabel>> {
-        let start = self.nodes.get(&self.cfg.entry).unwrap().clone();
+    fn snode_order(&self) -> Vec<&SLabel<TLabel>> {
+        let start = self.nodes.get(&self.cfg.entry).unwrap();
         DfsPost::<_, _, HashSet<_>>::reverse(&start.head, |slabel| {
             let snode = self.nodes.get(slabel).unwrap();
             snode.contained.iter().flat_map(|l| {
@@ -112,9 +108,6 @@ impl<TLabel: CfgLabel> SuperGraph<TLabel> {
                     .map(|to| self.label_location.get(to).unwrap())
             })
         })
-        .into_iter()
-        .copied()
-        .collect()
     }
 
     /// finding out applicable action for given supernode
@@ -123,20 +116,20 @@ impl<TLabel: CfgLabel> SuperGraph<TLabel> {
         node: &SNode<TLabel>,
         cfg_in_edges: &HashMap<SLabel<TLabel>, HashSet<SLabel<TLabel>>>,
     ) -> Option<NodeAction<TLabel>> {
-        let mut incoming: BTreeSet<&SNode<TLabel>> = cfg_in_edges
+        let mut incoming: BTreeSet<&SLabel<TLabel>> = cfg_in_edges // getting all nodes that point to current node's head
             .get(&node.head)
             .into_iter()
             .flatten()
             .map(|l| self.label_location.get(l).unwrap())
-            .map(|snode_label| self.nodes.get(snode_label).unwrap())
+            .map(|snode_label| &self.nodes.get(snode_label).unwrap().head)
             .collect();
-        // if given node have internal edges ending in its head, it will be seen as incoming supernode, which isn't useful
-        incoming.remove(node);
+
+        incoming.remove(&node.head); // if given node have internal edges ending in its head, it will be seen as incoming supernode
 
         match incoming.len() {
             0 => None,
-            1 => Some(MergeInto(incoming.first().unwrap().head)),
-            _ => Some(SplitFor(incoming.into_iter().map(|s| s.head).collect())),
+            1 => Some(MergeInto(**incoming.first().unwrap())),
+            _ => Some(SplitFor(incoming.into_iter().copied().collect())),
         }
     }
 
@@ -215,13 +208,13 @@ impl<TLabel: CfgLabel> SuperGraph<TLabel> {
     fn reduce(&mut self) {
         let mut in_edges: Option<HashMap<SLabel<TLabel>, HashSet<SLabel<TLabel>>>> = None;
         'outer: loop {
-            let order: Vec<SLabel<TLabel>> = self.snode_order();
+            let order: Vec<&SLabel<TLabel>> = self.snode_order();
 
             let mut splits: HashMap<SLabel<TLabel>, SplitInto<TLabel>> = Default::default();
 
             for snode_label in order {
-                let n = self.nodes.get(&snode_label).unwrap();
-                let in_edges = in_edges.get_or_insert_with(|| self.cfg.in_edges());
+                let n = self.nodes.get(snode_label).unwrap();
+                let in_edges = in_edges.get_or_insert_with(|| self.cfg.in_edges()); // recalculated after every node splitting
                 match self.node_action(n, in_edges) {
                     None => {}
                     Some(SplitFor(split)) => {
@@ -263,34 +256,34 @@ impl<TLabel: CfgLabel> SuperGraph<TLabel> {
 pub fn reduce<TLabel: CfgLabel>(cfg: &Cfg<TLabel>) -> Cfg<SLabel<TLabel>> {
     let mut super_graph = SuperGraph::new(cfg);
     super_graph.reduce();
+    assert!(check_reduction(cfg, &super_graph.cfg));
     super_graph.cfg
+}
+
+fn check_reduction<TLabel: CfgLabel>(
+    origin_cfg: &Cfg<TLabel>,
+    reduced_cfg: &Cfg<SLabel<TLabel>>,
+) -> bool {
+    let reduced_nodes = reduced_cfg.nodes();
+    let mut origin_mapping: HashMap<TLabel, HashSet<SLabel<TLabel>>> = Default::default();
+    for &x in reduced_nodes.iter() {
+        origin_mapping.entry(x.origin).or_default().insert(*x);
+    }
+
+    origin_cfg.edges().iter().all(|(from, e)| {
+        origin_mapping
+            .get(from)
+            .unwrap()
+            .iter()
+            .all(|&r_from| &reduced_cfg.edge(&r_from).map(|x| x.origin) == e)
+    })
 }
 
 #[cfg(test)]
 mod test {
+    use crate::graph::cfg::Cfg;
     use crate::graph::cfg::CfgEdge::{Cond, Uncond};
-    use crate::graph::cfg::{Cfg, CfgLabel};
-    use crate::graph::supergraph::{reduce, SLabel};
-    use std::collections::{HashMap, HashSet};
-
-    fn test_reduce<TLabel: CfgLabel>(
-        origin_cfg: Cfg<TLabel>,
-        reduced_cfg: Cfg<SLabel<TLabel>>,
-    ) -> bool {
-        let reduced_nodes = reduced_cfg.nodes();
-        let mut origin_mapping: HashMap<TLabel, HashSet<SLabel<TLabel>>> = Default::default();
-        for &x in reduced_nodes.iter() {
-            origin_mapping.entry(x.origin).or_default().insert(*x);
-        }
-
-        origin_cfg.edges().iter().all(|(from, e)| {
-            origin_mapping
-                .get(from)
-                .unwrap()
-                .iter()
-                .all(|&r_from| &reduced_cfg.edge(&r_from).map(|x| x.origin) == e)
-        })
-    }
+    use crate::graph::supergraph::{check_reduction, reduce};
 
     #[test]
     fn simplest() {
@@ -302,7 +295,7 @@ mod test {
         );
         let reduced = reduce(&cfg);
 
-        assert!(test_reduce(cfg, reduced));
+        assert!(check_reduction(&cfg, &reduced));
     }
 
     #[test]
@@ -320,7 +313,7 @@ mod test {
         );
         let reduced = reduce(&cfg);
 
-        assert!(test_reduce(cfg, reduced));
+        assert!(check_reduction(&cfg, &reduced));
     }
 
     #[test]
@@ -339,6 +332,6 @@ mod test {
         );
         let reduced = reduce(&cfg);
 
-        assert!(test_reduce(cfg, reduced));
+        assert!(check_reduction(&cfg, &reduced));
     }
 }
