@@ -55,8 +55,8 @@ impl<TLabel: CfgLabel> Context<TLabel> {
 
 impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
     /// returns set of immediately dominated nodes needed to be generated around the target node
-    fn children(&self, label: TLabel) -> HashSet<TLabel> {
-        self.domination.immediately_dominated_by(label)
+    fn children(&self, label: TLabel) -> HashSet<&TLabel> {
+        self.domination.immediately_dominated_by(&label)
     }
 
     /// either generates branch node or "fallthrough" next node
@@ -155,6 +155,7 @@ impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
             .children(node)
             .into_iter()
             .filter(|n| self.merge_nodes.contains(n))
+            .copied()
             .collect();
 
         let context_labels: HashSet<_> = context.iter().filter_map(|ctx| ctx.label()).collect();

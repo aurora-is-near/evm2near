@@ -180,11 +180,13 @@ impl<TLabel: CfgLabel> From<Vec<(TLabel, TLabel)>> for DomTree<TLabel> {
 }
 
 impl<TLabel: CfgLabel> DomTree<TLabel> {
-    pub(crate) fn immediately_dominated_by(&self, label: TLabel) -> HashSet<TLabel> {
-        self.dominates
-            .get(&label)
-            .unwrap_or(&HashSet::new())
-            .to_owned()
+    pub(crate) fn immediately_dominated_by(&self, label: &TLabel) -> HashSet<&TLabel> {
+        self.dominates.get(label).into_iter().flatten().collect()
+    }
+
+    pub fn dominates(&self, dominator: &TLabel, dominated: &TLabel) -> bool {
+        let mut dom_iter = Bfs::start_from(dominator, |x| self.immediately_dominated_by(x));
+        dom_iter.any(|x| x == dominated)
     }
 }
 
@@ -217,5 +219,33 @@ impl<TLabel: CfgLabel> NodeOrdering<TLabel> {
 
     pub fn sequence(&self) -> &Vec<TLabel> {
         &self.vec
+    }
+}
+
+impl<T: CfgLabel> EnrichedCfg<T> {
+    fn is_sp_back(&self, from: &T, to: &T) -> bool {
+        todo!()
+    }
+
+    fn splt_loops(&self, top: &T, set: &HashSet<T>) -> bool {
+        let mut cross = false;
+        for child in self.domination.immediately_dominated_by(top) {
+            if (set.is_empty() || set.contains(child)) && self.splt_loops(child, set) {
+                cross = true;
+            }
+        }
+        if cross {
+            self.handle_ir_children(top, set)
+        }
+        for predecessor in self.cfg.parents(top) {
+            if self.is_sp_back(predecessor, top) && self.domination.dominates(top, predecessor) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn handle_ir_children(&self, top: &T, set: &HashSet<T>) {
+        todo!()
     }
 }

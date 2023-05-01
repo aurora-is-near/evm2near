@@ -178,7 +178,7 @@ impl<TLabel: CfgLabel> SuperGraph<TLabel> {
 
             for &f in &split_for.contained {
                 let e = self.cfg.edge_mut(&f);
-                if e.iter().any(|&to| to == split_snode.head) {
+                if e.into_iter().any(|&to| to == split_snode.head) {
                     e.apply(|to| *versions_mapping.get(to).unwrap_or(to))
                 }
             }

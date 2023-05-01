@@ -18,8 +18,12 @@ pub enum CfgEdge<TLabel> {
     Terminal,
 }
 
-impl<TLabel> CfgEdge<TLabel> {
-    pub fn iter(&self) -> CfgEdgeIter<TLabel> {
+impl<'a, TLabel> IntoIterator for &'a CfgEdge<TLabel> {
+    type Item = &'a TLabel;
+
+    type IntoIter = CfgEdgeIter<'a, TLabel>;
+
+    fn into_iter(self) -> Self::IntoIter {
         match self {
             Uncond(u) => CfgEdgeIter {
                 fixed: [Some(u), None],
@@ -43,7 +47,9 @@ impl<TLabel> CfgEdge<TLabel> {
             },
         }
     }
+}
 
+impl<TLabel> CfgEdge<TLabel> {
     pub(crate) fn apply<F: Fn(&TLabel) -> TLabel>(&mut self, mapping: F) {
         match self {
             Self::Uncond(t) => {
@@ -144,7 +150,17 @@ impl<T: Eq + Hash + Clone> Cfg<T> {
         self.out_edges
             .get(label)
             .into_iter()
-            .flat_map(|edge| edge.iter())
+            .flat_map(|edge| edge.into_iter())
+            .collect()
+    }
+
+    pub fn parents(&self, label: &T) -> HashSet<&T> {
+        self.out_edges
+            .iter()
+            .filter_map(|(from, edge)| {
+                edge.into_iter()
+                    .find_map(|x| if x == label { Some(from) } else { None })
+            })
             .collect()
     }
 
@@ -157,7 +173,7 @@ impl<T: Eq + Hash + Clone> Cfg<T> {
 
     pub fn add_edge(&mut self, from: T, edge: CfgEdge<T>) {
         let out_edges = &mut self.out_edges;
-        for n in edge.iter() {
+        for n in edge.into_iter() {
             if !out_edges.contains_key(n) {
                 // The clone here is required because we use `edge` again in the insert below
                 out_edges.insert(n.clone(), Terminal);
@@ -215,7 +231,7 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
         let mut in_edges: HashMap<TLabel, HashSet<TLabel>> = HashMap::default();
 
         for (&from, to_edge) in &self.out_edges {
-            for &to in to_edge.iter() {
+            for &to in to_edge.into_iter() {
                 in_edges.entry(to).or_default().insert(from);
             }
         }
@@ -253,7 +269,7 @@ mod tests {
     fn test_cfg_edge_iter_inner(input: Vec<usize>) {
         let edge = cfg_edge_from_slice(&input);
 
-        let reconstructed: Vec<usize> = edge.iter().copied().collect();
+        let reconstructed: Vec<usize> = edge.into_iter().copied().collect();
         assert_eq!(input, reconstructed);
     }
 
