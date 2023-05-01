@@ -3,6 +3,8 @@ use crate::graph::enrichments::EnrichedCfg;
 use crate::graph::relooper::{ReBlock, ReSeq};
 use std::fmt::Display;
 
+use super::cfg::Graph;
+
 impl<TLabel: CfgLabel + Display> Cfg<TLabel> {
     pub fn cfg_to_dot(&self, name: &str) -> String {
         let mut lines: Vec<String> = Vec::new();

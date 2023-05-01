@@ -4,6 +4,8 @@ use crate::traversal::graph::dfs::{Dfs, DfsPost, DfsPostReverseInstantiator};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::vec::Vec;
 
+use super::cfg::Graph;
+
 struct Lazy<T, F> {
     init: Option<F>,
     value: Option<T>,
