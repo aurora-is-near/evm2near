@@ -156,7 +156,7 @@ impl<T: Eq + Hash> GEdge for CfgEdge<T> {
 
 pub trait Graph {
     type Edge: GEdge;
-    type Output<U: Hash + Eq>: Graph<Edge: GEdge<Label = U>>;
+    type Output<U: Hash + Eq + Clone>: Graph<Edge: GEdge<Label = U>>;
 
     fn edges(&self) -> &HashMap<<Self::Edge as GEdge>::Label, Self::Edge>; // change return to Cow?
     fn nodes(&self) -> HashSet<&<Self::Edge as GEdge>::Label> {
@@ -187,7 +187,7 @@ pub trait Graph {
             .collect()
     }
 
-    fn map_label<M, U: Eq + Hash>(&self, mapping: M) -> Self::Output<U>
+    fn map_label<M, U: Eq + Hash + Clone>(&self, mapping: M) -> Self::Output<U>
     where
         M: Fn(&<Self::Edge as GEdge>::Label) -> U,
         Self: Sized;
@@ -209,17 +209,33 @@ pub trait Graph {
 
         in_edges
     }
+
+    fn add_edge(&mut self, from: <Self::Edge as GEdge>::Label, edge: Self::Edge);
+
+    fn add_node(&mut self, n: <Self::Edge as GEdge>::Label);
+
+    fn remove_edge(&mut self, from: <Self::Edge as GEdge>::Label, edge: &Self::Edge);
+
+    fn add_edge_or_promote(
+        &mut self,
+        from: <Self::Edge as GEdge>::Label,
+        to: <Self::Edge as GEdge>::Label,
+    );
+
+    fn edge(&self, label: &<Self::Edge as GEdge>::Label) -> &Self::Edge;
+
+    fn edge_mut(&mut self, label: &<Self::Edge as GEdge>::Label) -> &mut Self::Edge;
 }
 
-impl<T: Hash + Eq> Graph for Cfg<T> {
+impl<T: Hash + Eq + Clone> Graph for Cfg<T> {
     type Edge = CfgEdge<T>;
-    type Output<U: Hash + Eq> = Cfg<U>;
+    type Output<U: Hash + Eq + Clone> = Cfg<U>;
 
     fn edges(&self) -> &HashMap<<Self::Edge as GEdge>::Label, Self::Edge> {
         &self.out_edges
     }
 
-    fn map_label<M, U: Eq + Hash>(&self, mapping: M) -> Self::Output<U>
+    fn map_label<M, U: Eq + Hash + Clone>(&self, mapping: M) -> Self::Output<U>
     where
         M: Fn(&<Self::Edge as GEdge>::Label) -> U,
         Self: Sized,
@@ -233,6 +249,53 @@ impl<T: Hash + Eq> Graph for Cfg<T> {
             entry: mapping(&self.entry),
             out_edges,
         }
+    }
+
+    fn add_edge(&mut self, from: <Self::Edge as GEdge>::Label, edge: Self::Edge) {
+        let out_edges = &mut self.out_edges;
+        for n in edge.iter() {
+            if !out_edges.contains_key(&n) {
+                // The clone here is required because we use `edge` again in the insert below
+                out_edges.insert(n.clone(), Terminal);
+            }
+        }
+
+        let prev_edge = out_edges.insert(from, edge);
+        Self::check_previous_edge(prev_edge);
+    }
+
+    fn add_node(&mut self, n: <Self::Edge as GEdge>::Label) {
+        let prev_edge = self.out_edges.insert(n, Terminal);
+        Self::check_previous_edge(prev_edge);
+    }
+
+    fn remove_edge(&mut self, from: <Self::Edge as GEdge>::Label, edge: &Self::Edge) {
+        let removed_edge = self.out_edges.remove(&from);
+        assert!(removed_edge.as_ref() == Some(edge));
+    }
+
+    fn add_edge_or_promote(
+        &mut self,
+        from: <Self::Edge as GEdge>::Label,
+        to: <Self::Edge as GEdge>::Label,
+    ) {
+        match self.out_edges.remove(&from) {
+            None | Some(Terminal) => self.out_edges.insert(from, Uncond(to)),
+            Some(Uncond(uncond)) => self.out_edges.insert(from, Cond(to, uncond)),
+            _ => panic!("edge (should be absent) or (shouldn't be `Cond`)"),
+        };
+    }
+
+    fn edge(&self, label: &<Self::Edge as GEdge>::Label) -> &Self::Edge {
+        self.out_edges
+            .get(label)
+            .expect("any node should have outgoing edges")
+    }
+
+    fn edge_mut(&mut self, label: &<Self::Edge as GEdge>::Label) -> &mut Self::Edge {
+        self.out_edges
+            .get_mut(label)
+            .expect("any node should have outgoing edges")
     }
 }
 
@@ -259,49 +322,6 @@ impl<T: Eq + Hash + Clone> Cfg<T> {
             None | Some(Terminal) => {}
             _ => panic!("adding edge over already present one"),
         }
-    }
-
-    pub fn add_edge(&mut self, from: T, edge: CfgEdge<T>) {
-        let out_edges = &mut self.out_edges;
-        for n in edge.iter() {
-            if !out_edges.contains_key(&n) {
-                // The clone here is required because we use `edge` again in the insert below
-                out_edges.insert(n.clone(), Terminal);
-            }
-        }
-
-        let prev_edge = out_edges.insert(from, edge);
-        Self::check_previous_edge(prev_edge);
-    }
-
-    pub fn add_node(&mut self, n: T) {
-        let prev_edge = self.out_edges.insert(n, Terminal);
-        Self::check_previous_edge(prev_edge);
-    }
-
-    pub fn remove_edge(&mut self, from: T, edge: &CfgEdge<T>) {
-        let removed_edge = self.out_edges.remove(&from);
-        assert!(removed_edge.as_ref() == Some(edge));
-    }
-
-    pub fn add_edge_or_promote(&mut self, from: T, to: T) {
-        match self.out_edges.remove(&from) {
-            None | Some(Terminal) => self.out_edges.insert(from, Uncond(to)),
-            Some(Uncond(uncond)) => self.out_edges.insert(from, Cond(to, uncond)),
-            _ => panic!("edge (should be absent) or (shouldn't be `Cond`)"),
-        };
-    }
-
-    pub fn edge(&self, label: &T) -> &CfgEdge<T> {
-        self.out_edges
-            .get(label)
-            .expect("any node should have outgoing edges")
-    }
-
-    pub fn edge_mut(&mut self, label: &T) -> &mut CfgEdge<T> {
-        self.out_edges
-            .get_mut(label)
-            .expect("any node should have outgoing edges")
     }
 }
 

@@ -1,5 +1,5 @@
 use crate::graph::cfg::CfgEdge::{Cond, Uncond};
-use crate::graph::cfg::{Cfg, CfgEdge};
+use crate::graph::cfg::{Cfg, CfgEdge, Graph};
 use anyhow::{ensure, format_err};
 use std::hash::Hash;
 use std::str::FromStr;
