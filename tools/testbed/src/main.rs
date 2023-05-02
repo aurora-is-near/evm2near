@@ -1,4 +1,5 @@
 use graph_samples::*;
+use relooper::graph::cfg::Graph;
 use relooper::graph::enrichments::EnrichedCfg;
 use relooper::graph::supergraph::reduce;
 
