@@ -18,37 +18,6 @@ pub enum CfgEdge<TLabel> {
     Terminal,
 }
 
-// impl<'a, TLabel> IntoIterator for &'a CfgEdge<TLabel> {
-//     type Item = &'a TLabel;
-
-//     type IntoIter = CfgEdgeIter<TLabel>;
-
-//     fn into_iter(self) -> Self::IntoIter {
-//         match self {
-//             Uncond(u) => CfgEdgeIter {
-//                 fixed: [Some(u), None],
-//                 allocated: [].iter(),
-//                 index: 0,
-//             },
-//             Cond(cond, fallthrough) => CfgEdgeIter {
-//                 fixed: [Some(cond), Some(fallthrough)],
-//                 allocated: [].iter(),
-//                 index: 0,
-//             },
-//             Switch(v) => CfgEdgeIter {
-//                 fixed: [None, None],
-//                 allocated: v.iter(),
-//                 index: 2,
-//             },
-//             Terminal => CfgEdgeIter {
-//                 fixed: [None, None],
-//                 allocated: [].iter(),
-//                 index: 0,
-//             },
-//         }
-//     }
-// }
-
 impl<TLabel> CfgEdge<TLabel> {
     pub(crate) fn apply<F: Fn(&TLabel) -> TLabel>(&mut self, mapping: F) {
         match self {
@@ -67,7 +36,7 @@ impl<TLabel> CfgEdge<TLabel> {
         }
     }
 
-    //todo remove
+    //todo to IterMut?
     pub(crate) fn map<'a, U, F: Fn(&'a TLabel) -> U>(&'a self, mapping: F) -> CfgEdge<U> {
         match self {
             Self::Uncond(t) => Uncond(mapping(t)),
@@ -189,6 +158,7 @@ pub trait Graph {
             .collect()
     }
 
+    // maybe it is better to implement IterMut instead
     fn map_label<M, U: Eq + Hash + Clone>(&self, mapping: M) -> Self::Output<U>
     where
         M: Fn(&<Self::Edge as GEdge>::Label) -> U,
@@ -314,10 +284,6 @@ impl<T: Eq + Hash + Clone> Cfg<T> {
             out_edges: Default::default(),
         }
     }
-
-    // pub fn to_borrowed<'a>(&'a self) -> Cfg<&'a T> { // TODO remove (not used) or fix lifetime error
-    //     self.map_label(|l: &'a T| l)
-    // }
 
     fn check_previous_edge(edge: Option<CfgEdge<T>>) {
         match edge {
