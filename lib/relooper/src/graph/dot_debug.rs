@@ -105,9 +105,11 @@ impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
         for n in self.cfg.nodes() {
             lines.push(format!("d{n}[label=\"{n}\"];"));
         }
-        for (&n, &d) in &self.domination.dominated {
-            lines.push(format!("d{d} -> d{n};"));
-        }
+        // for (&n, &d) in self.domination.edges() { //todo restore
+        //     for d in d {
+        //         lines.push(format!("d{d} -> d{n};"));
+        //     }
+        // }
         lines.push("}".to_string());
 
         lines.join("\n")

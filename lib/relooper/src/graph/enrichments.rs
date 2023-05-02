@@ -1,10 +1,12 @@
 use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel};
 use crate::traversal::graph::bfs::Bfs;
 use crate::traversal::graph::dfs::{Dfs, DfsPost, DfsPostReverseInstantiator};
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::hash::Hash;
 use std::vec::Vec;
 
-use super::cfg::Graph;
+use super::cfg::{GEdge, Graph};
 
 struct Lazy<T, F> {
     init: Option<F>,
@@ -160,14 +162,67 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
 ///
 /// Thanks to reverse postorder we will find immediate dominator for all nodes.
 ///
-pub struct DomTree<TLabel: CfgLabel> {
+pub struct DomTree<TLabel: Hash + Eq + Clone> {
     dominates: HashMap<TLabel, HashSet<TLabel>>,
-    pub(crate) dominated: HashMap<TLabel, TLabel>,
+}
+
+impl<TLabel: Hash + Eq + Clone> Graph for DomTree<TLabel> {
+    type Edge = HashSet<TLabel>;
+    type Output<U: std::hash::Hash + Eq + Clone> = DomTree<U>;
+
+    fn edges(&self) -> &HashMap<<Self::Edge as super::cfg::GEdge>::Label, Self::Edge> {
+        &self.dominates
+    }
+
+    fn map_label<M, U: Eq + std::hash::Hash + Clone>(&self, mapping: M) -> Self::Output<U>
+    where
+        M: Fn(&<Self::Edge as super::cfg::GEdge>::Label) -> U,
+        Self: Sized,
+    {
+        todo!()
+    }
+
+    fn add_node(&mut self, n: <Self::Edge as super::cfg::GEdge>::Label) {
+        // self.do
+        todo!()
+    }
+
+    fn remove_node(&mut self, n: &<Self::Edge as super::cfg::GEdge>::Label) {
+        todo!()
+    }
+
+    fn add_edge(&mut self, from: <Self::Edge as super::cfg::GEdge>::Label, edge: Self::Edge) {
+        todo!()
+    }
+
+    fn remove_edge(&mut self, from: <Self::Edge as super::cfg::GEdge>::Label, edge: &Self::Edge) {
+        todo!()
+    }
+
+    fn add_edge_or_promote(
+        &mut self,
+        from: <Self::Edge as super::cfg::GEdge>::Label,
+        to: <Self::Edge as super::cfg::GEdge>::Label,
+    ) {
+        todo!()
+    }
+
+    fn edge(&self, label: &<Self::Edge as super::cfg::GEdge>::Label) -> &Self::Edge {
+        todo!()
+    }
+
+    fn edge_mut(&mut self, label: &<Self::Edge as super::cfg::GEdge>::Label) -> &mut Self::Edge {
+        todo!()
+    }
+
+    fn nodes(&self) -> HashSet<&<Self::Edge as super::cfg::GEdge>::Label> {
+        self.edges().keys().collect()
+    }
 }
 
 impl<TLabel: CfgLabel> From<Vec<(TLabel, TLabel)>> for DomTree<TLabel> {
     fn from(edges: Vec<(TLabel, TLabel)>) -> Self {
-        let dominated = HashMap::from_iter(edges.iter().copied());
+        let dominated: HashMap<TLabel, TLabel> = HashMap::from_iter(edges.iter().copied());
         let mut dominates: HashMap<TLabel, HashSet<TLabel>> = HashMap::new();
 
         for (dominated, dominator) in edges {
@@ -176,7 +231,7 @@ impl<TLabel: CfgLabel> From<Vec<(TLabel, TLabel)>> for DomTree<TLabel> {
 
         DomTree {
             dominates,
-            dominated,
+            // dominated,
         }
     }
 }

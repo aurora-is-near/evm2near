@@ -84,6 +84,22 @@ pub trait GEdge {
     fn map<U: Hash + Eq, F: Fn(&Self::Label) -> U>(&self, mapping: F) -> Self::Output<U>;
 }
 
+impl<T: Eq + Hash> GEdge for HashSet<T> {
+    type Label = T;
+
+    type Output<U: Hash + Eq> = HashSet<U>;
+
+    type Iter<'a> = std::collections::hash_set::Iter<'a, T> where T: 'a;
+
+    fn iter<'a>(&'a self) -> Self::Iter<'a> {
+        self.iter()
+    }
+
+    fn map<U: Hash + Eq, F: Fn(&Self::Label) -> U>(&self, mapping: F) -> Self::Output<U> {
+        self.iter().map(mapping).collect()
+    }
+}
+
 impl<T: Eq + Hash> GEdge for CfgEdge<T> {
     type Label = T;
     type Output<U: Hash + Eq> = CfgEdge<U>;
