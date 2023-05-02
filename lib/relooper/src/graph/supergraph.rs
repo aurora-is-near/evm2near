@@ -4,7 +4,7 @@ use crate::traversal::graph::dfs::{DfsPost, DfsPostReverseInstantiator};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 
-use super::cfg::Graph;
+use super::cfg::{GEdge, Graph};
 
 type SVersion = usize;
 
@@ -180,7 +180,7 @@ impl<TLabel: CfgLabel> SuperGraph<TLabel> {
 
             for &f in &split_for.contained {
                 let e = self.cfg.edge_mut(&f);
-                if e.into_iter().any(|&to| to == split_snode.head) {
+                if e.iter().any(|&to| to == split_snode.head) {
                     e.apply(|to| *versions_mapping.get(to).unwrap_or(to))
                 }
             }

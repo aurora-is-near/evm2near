@@ -18,36 +18,36 @@ pub enum CfgEdge<TLabel> {
     Terminal,
 }
 
-impl<'a, TLabel> IntoIterator for &'a CfgEdge<TLabel> {
-    type Item = &'a TLabel;
+// impl<'a, TLabel> IntoIterator for &'a CfgEdge<TLabel> {
+//     type Item = &'a TLabel;
 
-    type IntoIter = CfgEdgeIter<'a, TLabel>;
+//     type IntoIter = CfgEdgeIter<TLabel>;
 
-    fn into_iter(self) -> Self::IntoIter {
-        match self {
-            Uncond(u) => CfgEdgeIter {
-                fixed: [Some(u), None],
-                allocated: [].iter(),
-                index: 0,
-            },
-            Cond(cond, fallthrough) => CfgEdgeIter {
-                fixed: [Some(cond), Some(fallthrough)],
-                allocated: [].iter(),
-                index: 0,
-            },
-            Switch(v) => CfgEdgeIter {
-                fixed: [None, None],
-                allocated: v.iter(),
-                index: 2,
-            },
-            Terminal => CfgEdgeIter {
-                fixed: [None, None],
-                allocated: [].iter(),
-                index: 0,
-            },
-        }
-    }
-}
+//     fn into_iter(self) -> Self::IntoIter {
+//         match self {
+//             Uncond(u) => CfgEdgeIter {
+//                 fixed: [Some(u), None],
+//                 allocated: [].iter(),
+//                 index: 0,
+//             },
+//             Cond(cond, fallthrough) => CfgEdgeIter {
+//                 fixed: [Some(cond), Some(fallthrough)],
+//                 allocated: [].iter(),
+//                 index: 0,
+//             },
+//             Switch(v) => CfgEdgeIter {
+//                 fixed: [None, None],
+//                 allocated: v.iter(),
+//                 index: 2,
+//             },
+//             Terminal => CfgEdgeIter {
+//                 fixed: [None, None],
+//                 allocated: [].iter(),
+//                 index: 0,
+//             },
+//         }
+//     }
+// }
 
 impl<TLabel> CfgEdge<TLabel> {
     pub(crate) fn apply<F: Fn(&TLabel) -> TLabel>(&mut self, mapping: F) {
@@ -105,15 +105,44 @@ impl<'a, T> Iterator for CfgEdgeIter<'a, T> {
 
 pub trait GEdge {
     type Label: Eq + Hash;
-    type Output<U>: GEdge<Label = U>
+    type Output<U: Hash + Eq>: GEdge<Label = U>;
+    type Iter<'a>: Iterator<Item = &'a Self::Label>
     where
-        U: Hash + Eq;
+        Self: 'a;
+
+    fn iter<'a>(&'a self) -> Self::Iter<'a>;
     fn map<U: Hash + Eq, F: Fn(&Self::Label) -> U>(&self, mapping: F) -> Self::Output<U>;
 }
 
 impl<T: Eq + Hash> GEdge for CfgEdge<T> {
     type Label = T;
     type Output<U: Hash + Eq> = CfgEdge<U>;
+    type Iter<'a> = CfgEdgeIter<'a, Self::Label> where Self::Label: 'a;
+
+    fn iter<'a>(&'a self) -> Self::Iter<'a> {
+        match self {
+            Uncond(u) => CfgEdgeIter {
+                fixed: [Some(u), None],
+                allocated: [].iter(),
+                index: 0,
+            },
+            Cond(cond, fallthrough) => CfgEdgeIter {
+                fixed: [Some(cond), Some(fallthrough)],
+                allocated: [].iter(),
+                index: 0,
+            },
+            Switch(v) => CfgEdgeIter {
+                fixed: [None, None],
+                allocated: v.iter(),
+                index: 2,
+            },
+            Terminal => CfgEdgeIter {
+                fixed: [None, None],
+                allocated: [].iter(),
+                index: 0,
+            },
+        }
+    }
 
     fn map<U: Hash + Eq, F: Fn(&Self::Label) -> U>(&self, mapping: F) -> Self::Output<U> {
         match self {
@@ -130,6 +159,33 @@ pub trait Graph {
     type Output<U: Hash + Eq>: Graph<Edge: GEdge<Label = U>>;
 
     fn edges(&self) -> &HashMap<<Self::Edge as GEdge>::Label, Self::Edge>; // change return to Cow?
+    fn nodes(&self) -> HashSet<&<Self::Edge as GEdge>::Label> {
+        self.edges().keys().collect()
+    }
+
+    fn children(
+        &self,
+        label: &<Self::Edge as GEdge>::Label,
+    ) -> HashSet<&<Self::Edge as GEdge>::Label> {
+        self.edges()
+            .get(label)
+            .into_iter()
+            .flat_map(|edge| edge.iter())
+            .collect()
+    }
+
+    fn parents(
+        &self,
+        label: &<Self::Edge as GEdge>::Label,
+    ) -> HashSet<&<Self::Edge as GEdge>::Label> {
+        self.edges()
+            .iter()
+            .filter_map(|(from, edge)| {
+                edge.iter()
+                    .find_map(|x| if x == label { Some(from) } else { None })
+            })
+            .collect()
+    }
 
     fn map_label<M, U: Eq + Hash>(&self, mapping: M) -> Self::Output<U>
     where
@@ -180,28 +236,6 @@ impl<T: Eq + Hash + Clone> Cfg<T> {
     //     self.map_label(|l: &'a T| l)
     // }
 
-    pub fn nodes(&self) -> HashSet<&T> {
-        self.out_edges.keys().collect()
-    }
-
-    pub fn children(&self, label: &T) -> HashSet<&T> {
-        self.out_edges
-            .get(label)
-            .into_iter()
-            .flat_map(|edge| edge.into_iter())
-            .collect()
-    }
-
-    pub fn parents(&self, label: &T) -> HashSet<&T> {
-        self.out_edges
-            .iter()
-            .filter_map(|(from, edge)| {
-                edge.into_iter()
-                    .find_map(|x| if x == label { Some(from) } else { None })
-            })
-            .collect()
-    }
-
     fn check_previous_edge(edge: Option<CfgEdge<T>>) {
         match edge {
             None | Some(Terminal) => {}
@@ -211,8 +245,8 @@ impl<T: Eq + Hash + Clone> Cfg<T> {
 
     pub fn add_edge(&mut self, from: T, edge: CfgEdge<T>) {
         let out_edges = &mut self.out_edges;
-        for n in edge.into_iter() {
-            if !out_edges.contains_key(n) {
+        for n in edge.iter() {
+            if !out_edges.contains_key(&n) {
                 // The clone here is required because we use `edge` again in the insert below
                 out_edges.insert(n.clone(), Terminal);
             }
@@ -269,7 +303,7 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
         let mut in_edges: HashMap<TLabel, HashSet<TLabel>> = HashMap::default();
 
         for (&from, to_edge) in &self.out_edges {
-            for &to in to_edge.into_iter() {
+            for &to in to_edge.iter() {
                 in_edges.entry(to).or_default().insert(from);
             }
         }
@@ -307,7 +341,7 @@ mod tests {
     fn test_cfg_edge_iter_inner(input: Vec<usize>) {
         let edge = cfg_edge_from_slice(&input);
 
-        let reconstructed: Vec<usize> = edge.into_iter().copied().collect();
+        let reconstructed: Vec<usize> = edge.iter().copied().collect();
         assert_eq!(input, reconstructed);
     }
 
