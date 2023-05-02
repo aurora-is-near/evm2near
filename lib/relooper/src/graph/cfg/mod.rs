@@ -104,18 +104,18 @@ impl<'a, T> Iterator for CfgEdgeIter<'a, T> {
 }
 
 pub trait GEdge {
-    type Label: Eq + Ord + Hash;
+    type Label: Eq + Hash;
     type Output<U>: GEdge<Label = U>
     where
-        U: Hash + Ord;
-    fn map<U: Hash + Ord, F: Fn(&Self::Label) -> U>(&self, mapping: F) -> Self::Output<U>;
+        U: Hash + Eq;
+    fn map<U: Hash + Eq, F: Fn(&Self::Label) -> U>(&self, mapping: F) -> Self::Output<U>;
 }
 
-impl<T: Eq + Ord + Hash> GEdge for CfgEdge<T> {
+impl<T: Eq + Hash> GEdge for CfgEdge<T> {
     type Label = T;
-    type Output<U: Hash + Ord> = CfgEdge<U>;
+    type Output<U: Hash + Eq> = CfgEdge<U>;
 
-    fn map<U: Hash + Ord, F: Fn(&Self::Label) -> U>(&self, mapping: F) -> Self::Output<U> {
+    fn map<U: Hash + Eq, F: Fn(&Self::Label) -> U>(&self, mapping: F) -> Self::Output<U> {
         match self {
             Self::Uncond(t) => Uncond(mapping(t)),
             Self::Cond(t, f) => Cond(mapping(t), mapping(f)),
@@ -127,25 +127,25 @@ impl<T: Eq + Ord + Hash> GEdge for CfgEdge<T> {
 
 pub trait Graph {
     type Edge: GEdge;
-    type Output<U: Hash + Ord>: Graph<Edge: GEdge<Label = U>>;
+    type Output<U: Hash + Eq>: Graph<Edge: GEdge<Label = U>>;
 
     fn edges(&self) -> &HashMap<<Self::Edge as GEdge>::Label, Self::Edge>; // change return to Cow?
 
-    fn map_label<M, U: Eq + Hash + Ord>(&self, mapping: M) -> Self::Output<U>
+    fn map_label<M, U: Eq + Hash>(&self, mapping: M) -> Self::Output<U>
     where
         M: Fn(&<Self::Edge as GEdge>::Label) -> U,
         Self: Sized;
 }
 
-impl<T: Ord + Hash> Graph for Cfg<T> {
+impl<T: Hash + Eq> Graph for Cfg<T> {
     type Edge = CfgEdge<T>;
-    type Output<U: Hash + Ord> = Cfg<U>;
+    type Output<U: Hash + Eq> = Cfg<U>;
 
     fn edges(&self) -> &HashMap<<Self::Edge as GEdge>::Label, Self::Edge> {
         &self.out_edges
     }
 
-    fn map_label<M, U: Eq + Hash + Ord>(&self, mapping: M) -> Self::Output<U>
+    fn map_label<M, U: Eq + Hash>(&self, mapping: M) -> Self::Output<U>
     where
         M: Fn(&<Self::Edge as GEdge>::Label) -> U,
         Self: Sized,
@@ -168,12 +168,6 @@ pub struct Cfg<TLabel> {
     out_edges: HashMap<TLabel, CfgEdge<TLabel>>,
 }
 
-// impl<T> Cfg<T> {
-//     pub fn edges(&self) -> &HashMap<T, CfgEdge<T>> {
-//         &self.out_edges
-//     }
-// }
-
 impl<T: Eq + Hash + Clone> Cfg<T> {
     pub fn new(entry: T) -> Cfg<T> {
         Self {
@@ -182,25 +176,9 @@ impl<T: Eq + Hash + Clone> Cfg<T> {
         }
     }
 
-    pub fn map_label<'a, M, U: Eq + Hash>(&'a self, mapping: M) -> Cfg<U>
-    where
-        M: Fn(&'a T) -> U,
-    {
-        let out_edges: HashMap<U, CfgEdge<U>> = self
-            .out_edges
-            .iter()
-            .map(|(from, e)| (mapping(from), e.map(&mapping)))
-            .collect();
-
-        Cfg {
-            entry: mapping(&self.entry),
-            out_edges,
-        }
-    }
-
-    pub fn to_borrowed(&self) -> Cfg<&T> {
-        self.map_label(|l| l)
-    }
+    // pub fn to_borrowed<'a>(&'a self) -> Cfg<&'a T> { // TODO remove (not used) or fix lifetime error
+    //     self.map_label(|l: &'a T| l)
+    // }
 
     pub fn nodes(&self) -> HashSet<&T> {
         self.out_edges.keys().collect()
