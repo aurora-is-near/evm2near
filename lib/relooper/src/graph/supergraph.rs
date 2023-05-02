@@ -216,7 +216,14 @@ impl<TLabel: CfgLabel> SuperGraph<TLabel> {
 
             for snode_label in order {
                 let n = self.nodes.get(snode_label).unwrap();
-                let in_edges = in_edges.get_or_insert_with(|| self.cfg.in_edges()); // recalculated after every node splitting
+                let in_edges = in_edges.get_or_insert_with(|| {
+                    let mut hm: HashMap<SLabel<TLabel>, HashSet<SLabel<TLabel>>> =  // ugly copying to avoid mutual borrowing
+                        Default::default();
+                    for (a, b) in self.cfg.in_edges().into_iter() {
+                        hm.insert(*a, b.into_iter().copied().collect());
+                    }
+                    hm
+                }); // recalculated after every node splitting
                 match self.node_action(n, in_edges) {
                     None => {}
                     Some(SplitFor(split)) => {

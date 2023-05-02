@@ -191,6 +191,24 @@ pub trait Graph {
     where
         M: Fn(&<Self::Edge as GEdge>::Label) -> U,
         Self: Sized;
+
+    fn in_edges(
+        &self,
+    ) -> HashMap<&<Self::Edge as GEdge>::Label, HashSet<&<Self::Edge as GEdge>::Label>> {
+        let mut in_edges: HashMap<
+            &<Self::Edge as GEdge>::Label,
+            HashSet<&<Self::Edge as GEdge>::Label>,
+        > = HashMap::default();
+
+        let x = self.edges();
+        for (from, to_edge) in x {
+            for to in to_edge.iter() {
+                in_edges.entry(to).or_default().insert(from);
+            }
+        }
+
+        in_edges
+    }
 }
 
 impl<T: Hash + Eq> Graph for Cfg<T> {
@@ -299,18 +317,6 @@ impl<TLabel: Eq + Hash + Copy> Cfg<TLabel> {
 }
 
 impl<TLabel: CfgLabel> Cfg<TLabel> {
-    pub fn in_edges(&self) -> HashMap<TLabel, HashSet<TLabel>> {
-        let mut in_edges: HashMap<TLabel, HashSet<TLabel>> = HashMap::default();
-
-        for (&from, to_edge) in &self.out_edges {
-            for &to in to_edge.iter() {
-                in_edges.entry(to).or_default().insert(from);
-            }
-        }
-
-        in_edges
-    }
-
     pub fn strip_unreachable(&mut self) {
         let reachable_from_start: HashSet<&TLabel> =
             Bfs::start_from(&self.entry, |label| self.children(label)).collect();

@@ -225,29 +225,29 @@ impl<TLabel: CfgLabel> NodeOrdering<TLabel> {
 }
 
 impl<T: CfgLabel> EnrichedCfg<T> {
-    fn is_sp_back(&self, from: &T, to: &T) -> bool {
-        todo!()
-    }
+    // fn is_sp_back(&self, from: &T, to: &T) -> bool {
+    //     todo!()
+    // }
 
-    fn splt_loops(&self, top: &T, set: &HashSet<T>) -> bool {
-        let mut cross = false;
-        for child in self.domination.immediately_dominated_by(top) {
-            if (set.is_empty() || set.contains(child)) && self.splt_loops(child, set) {
-                cross = true;
-            }
-        }
-        if cross {
-            self.handle_ir_children(top, set)
-        }
-        for predecessor in self.cfg.parents(top) {
-            if self.is_sp_back(predecessor, top) && self.domination.dominates(top, predecessor) {
-                return true;
-            }
-        }
-        false
-    }
+    // fn splt_loops(&self, top: &T, set: &HashSet<T>) -> bool {
+    //     let mut cross = false;
+    //     for child in self.domination.immediately_dominated_by(top) {
+    //         if (set.is_empty() || set.contains(child)) && self.splt_loops(child, set) {
+    //             cross = true;
+    //         }
+    //     }
+    //     if cross {
+    //         self.handle_ir_children(top, set)
+    //     }
+    //     for predecessor in self.cfg.parents(top) {
+    //         if self.is_sp_back(predecessor, top) && self.domination.dominates(top, predecessor) {
+    //             return true;
+    //         }
+    //     }
+    //     false
+    // }
 
-    fn handle_ir_children(&self, top: &T, set: &HashSet<T>) {
-        todo!()
-    }
+    // fn handle_ir_children(&self, top: &T, set: &HashSet<T>) {
+    //     todo!()
+    // }
 }
