@@ -182,9 +182,11 @@ pub trait Graph {
         in_edges
     }
 
-    fn add_edge(&mut self, from: <Self::Edge as GEdge>::Label, edge: Self::Edge);
-
     fn add_node(&mut self, n: <Self::Edge as GEdge>::Label);
+
+    fn remove_node(&mut self, n: &<Self::Edge as GEdge>::Label);
+
+    fn add_edge(&mut self, from: <Self::Edge as GEdge>::Label, edge: Self::Edge);
 
     fn remove_edge(&mut self, from: <Self::Edge as GEdge>::Label, edge: &Self::Edge);
 
@@ -223,6 +225,17 @@ impl<T: Hash + Eq + Clone> Graph for Cfg<T> {
         }
     }
 
+    fn add_node(&mut self, n: <Self::Edge as GEdge>::Label) {
+        let prev_edge = self.out_edges.insert(n, Terminal);
+        Self::check_previous_edge(prev_edge);
+    }
+
+    fn remove_node(&mut self, n: &<Self::Edge as GEdge>::Label) {
+        self.out_edges
+            .remove(n)
+            .expect("cannot delete non-present node");
+    }
+
     fn add_edge(&mut self, from: <Self::Edge as GEdge>::Label, edge: Self::Edge) {
         let out_edges = &mut self.out_edges;
         for n in edge.iter() {
@@ -233,11 +246,6 @@ impl<T: Hash + Eq + Clone> Graph for Cfg<T> {
         }
 
         let prev_edge = out_edges.insert(from, edge);
-        Self::check_previous_edge(prev_edge);
-    }
-
-    fn add_node(&mut self, n: <Self::Edge as GEdge>::Label) {
-        let prev_edge = self.out_edges.insert(n, Terminal);
         Self::check_previous_edge(prev_edge);
     }
 
@@ -315,7 +323,7 @@ impl<TLabel: CfgLabel> Cfg<TLabel> {
             .map(|n| **n)
             .collect();
         for unreachable in unreachable_nodes {
-            self.out_edges.remove(&unreachable);
+            self.remove_node(&unreachable);
         }
     }
 }
