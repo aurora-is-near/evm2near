@@ -110,6 +110,7 @@ pub trait GEdge {
     where
         Self: 'a;
 
+    #[allow(clippy::needless_lifetimes)] // lint is wrong, probably due to generic_associated_types or associated_type_bounds features
     fn iter<'a>(&'a self) -> Self::Iter<'a>;
     fn map<U: Hash + Eq, F: Fn(&Self::Label) -> U>(&self, mapping: F) -> Self::Output<U>;
 }
@@ -119,6 +120,7 @@ impl<T: Eq + Hash> GEdge for CfgEdge<T> {
     type Output<U: Hash + Eq> = CfgEdge<U>;
     type Iter<'a> = CfgEdgeIter<'a, Self::Label> where Self::Label: 'a;
 
+    #[allow(clippy::needless_lifetimes)]
     fn iter<'a>(&'a self) -> Self::Iter<'a> {
         match self {
             Uncond(u) => CfgEdgeIter {
@@ -254,7 +256,7 @@ impl<T: Hash + Eq + Clone> Graph for Cfg<T> {
     fn add_edge(&mut self, from: <Self::Edge as GEdge>::Label, edge: Self::Edge) {
         let out_edges = &mut self.out_edges;
         for n in edge.iter() {
-            if !out_edges.contains_key(&n) {
+            if !out_edges.contains_key(n) {
                 // The clone here is required because we use `edge` again in the insert below
                 out_edges.insert(n.clone(), Terminal);
             }
