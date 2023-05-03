@@ -91,6 +91,7 @@ impl<T: Eq + Hash> GEdge for HashSet<T> {
 
     type Iter<'a> = std::collections::hash_set::Iter<'a, T> where T: 'a;
 
+    #[allow(clippy::needless_lifetimes)]
     fn iter<'a>(&'a self) -> Self::Iter<'a> {
         self.iter()
     }
