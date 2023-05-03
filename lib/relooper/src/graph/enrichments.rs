@@ -1,7 +1,6 @@
 use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel};
 use crate::traversal::graph::bfs::Bfs;
 use crate::traversal::graph::dfs::{Dfs, DfsPost, DfsPostReverseInstantiator};
-use std::borrow::Cow;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 use std::vec::Vec;
@@ -162,16 +161,37 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
 ///
 /// Thanks to reverse postorder we will find immediate dominator for all nodes.
 ///
-pub struct DomTree<TLabel: Hash + Eq + Clone> {
+pub struct DomTree<TLabel: Hash + Eq> {
     dominates: HashMap<TLabel, HashSet<TLabel>>,
+    dominated_by: HashMap<TLabel, DomEdge<TLabel>>,
+}
+
+#[derive(Clone, Copy)]
+pub struct DomEdge<T>(T);
+
+impl<TLabel: Hash + Eq> GEdge for DomEdge<TLabel> {
+    type Label = TLabel;
+
+    type Output<U: Hash + Eq> = DomEdge<U>;
+
+    type Iter<'a> = std::iter::Once<&'a TLabel> where TLabel: 'a;
+
+    #[allow(clippy::needless_lifetimes)]
+    fn iter<'a>(&'a self) -> Self::Iter<'a> {
+        std::iter::once(&self.0)
+    }
+
+    fn map<U: Hash + Eq, F: Fn(&Self::Label) -> U>(&self, mapping: F) -> Self::Output<U> {
+        DomEdge(mapping(&self.0))
+    }
 }
 
 impl<TLabel: Hash + Eq + Clone> Graph for DomTree<TLabel> {
-    type Edge = HashSet<TLabel>;
+    type Edge = DomEdge<TLabel>;
     type Output<U: std::hash::Hash + Eq + Clone> = DomTree<U>;
 
     fn edges(&self) -> &HashMap<<Self::Edge as super::cfg::GEdge>::Label, Self::Edge> {
-        &self.dominates
+        &self.dominated_by
     }
 
     fn map_label<M, U: Eq + std::hash::Hash + Clone>(&self, mapping: M) -> Self::Output<U>
@@ -179,20 +199,38 @@ impl<TLabel: Hash + Eq + Clone> Graph for DomTree<TLabel> {
         M: Fn(&<Self::Edge as super::cfg::GEdge>::Label) -> U,
         Self: Sized,
     {
-        todo!()
+        let dominates = self
+            .dominates
+            .iter()
+            .map(|(f, s)| (mapping(f), s.iter().map(&mapping).collect()))
+            .collect();
+        let dominated = self
+            .dominated_by
+            .iter()
+            .map(|(f, t)| (mapping(f), t.map(&mapping)))
+            .collect();
+        DomTree {
+            dominates,
+            dominated_by: dominated,
+        }
     }
 
-    fn add_node(&mut self, n: <Self::Edge as super::cfg::GEdge>::Label) {
-        // self.do
-        todo!()
-    }
+    fn add_node(&mut self, _n: <Self::Edge as super::cfg::GEdge>::Label) {}
 
     fn remove_node(&mut self, n: &<Self::Edge as super::cfg::GEdge>::Label) {
-        todo!()
+        let DomEdge(removed) = self
+            .dominated_by
+            .remove(n)
+            .expect("node should be present in order to remove");
+        self.dominates.remove(&removed);
     }
 
     fn add_edge(&mut self, from: <Self::Edge as super::cfg::GEdge>::Label, edge: Self::Edge) {
-        todo!()
+        assert!(self
+            .dominated_by
+            .insert(from.clone(), edge.clone())
+            .is_none());
+        self.dominates.entry(edge.0).or_default().insert(from);
     }
 
     fn remove_edge(&mut self, from: <Self::Edge as super::cfg::GEdge>::Label, edge: &Self::Edge) {
@@ -222,7 +260,7 @@ impl<TLabel: Hash + Eq + Clone> Graph for DomTree<TLabel> {
 
 impl<TLabel: CfgLabel> From<Vec<(TLabel, TLabel)>> for DomTree<TLabel> {
     fn from(edges: Vec<(TLabel, TLabel)>) -> Self {
-        let dominated: HashMap<TLabel, TLabel> = HashMap::from_iter(edges.iter().copied());
+        let dominated = HashMap::from_iter(edges.iter().copied().map(|(f, t)| (f, DomEdge(t))));
         let mut dominates: HashMap<TLabel, HashSet<TLabel>> = HashMap::new();
 
         for (dominated, dominator) in edges {
@@ -231,20 +269,21 @@ impl<TLabel: CfgLabel> From<Vec<(TLabel, TLabel)>> for DomTree<TLabel> {
 
         DomTree {
             dominates,
-            // dominated,
+            dominated_by: dominated,
         }
     }
 }
 
 impl<TLabel: CfgLabel> DomTree<TLabel> {
-    pub(crate) fn immediately_dominated_by(&self, label: &TLabel) -> HashSet<&TLabel> {
+    pub(crate) fn immediately_dominates(&self, label: &TLabel) -> HashSet<&TLabel> {
         self.dominates.get(label).into_iter().flatten().collect()
+        // self.children(label)
     }
 
-    pub fn dominates(&self, dominator: &TLabel, dominated: &TLabel) -> bool {
-        let mut dom_iter = Bfs::start_from(dominator, |x| self.immediately_dominated_by(x));
-        dom_iter.any(|x| x == dominated)
-    }
+    // pub fn dominates(&self, dominator: &TLabel, dominated: &TLabel) -> bool {
+    //     let mut dom_iter = Bfs::start_from(dominator, |x| self.immediately_dominated_by(x));
+    //     dom_iter.any(|x| x == dominated)
+    // }
 }
 
 pub struct NodeOrdering<TLabel: CfgLabel> {
