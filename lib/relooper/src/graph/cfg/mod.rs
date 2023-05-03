@@ -150,6 +150,12 @@ pub trait Graph {
         self.edges().keys().collect()
     }
 
+    fn edge(&self, label: &<Self::Edge as GEdge>::Label) -> &Self::Edge {
+        self.edges()
+            .get(label)
+            .expect("given node should be present")
+    }
+
     fn children(
         &self,
         label: &<Self::Edge as GEdge>::Label,
@@ -198,6 +204,19 @@ pub trait Graph {
         in_edges
     }
 
+    fn reachable(
+        &self,
+        ancestor: &<Self::Edge as GEdge>::Label,
+        descendant: &<Self::Edge as GEdge>::Label,
+    ) -> bool {
+        let mut descendants = Bfs::start_from(ancestor, |x| self.children(x));
+        descendants.any(|x| x == descendant)
+    }
+}
+
+pub trait GraphMut: Graph {
+    fn edge_mut(&mut self, label: &<Self::Edge as GEdge>::Label) -> &mut Self::Edge;
+
     fn add_node(&mut self, n: <Self::Edge as GEdge>::Label);
 
     fn remove_node(&mut self, n: &<Self::Edge as GEdge>::Label);
@@ -211,10 +230,6 @@ pub trait Graph {
         from: <Self::Edge as GEdge>::Label,
         to: <Self::Edge as GEdge>::Label,
     );
-
-    fn edge(&self, label: &<Self::Edge as GEdge>::Label) -> &Self::Edge;
-
-    fn edge_mut(&mut self, label: &<Self::Edge as GEdge>::Label) -> &mut Self::Edge;
 }
 
 impl<T: Hash + Eq + Clone> Graph for Cfg<T> {
@@ -223,6 +238,12 @@ impl<T: Hash + Eq + Clone> Graph for Cfg<T> {
 
     fn edges(&self) -> &HashMap<<Self::Edge as GEdge>::Label, Self::Edge> {
         &self.out_edges
+    }
+
+    fn edge(&self, label: &<Self::Edge as GEdge>::Label) -> &Self::Edge {
+        self.out_edges
+            .get(label)
+            .expect("any node should have outgoing edges")
     }
 
     fn map_label<M, U: Eq + Hash + Clone>(&self, mapping: M) -> Self::Output<U>
@@ -239,6 +260,14 @@ impl<T: Hash + Eq + Clone> Graph for Cfg<T> {
             entry: mapping(&self.entry),
             out_edges,
         }
+    }
+}
+
+impl<T: Hash + Eq + Clone> GraphMut for Cfg<T> {
+    fn edge_mut(&mut self, label: &<Self::Edge as GEdge>::Label) -> &mut Self::Edge {
+        self.out_edges
+            .get_mut(label)
+            .expect("any node should have outgoing edges")
     }
 
     fn add_node(&mut self, n: <Self::Edge as GEdge>::Label) {
@@ -280,18 +309,6 @@ impl<T: Hash + Eq + Clone> Graph for Cfg<T> {
             Some(Uncond(uncond)) => self.out_edges.insert(from, Cond(to, uncond)),
             _ => panic!("edge (should be absent) or (shouldn't be `Cond`)"),
         };
-    }
-
-    fn edge(&self, label: &<Self::Edge as GEdge>::Label) -> &Self::Edge {
-        self.out_edges
-            .get(label)
-            .expect("any node should have outgoing edges")
-    }
-
-    fn edge_mut(&mut self, label: &<Self::Edge as GEdge>::Label) -> &mut Self::Edge {
-        self.out_edges
-            .get_mut(label)
-            .expect("any node should have outgoing edges")
     }
 }
 
