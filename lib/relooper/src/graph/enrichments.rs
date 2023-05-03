@@ -161,16 +161,14 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
 ///
 /// Thanks to reverse postorder we will find immediate dominator for all nodes.
 ///
-pub struct DomTree<TLabel: Hash + Eq> {
-    dominates: HashMap<TLabel, HashSet<TLabel>>,
-}
+pub struct DomTree<TLabel: Hash + Eq>(HashMap<TLabel, HashSet<TLabel>>);
 
 impl<TLabel: Hash + Eq + Clone> Graph for DomTree<TLabel> {
     type Edge = HashSet<TLabel>;
     type Output<U: std::hash::Hash + Eq + Clone> = DomTree<U>;
 
     fn edges(&self) -> &HashMap<<Self::Edge as super::cfg::GEdge>::Label, Self::Edge> {
-        &self.dominates
+        &self.0
     }
 
     fn map_label<M, U: Eq + std::hash::Hash + Clone>(&self, mapping: M) -> Self::Output<U>
@@ -179,11 +177,25 @@ impl<TLabel: Hash + Eq + Clone> Graph for DomTree<TLabel> {
         Self: Sized,
     {
         let dominates = self
-            .dominates
+            .0
             .iter()
             .map(|(f, s)| (mapping(f), s.iter().map(&mapping).collect()))
             .collect();
-        DomTree { dominates }
+        DomTree(dominates)
+    }
+}
+
+impl<T: Hash + Eq + Clone> DomTree<T> {
+    pub fn dom(&self, dominator: &T, dominated: &T) -> bool {
+        self.is_reachable(dominator, dominated)
+    }
+
+    pub fn stdom(&self, dominator: &T, dominated: &T) -> bool {
+        dominator != dominated && self.is_reachable(dominator, dominated)
+    }
+
+    pub fn idom(&self, dominator: &T, dominated: &T) -> bool {
+        self.children(dominator).contains(dominated)
     }
 }
 
@@ -195,7 +207,7 @@ impl<TLabel: CfgLabel> From<Vec<(TLabel, TLabel)>> for DomTree<TLabel> {
             dominates.entry(dominator).or_default().insert(dominated);
         }
 
-        DomTree { dominates }
+        DomTree(dominates)
     }
 }
 
@@ -231,30 +243,42 @@ impl<TLabel: CfgLabel> NodeOrdering<TLabel> {
     }
 }
 
-impl<T: CfgLabel> EnrichedCfg<T> {
-    // fn is_sp_back(&self, from: &T, to: &T) -> bool {
-    //     todo!()
-    // }
+// impl<T: CfgLabel> EnrichedCfg<T> {
+//     fn is_sp_back(&self, from: &T, to: &T) -> bool {
+//         todo!()
+//     }
 
-    // fn splt_loops(&self, top: &T, set: &HashSet<T>) -> bool {
-    //     let mut cross = false;
-    //     for child in self.domination.immediately_dominated_by(top) {
-    //         if (set.is_empty() || set.contains(child)) && self.splt_loops(child, set) {
-    //             cross = true;
-    //         }
-    //     }
-    //     if cross {
-    //         self.handle_ir_children(top, set)
-    //     }
-    //     for predecessor in self.cfg.parents(top) {
-    //         if self.is_sp_back(predecessor, top) && self.domination.dominates(top, predecessor) {
-    //             return true;
-    //         }
-    //     }
-    //     false
-    // }
+//     fn splt_loops(&self, top: &T, set: &HashSet<T>) -> bool {
+//         let mut cross = false;
+//         for child in self.domination.immediately_dominated_by(top) {
+//             if (set.is_empty() || set.contains(child)) && self.splt_loops(child, set) {
+//                 cross = true;
+//             }
+//         }
+//         if cross {
+//             self.handle_ir_children(top, set)
+//         }
+//         for predecessor in self.cfg.parents(top) {
+//             if self.is_sp_back(predecessor, top) && self.domination.dominates(top, predecessor) {
+//                 return true;
+//             }
+//         }
+//         false
+//     }
 
-    // fn handle_ir_children(&self, top: &T, set: &HashSet<T>) {
-    //     todo!()
-    // }
+//     fn handle_ir_children(&self, top: &T, set: &HashSet<T>) {
+//         todo!()
+//     }
+// }
+
+enum JEdge<T> {
+    B(T),
+    C(T),
 }
+
+enum DJEdge<T> {
+    D(T),
+    J(JEdge<T>),
+}
+
+struct DJGraph();

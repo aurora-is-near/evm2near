@@ -205,7 +205,7 @@ pub trait Graph {
         in_edges
     }
 
-    fn reachable(
+    fn is_reachable(
         &self,
         ancestor: &<Self::Edge as GEdge>::Label,
         descendant: &<Self::Edge as GEdge>::Label,
