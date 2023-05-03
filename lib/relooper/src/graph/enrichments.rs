@@ -173,12 +173,6 @@ impl<TLabel: Hash + Eq + Clone> Graph for DomTree<TLabel> {
         &self.dominates
     }
 
-    fn edge(&self, label: &<Self::Edge as super::cfg::GEdge>::Label) -> &Self::Edge {
-        self.dominates
-            .get(label)
-            .expect("given node is not present")
-    }
-
     fn map_label<M, U: Eq + std::hash::Hash + Clone>(&self, mapping: M) -> Self::Output<U>
     where
         M: Fn(&<Self::Edge as super::cfg::GEdge>::Label) -> U,
