@@ -4,7 +4,7 @@ use crate::traversal::graph::dfs::{DfsPost, DfsPostReverseInstantiator};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
 
-use super::cfg::{GEdge, Graph, GraphMut};
+use super::cfg::{GEdge, GEdgeMappable, Graph, GraphMappable, GraphMut};
 
 type SVersion = usize;
 

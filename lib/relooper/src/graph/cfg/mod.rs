@@ -35,16 +35,6 @@ impl<TLabel> CfgEdge<TLabel> {
             Self::Terminal => {}
         }
     }
-
-    //todo to IterMut?
-    pub(crate) fn map<'a, U, F: Fn(&'a TLabel) -> U>(&'a self, mapping: F) -> CfgEdge<U> {
-        match self {
-            Self::Uncond(t) => Uncond(mapping(t)),
-            Self::Cond(t, f) => Cond(mapping(t), mapping(f)),
-            Self::Switch(v) => Switch(v.iter().map(|(u, x)| (*u, mapping(x))).collect()),
-            Self::Terminal => Terminal,
-        }
-    }
 }
 
 /// A struct which enables iterating over the nodes that make up a `CfgEdge`.
@@ -74,20 +64,21 @@ impl<'a, T> Iterator for CfgEdgeIter<'a, T> {
 
 pub trait GEdge {
     type Label: Eq + Hash;
-    type Output<U: Hash + Eq>: GEdge<Label = U>;
     type Iter<'a>: Iterator<Item = &'a Self::Label>
     where
         Self: 'a;
 
     #[allow(clippy::needless_lifetimes)] // lint is wrong, probably due to generic_associated_types or associated_type_bounds features
     fn iter<'a>(&'a self) -> Self::Iter<'a>;
+}
+
+pub trait GEdgeMappable: GEdge {
+    type Output<U: Hash + Eq>: GEdge<Label = U>;
     fn map<U: Hash + Eq, F: Fn(&Self::Label) -> U>(&self, mapping: F) -> Self::Output<U>;
 }
 
 impl<T: Eq + Hash> GEdge for HashSet<T> {
     type Label = T;
-
-    type Output<U: Hash + Eq> = HashSet<U>;
 
     type Iter<'a> = std::collections::hash_set::Iter<'a, T> where T: 'a;
 
@@ -95,7 +86,10 @@ impl<T: Eq + Hash> GEdge for HashSet<T> {
     fn iter<'a>(&'a self) -> Self::Iter<'a> {
         self.iter()
     }
+}
 
+impl<T: Eq + Hash> GEdgeMappable for HashSet<T> {
+    type Output<U: Hash + Eq> = HashSet<U>;
     fn map<U: Hash + Eq, F: Fn(&Self::Label) -> U>(&self, mapping: F) -> Self::Output<U> {
         self.iter().map(mapping).collect()
     }
@@ -103,7 +97,6 @@ impl<T: Eq + Hash> GEdge for HashSet<T> {
 
 impl<T: Eq + Hash> GEdge for CfgEdge<T> {
     type Label = T;
-    type Output<U: Hash + Eq> = CfgEdge<U>;
     type Iter<'a> = CfgEdgeIter<'a, Self::Label> where Self::Label: 'a;
 
     #[allow(clippy::needless_lifetimes)]
@@ -131,7 +124,10 @@ impl<T: Eq + Hash> GEdge for CfgEdge<T> {
             },
         }
     }
+}
 
+impl<T: Eq + Hash> GEdgeMappable for CfgEdge<T> {
+    type Output<U: Hash + Eq> = CfgEdge<U>;
     fn map<U: Hash + Eq, F: Fn(&Self::Label) -> U>(&self, mapping: F) -> Self::Output<U> {
         match self {
             Self::Uncond(t) => Uncond(mapping(t)),
@@ -142,9 +138,15 @@ impl<T: Eq + Hash> GEdge for CfgEdge<T> {
     }
 }
 
+pub trait Wrap {
+    type Inside;
+    fn lower(self) -> Self::Inside;
+}
+
+// pub trait Graph<T> {
+// type Edge: GEdge + Wrap<Inside = T>;
 pub trait Graph {
     type Edge: GEdge;
-    type Output<U: Hash + Eq + Clone>: Graph<Edge: GEdge<Label = U>>;
 
     fn edges(&self) -> &HashMap<<Self::Edge as GEdge>::Label, Self::Edge>; // change return to Cow?
     fn nodes(&self) -> HashSet<&<Self::Edge as GEdge>::Label> {
@@ -181,12 +183,6 @@ pub trait Graph {
             .collect()
     }
 
-    // maybe it is better to implement IterMut instead
-    fn map_label<M, U: Eq + Hash + Clone>(&self, mapping: M) -> Self::Output<U>
-    where
-        M: Fn(&<Self::Edge as GEdge>::Label) -> U,
-        Self: Sized;
-
     fn in_edges(
         &self,
     ) -> HashMap<&<Self::Edge as GEdge>::Label, HashSet<&<Self::Edge as GEdge>::Label>> {
@@ -215,6 +211,16 @@ pub trait Graph {
     }
 }
 
+pub trait GraphMappable: Graph {
+    type Output<U: Hash + Eq + Clone>: Graph<Edge: GEdge<Label = U>>;
+
+    // maybe it is better to implement IterMut instead
+    fn map_label<M, U: Eq + Hash + Clone>(&self, mapping: M) -> Self::Output<U>
+    where
+        M: Fn(&<Self::Edge as GEdge>::Label) -> U,
+        Self: Sized;
+}
+
 pub trait GraphMut: Graph {
     fn edge_mut(&mut self, label: &<Self::Edge as GEdge>::Label) -> &mut Self::Edge;
 
@@ -235,7 +241,6 @@ pub trait GraphMut: Graph {
 
 impl<T: Hash + Eq + Clone> Graph for Cfg<T> {
     type Edge = CfgEdge<T>;
-    type Output<U: Hash + Eq + Clone> = Cfg<U>;
 
     fn edges(&self) -> &HashMap<<Self::Edge as GEdge>::Label, Self::Edge> {
         &self.out_edges
@@ -246,7 +251,10 @@ impl<T: Hash + Eq + Clone> Graph for Cfg<T> {
             .get(label)
             .expect("any node should have outgoing edges")
     }
+}
 
+impl<T: Hash + Eq + Clone> GraphMappable for Cfg<T> {
+    type Output<U: Hash + Eq + Clone> = Cfg<U>;
     fn map_label<M, U: Eq + Hash + Clone>(&self, mapping: M) -> Self::Output<U>
     where
         M: Fn(&<Self::Edge as GEdge>::Label) -> U,
