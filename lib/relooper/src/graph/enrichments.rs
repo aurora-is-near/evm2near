@@ -1,4 +1,4 @@
-use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel, GEdge};
+use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel, GEdgeColl};
 use crate::traversal::graph::bfs::Bfs;
 use crate::traversal::graph::dfs::{Dfs, DfsPost, DfsPostReverseInstantiator};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -6,7 +6,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::vec::Vec;
 
-use super::cfg::{Graph, GraphMappable, GraphMut};
+use super::cfg::{GEdge, Graph, GraphMut, GraphSameTypes};
 
 struct Lazy<T, F> {
     init: Option<F>,
@@ -163,29 +163,44 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
 ///
 pub struct DomTree<TLabel: Hash + Eq>(HashMap<TLabel, HashSet<TLabel>>);
 
-impl<TLabel: Hash + Eq + Clone> Graph for DomTree<TLabel> {
-    type Edge = HashSet<TLabel>;
+// impl<TLabel: Hash + Eq + Clone + GEdge<Inside = TLabel>> Graph<TLabel, TLabel> for DomTree<TLabel> {
+//     type EdgeColl = HashSet<TLabel>;
 
-    fn edges(&self) -> &HashMap<<Self::Edge as super::cfg::GEdge>::Label, Self::Edge> {
+//     fn edges(&self) -> &HashMap<<Self::EdgeColl as super::cfg::GEdgeColl>::Label, Self::EdgeColl> {
+//         &self.0
+//     }
+// }
+
+impl<T: Hash + Eq + Clone> Graph<T, T> for DomTree<T> {
+    type EdgeColl<'a> = HashSet<T>;
+
+    fn lower_edge(edge: &T) -> &T {
+        edge
+    }
+
+    fn edges<'a>(&'a self) -> &HashMap<T, Self::EdgeColl<'a>> {
         &self.0
     }
 }
 
-impl<T: Hash + Eq + Clone> GraphMappable for DomTree<T> {
-    type Output<U: std::hash::Hash + Eq + Clone> = DomTree<U>;
-    fn map_label<M, U: Eq + std::hash::Hash + Clone>(&self, mapping: M) -> Self::Output<U>
-    where
-        M: Fn(&<Self::Edge as super::cfg::GEdge>::Label) -> U,
-        Self: Sized,
-    {
-        let dominates = self
-            .0
-            .iter()
-            .map(|(f, s)| (mapping(f), s.iter().map(&mapping).collect()))
-            .collect();
-        DomTree(dominates)
-    }
-}
+// impl<T: Hash + Eq + Clone + GEdge<Inside = T>> GraphMappable<T, T> for DomTree<T> {
+//     type Output<U: std::hash::Hash + Eq + Clone, UE: GEdge<Inside = U>> = DomTree<U>;
+//     fn map_label<M, U: Eq + std::hash::Hash + Clone, UE: GEdge<Inside = U>>(
+//         &self,
+//         mapping: M,
+//     ) -> Self::Output<U, UE>
+//     where
+//         M: Fn(&<Self::EdgeColl as super::cfg::GEdgeColl>::Label) -> U,
+//         Self: Sized,
+//     {
+//         let dominates = self
+//             .0
+//             .iter()
+//             .map(|(f, s)| (mapping(f), s.iter().map(&mapping).collect()))
+//             .collect();
+//         DomTree(dominates)
+//     }
+// }
 
 impl<T: Hash + Eq + Clone> DomTree<T> {
     pub fn dom(&self, dominator: &T, dominated: &T) -> bool {
@@ -305,8 +320,8 @@ impl<T> DJEdge<T> {
 #[derive(Debug)]
 pub struct DJGraphEdge<T>(HashSet<DJEdge<T>>);
 
-impl<T: Hash + Eq> GEdge for DJGraphEdge<T> {
-    type Label = DJEdge<T>;
+impl<T: Hash + Eq> GEdgeColl for DJGraphEdge<T> {
+    type Edge = DJEdge<T>;
     type Iter<'a> = std::collections::hash_set::Iter<'a, DJEdge<T>> where T: 'a;
 
     #[allow(clippy::needless_lifetimes)]
