@@ -11,12 +11,7 @@ use std::{
 };
 
 use evm_rs::{parse_opcode, Opcode, Program};
-use relooper::graph::{
-    cfg::{Graph, GraphMappable},
-    enrichments::EnrichedCfg,
-    relooper::ReBlock,
-    supergraph::reduce,
-};
+use relooper::graph::{enrichments::EnrichedCfg, relooper::ReBlock, supergraph::reduce};
 use relooper::graph::{relooper::ReSeq, supergraph::SLabel};
 use wasm_encoder::{BlockType, ExportKind, Function, Instruction, Module, ValType};
 

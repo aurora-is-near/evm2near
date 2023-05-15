@@ -35,23 +35,23 @@ impl<T: Eq + Hash> GEdgeColl for HashSet<T> {
     }
 }
 
-pub trait Graph<T: Eq + Hash, TE> {
-    type EdgeColl<'a>: GEdgeColl<Edge = TE> + 'a; // todo try changing to IntoIter for a ref?
+pub trait Graph<'a, T: Eq + Hash + 'a, TE: 'a> {
+    type EdgeColl: GEdgeColl<Edge = TE>; // todo try changing to IntoIter for a ref?
 
     fn lower_edge(edge: &TE) -> &T; //todo rename
 
-    fn edges<'a>(&'a self) -> &HashMap<T, Self::EdgeColl<'a>>; // change return to Cow?
-    fn nodes(&self) -> HashSet<&T> {
+    fn edges(&'a self) -> &HashMap<T, Self::EdgeColl>; // change return to Cow?
+    fn nodes(&'a self) -> HashSet<&'a T> {
         self.edges().keys().collect()
     }
 
-    fn edge<'a>(&self, label: &T) -> &Self::EdgeColl<'a> {
+    fn edge(&'a self, label: &T) -> &'a Self::EdgeColl {
         self.edges()
             .get(label)
             .expect("given node should be present")
     }
 
-    fn children(&self, label: &T) -> HashSet<&T> {
+    fn children(&'a self, label: &T) -> HashSet<&'a T> {
         self.edges()
             .get(label)
             .into_iter()
@@ -59,7 +59,7 @@ pub trait Graph<T: Eq + Hash, TE> {
             .collect()
     }
 
-    fn parents(&self, label: &T) -> HashSet<&T> {
+    fn parents(&'a self, label: &T) -> HashSet<&'a T> {
         self.edges()
             .iter()
             .filter_map(|(from, edge_coll)| {
@@ -74,7 +74,7 @@ pub trait Graph<T: Eq + Hash, TE> {
             .collect()
     }
 
-    fn in_edges(&self) -> HashMap<&T, HashSet<&T>> {
+    fn in_edges(&'a self) -> HashMap<&'a T, HashSet<&'a T>> {
         let mut in_edges: HashMap<&T, HashSet<&T>> = HashMap::default();
 
         let x = self.edges();
@@ -90,7 +90,7 @@ pub trait Graph<T: Eq + Hash, TE> {
         in_edges
     }
 
-    fn is_reachable(&self, ancestor: &T, descendant: &T) -> bool {
+    fn is_reachable(&'a self, ancestor: &T, descendant: &T) -> bool {
         let mut descendants = Bfs::start_from(ancestor, |x| self.children(x));
         descendants.any(|x| x == descendant)
     }
@@ -132,18 +132,18 @@ pub trait GEdge {
 //         Self: Sized;
 // }
 
-pub trait GraphMut<T: Eq + Hash, TE>: Graph<T, TE> {
-    fn edge_mut<'a>(&mut self, label: &T) -> &mut Self::EdgeColl<'a>;
+pub trait GraphMut<'a, T: Eq + Hash + 'a, TE: 'a>: Graph<'a, T, TE> {
+    fn edge_mut(&mut self, label: &T) -> &mut Self::EdgeColl;
 
     fn add_node(&mut self, n: T);
 
     fn remove_node(&mut self, n: &T);
 
-    fn add_edge<'a>(&mut self, from: T, edge: Self::EdgeColl<'a>);
+    fn add_edge(&mut self, from: T, edge: Self::EdgeColl);
 
-    fn remove_edge<'a>(&mut self, from: T, edge: &Self::EdgeColl<'a>);
+    fn remove_edge(&mut self, from: T, edge: &Self::EdgeColl);
 
-    fn add_edge_or_promote<'a>(&mut self, from: T, to: TE);
+    fn add_edge_or_promote(&mut self, from: T, to: TE);
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -262,14 +262,14 @@ impl<T: Eq + Hash> GEdgeCollMappable for CfgEdge<T> {
 //     }
 // }
 
-impl<T: Hash + Eq + Clone> Graph<T, T> for Cfg<T> {
-    type EdgeColl<'a> = CfgEdge<T>;
+impl<'a, T: Hash + Eq + Clone + 'a> Graph<'a, T, T> for Cfg<T> {
+    type EdgeColl = CfgEdge<T>;
 
     fn lower_edge(edge: &T) -> &T {
         edge
     }
 
-    fn edges<'a>(&'a self) -> &HashMap<T, Self::EdgeColl<'a>> {
+    fn edges(&'a self) -> &HashMap<T, Self::EdgeColl> {
         &self.out_edges
     }
 }
@@ -297,8 +297,8 @@ impl<T: Hash + Eq + Clone> Graph<T, T> for Cfg<T> {
 //     }
 // }
 
-impl<T: Hash + Eq + Clone> GraphMut<T, T> for Cfg<T> {
-    fn edge_mut<'a>(&mut self, label: &T) -> &mut Self::EdgeColl<'a> {
+impl<'a, T: Hash + Eq + Clone + 'a> GraphMut<'a, T, T> for Cfg<T> {
+    fn edge_mut(&mut self, label: &T) -> &mut Self::EdgeColl {
         self.out_edges
             .get_mut(label)
             .expect("any node should have outgoing edges")
@@ -315,7 +315,7 @@ impl<T: Hash + Eq + Clone> GraphMut<T, T> for Cfg<T> {
             .expect("cannot delete non-present node");
     }
 
-    fn add_edge<'a>(&mut self, from: T, edge: Self::EdgeColl<'a>) {
+    fn add_edge(&mut self, from: T, edge: Self::EdgeColl) {
         let out_edges = &mut self.out_edges;
         for n in edge.iter() {
             if !out_edges.contains_key(n) {
@@ -328,12 +328,12 @@ impl<T: Hash + Eq + Clone> GraphMut<T, T> for Cfg<T> {
         Self::check_previous_edge(prev_edge);
     }
 
-    fn remove_edge<'a>(&mut self, from: T, edge: &Self::EdgeColl<'a>) {
+    fn remove_edge(&mut self, from: T, edge: &Self::EdgeColl) {
         let removed_edge = self.out_edges.remove(&from);
         assert!(removed_edge.as_ref() == Some(edge));
     }
 
-    fn add_edge_or_promote<'a>(&mut self, from: T, to: T) {
+    fn add_edge_or_promote(&mut self, from: T, to: T) {
         match self.out_edges.remove(&from) {
             None | Some(Terminal) => self.out_edges.insert(from, Uncond(to)),
             Some(Uncond(uncond)) => self.out_edges.insert(from, Cond(to, uncond)),
@@ -387,7 +387,7 @@ impl<TLabel: Eq + Hash + Copy> Cfg<TLabel> {
     }
 }
 
-impl<TLabel: CfgLabel + GEdge<Inside = TLabel>> Cfg<TLabel> {
+impl<TLabel: CfgLabel> Cfg<TLabel> {
     pub fn strip_unreachable(&mut self) {
         let reachable_from_start: HashSet<&TLabel> =
             Bfs::start_from(&self.entry, |label| self.children(label)).collect();

@@ -6,7 +6,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::vec::Vec;
 
-use super::cfg::{GEdge, Graph, GraphMut, GraphSameTypes};
+use super::cfg::Graph;
 
 struct Lazy<T, F> {
     init: Option<F>,
@@ -171,14 +171,14 @@ pub struct DomTree<TLabel: Hash + Eq>(HashMap<TLabel, HashSet<TLabel>>);
 //     }
 // }
 
-impl<T: Hash + Eq + Clone> Graph<T, T> for DomTree<T> {
-    type EdgeColl<'a> = HashSet<T>;
+impl<'a, T: Hash + Eq + Clone + 'a> Graph<'a, T, T> for DomTree<T> {
+    type EdgeColl = HashSet<T>;
 
     fn lower_edge(edge: &T) -> &T {
         edge
     }
 
-    fn edges<'a>(&'a self) -> &HashMap<T, Self::EdgeColl<'a>> {
+    fn edges(&'a self) -> &HashMap<T, Self::EdgeColl> {
         &self.0
     }
 }
