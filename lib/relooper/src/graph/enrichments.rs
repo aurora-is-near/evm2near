@@ -378,10 +378,6 @@ impl<'a, T: Eq + Hash + Clone + 'a> GraphMut<'a, T, DJEdge<T>> for DJGraph<T> {
         let _prev = self.0.remove(&from).expect("node should be present");
         // assert_eq!(prev, edge);
     }
-
-    // fn add_edge_or_promote(&mut self, from: T, to: DJEdge<T>) {
-    //     todo!()
-    // }
 }
 // impl<T: Eq + Hash + Clone> GraphMut for DJGraph<T> {
 //     fn edge_mut(&mut self, label: &<Self::Edge as GEdge>::Label) -> &mut Self::Edge {
@@ -401,14 +397,6 @@ impl<'a, T: Eq + Hash + Clone + 'a> GraphMut<'a, T, DJEdge<T>> for DJGraph<T> {
 //     fn remove_edge(&mut self, from: <Self::Edge as GEdge>::Label, edge: &Self::Edge) {
 //         let _prev = self.0.remove(&from).expect("node should be present");
 //         // assert_eq!(prev, edge);
-//     }
-
-//     fn add_edge_or_promote(
-//         &mut self,
-//         from: <Self::Edge as GEdge>::Label,
-//         to: <Self::Edge as GEdge>::Label,
-//     ) {
-//         todo!()
 //     }
 // }
 

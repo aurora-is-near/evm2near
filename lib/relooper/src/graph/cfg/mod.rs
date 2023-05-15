@@ -142,8 +142,6 @@ pub trait GraphMut<'a, T: Eq + Hash + 'a, TE: 'a>: Graph<'a, T, TE> {
     fn add_edge(&mut self, from: T, edge: Self::EdgeColl);
 
     fn remove_edge(&mut self, from: T, edge: &Self::EdgeColl);
-
-    // fn add_edge_or_promote(&mut self, from: T, to: TE);
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -332,14 +330,6 @@ impl<'a, T: Hash + Eq + Clone + 'a> GraphMut<'a, T, T> for Cfg<T> {
         let removed_edge = self.out_edges.remove(&from);
         assert!(removed_edge.as_ref() == Some(edge));
     }
-
-    // fn add_edge_or_promote(&mut self, from: T, to: T) {
-    //     match self.out_edges.remove(&from) {
-    //         None | Some(Terminal) => self.out_edges.insert(from, Uncond(to)),
-    //         Some(Uncond(uncond)) => self.out_edges.insert(from, Cond(to, uncond)),
-    //         _ => panic!("edge (should be absent) or (shouldn't be `Cond`)"),
-    //     };
-    // }
 }
 
 #[derive(Clone, Debug)]
