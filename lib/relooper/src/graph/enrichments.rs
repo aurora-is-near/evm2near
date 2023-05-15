@@ -1,4 +1,4 @@
-use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel, GEdgeColl};
+use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel};
 use crate::traversal::graph::bfs::Bfs;
 use crate::traversal::graph::dfs::{Dfs, DfsPost, DfsPostReverseInstantiator};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -6,7 +6,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::vec::Vec;
 
-use super::cfg::Graph;
+use super::cfg::{Graph, GraphMut};
 
 struct Lazy<T, F> {
     init: Option<F>,
@@ -317,26 +317,26 @@ impl<T> DJEdge<T> {
     }
 }
 
+// #[derive(Debug)]
+// pub struct DJGraphEdge<T>(HashSet<DJEdge<T>>);
+
+// impl<T: Hash + Eq> GEdgeColl for DJGraphEdge<T> {
+//     type Edge = DJEdge<T>;
+//     type Iter<'a> = std::collections::hash_set::Iter<'a, DJEdge<T>> where T: 'a;
+
+//     #[allow(clippy::needless_lifetimes)]
+//     fn iter<'a>(&'a self) -> Self::Iter<'a> {
+//         self.0.iter()
+//     }
+
+//     // type Output<U: Hash + Eq> = DJGraphEdge<U>;
+//     // fn map<U: Hash + Eq, F: Fn(&Self::Label) -> U>(&self, mapping: F) -> Self::Output<U> {
+//     //     DJGraphEdge(self.0.iter().map(mapping).collect())
+//     // }
+// }
+
 #[derive(Debug)]
-pub struct DJGraphEdge<T>(HashSet<DJEdge<T>>);
-
-impl<T: Hash + Eq> GEdgeColl for DJGraphEdge<T> {
-    type Edge = DJEdge<T>;
-    type Iter<'a> = std::collections::hash_set::Iter<'a, DJEdge<T>> where T: 'a;
-
-    #[allow(clippy::needless_lifetimes)]
-    fn iter<'a>(&'a self) -> Self::Iter<'a> {
-        self.0.iter()
-    }
-
-    // type Output<U: Hash + Eq> = DJGraphEdge<U>;
-    // fn map<U: Hash + Eq, F: Fn(&Self::Label) -> U>(&self, mapping: F) -> Self::Output<U> {
-    //     DJGraphEdge(self.0.iter().map(mapping).collect())
-    // }
-}
-
-#[derive(Debug)]
-pub struct DJGraph<T>(HashMap<T, DJGraphEdge<DJEdge<T>>>);
+pub struct DJGraph<T>(HashMap<T, HashSet<DJEdge<T>>>);
 
 impl<T> Default for DJGraph<T> {
     fn default() -> Self {
@@ -345,23 +345,44 @@ impl<T> Default for DJGraph<T> {
     }
 }
 
-// impl<T: Eq + Hash + Clone> Graph for DJGraph<T> {
-//     type Edge = DJGraphEdge<T>;
+impl<'a, T: Eq + Hash + Clone + 'a> Graph<'a, T, DJEdge<T>> for DJGraph<T> {
+    type EdgeColl = HashSet<DJEdge<T>>;
 
-//     fn edges(&self) -> &HashMap<<Self::Edge as GEdge>::Label, Self::Edge> {
-//         &self.0
-//     }
+    fn lower_edge(edge: &DJEdge<T>) -> &T {
+        edge.label()
+    }
 
-//     // type Output<U: Hash + Eq + Clone> = DJGraph<U>;
-//     // fn map_label<M, U: Eq + Hash + Clone>(&self, mapping: M) -> Self::Output<U>
-//     // where
-//     //     M: Fn(&<Self::Edge as GEdge>::Label) -> U,
-//     //     Self: Sized,
-//     // {
-//     //     todo!()
-//     // }
-// }
+    fn edges(&'a self) -> &HashMap<T, Self::EdgeColl> {
+        &self.0
+    }
+}
 
+impl<'a, T: Eq + Hash + Clone + 'a> GraphMut<'a, T, DJEdge<T>> for DJGraph<T> {
+    fn edge_mut(&mut self, label: &T) -> &mut Self::EdgeColl {
+        self.0.get_mut(label).expect("node should be present")
+    }
+
+    fn add_node(&mut self, _n: T) {
+        unreachable!()
+    }
+
+    fn remove_node(&mut self, n: &T) {
+        assert!(self.0.remove(n).is_some());
+    }
+
+    fn add_edge(&mut self, from: T, edge: Self::EdgeColl) {
+        assert!(self.0.insert(from, edge).is_none());
+    }
+
+    fn remove_edge(&mut self, from: T, _edge: &Self::EdgeColl) {
+        let _prev = self.0.remove(&from).expect("node should be present");
+        // assert_eq!(prev, edge);
+    }
+
+    // fn add_edge_or_promote(&mut self, from: T, to: DJEdge<T>) {
+    //     todo!()
+    // }
+}
 // impl<T: Eq + Hash + Clone> GraphMut for DJGraph<T> {
 //     fn edge_mut(&mut self, label: &<Self::Edge as GEdge>::Label) -> &mut Self::Edge {
 //         self.0.get_mut(label).expect("node should be present")
