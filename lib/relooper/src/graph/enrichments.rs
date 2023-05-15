@@ -1,4 +1,4 @@
-use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel};
+use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel, GEdgeColl};
 use crate::traversal::graph::bfs::Bfs;
 use crate::traversal::graph::dfs::{Dfs, DfsPost, DfsPostReverseInstantiator};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -74,8 +74,7 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
         });
         let domination = flame::span_of("building domination", || {
             let domination_map = Self::domination_tree(&cfg, &node_ordering);
-            let domination_vec = Vec::from_iter(domination_map);
-            DomTree::from(domination_vec)
+            DomTree::from_edges(cfg.entry, domination_map)
         });
 
         Self {
@@ -144,7 +143,6 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
     }
 }
 
-#[derive(Default)]
 /// Node A dominate node B if you can't reach B without visiting A. For example, entry node dominates all nodes.
 /// Each node have set of dominators. If B_set is set of node B dominators, node A will called Immediate Dominator of B
 /// if it is in B_set AND NOT dominate any other nodes from B_set.
@@ -161,15 +159,11 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
 ///
 /// Thanks to reverse postorder we will find immediate dominator for all nodes.
 ///
-pub struct DomTree<TLabel: Hash + Eq>(HashMap<TLabel, HashSet<TLabel>>);
-
-// impl<TLabel: Hash + Eq + Clone + GEdge<Inside = TLabel>> Graph<TLabel, TLabel> for DomTree<TLabel> {
-//     type EdgeColl = HashSet<TLabel>;
-
-//     fn edges(&self) -> &HashMap<<Self::EdgeColl as super::cfg::GEdgeColl>::Label, Self::EdgeColl> {
-//         &self.0
-//     }
-// }
+#[derive(Default)]
+pub struct DomTree<T: Hash + Eq> {
+    dominates: HashMap<T, HashSet<T>>,
+    levels: HashMap<T, usize>,
+}
 
 impl<'a, T: Hash + Eq + Clone + 'a> Graph<'a, T, T> for DomTree<T> {
     type EdgeColl = HashSet<T>;
@@ -179,30 +173,11 @@ impl<'a, T: Hash + Eq + Clone + 'a> Graph<'a, T, T> for DomTree<T> {
     }
 
     fn edges(&'a self) -> &HashMap<T, Self::EdgeColl> {
-        &self.0
+        &self.dominates
     }
 }
 
-// impl<T: Hash + Eq + Clone + GEdge<Inside = T>> GraphMappable<T, T> for DomTree<T> {
-//     type Output<U: std::hash::Hash + Eq + Clone, UE: GEdge<Inside = U>> = DomTree<U>;
-//     fn map_label<M, U: Eq + std::hash::Hash + Clone, UE: GEdge<Inside = U>>(
-//         &self,
-//         mapping: M,
-//     ) -> Self::Output<U, UE>
-//     where
-//         M: Fn(&<Self::EdgeColl as super::cfg::GEdgeColl>::Label) -> U,
-//         Self: Sized,
-//     {
-//         let dominates = self
-//             .0
-//             .iter()
-//             .map(|(f, s)| (mapping(f), s.iter().map(&mapping).collect()))
-//             .collect();
-//         DomTree(dominates)
-//     }
-// }
-
-impl<T: Hash + Eq + Clone> DomTree<T> {
+impl<T: CfgLabel> DomTree<T> {
     pub fn dom(&self, dominator: &T, dominated: &T) -> bool {
         self.is_reachable(dominator, dominated)
     }
@@ -214,17 +189,33 @@ impl<T: Hash + Eq + Clone> DomTree<T> {
     pub fn idom(&self, dominator: &T, dominated: &T) -> bool {
         self.children(dominator).contains(dominated)
     }
-}
 
-impl<TLabel: CfgLabel> From<Vec<(TLabel, TLabel)>> for DomTree<TLabel> {
-    fn from(edges: Vec<(TLabel, TLabel)>) -> Self {
-        let mut dominates: HashMap<TLabel, HashSet<TLabel>> = HashMap::new();
+    pub fn level(&self, node: &T) -> usize {
+        *self
+            .levels
+            .get(node)
+            .expect("node should be present in domination tree in order to acquire its level")
+    }
+
+    //todo remove with new dominance building
+    fn from_edges(entry: T, edges: HashMap<T, T>) -> Self {
+        let mut dominates: HashMap<T, HashSet<T>> = HashMap::new();
 
         for (dominated, dominator) in edges {
             dominates.entry(dominator).or_default().insert(dominated);
         }
 
-        DomTree(dominates)
+        let levels = Bfs::start_from((entry, 0), |(n, level)| {
+            let next_level = level + 1;
+            dominates
+                .get(&n)
+                .into_iter()
+                .flatten()
+                .map(move |&x| (x, next_level))
+        })
+        .collect();
+
+        DomTree { dominates, levels }
     }
 }
 
@@ -317,24 +308,6 @@ impl<T> DJEdge<T> {
     }
 }
 
-// #[derive(Debug)]
-// pub struct DJGraphEdge<T>(HashSet<DJEdge<T>>);
-
-// impl<T: Hash + Eq> GEdgeColl for DJGraphEdge<T> {
-//     type Edge = DJEdge<T>;
-//     type Iter<'a> = std::collections::hash_set::Iter<'a, DJEdge<T>> where T: 'a;
-
-//     #[allow(clippy::needless_lifetimes)]
-//     fn iter<'a>(&'a self) -> Self::Iter<'a> {
-//         self.0.iter()
-//     }
-
-//     // type Output<U: Hash + Eq> = DJGraphEdge<U>;
-//     // fn map<U: Hash + Eq, F: Fn(&Self::Label) -> U>(&self, mapping: F) -> Self::Output<U> {
-//     //     DJGraphEdge(self.0.iter().map(mapping).collect())
-//     // }
-// }
-
 #[derive(Debug)]
 pub struct DJGraph<T>(HashMap<T, HashSet<DJEdge<T>>>);
 
@@ -376,51 +349,33 @@ impl<'a, T: Eq + Hash + Clone + 'a> GraphMut<'a, T, DJEdge<T>> for DJGraph<T> {
 
     fn remove_edge(&mut self, from: T, _edge: &Self::EdgeColl) {
         let _prev = self.0.remove(&from).expect("node should be present");
-        // assert_eq!(prev, edge);
+        // assert_eq!(prev, edge); // todo
     }
 }
-// impl<T: Eq + Hash + Clone> GraphMut for DJGraph<T> {
-//     fn edge_mut(&mut self, label: &<Self::Edge as GEdge>::Label) -> &mut Self::Edge {
-//         self.0.get_mut(label).expect("node should be present")
-//     }
 
-//     fn add_node(&mut self, n: <Self::Edge as GEdge>::Label) {}
+impl<T: Copy + Hash + Ord + Debug> DJGraph<T> {
+    fn new(cfg: &Cfg<T>) -> Self {
+        let cfg: Cfg<T> = cfg.clone();
+        let enriched = EnrichedCfg::new(cfg.clone());
+        let mut dj_graph: DJGraph<T> = Default::default();
+        for (&from, dom_edge_set) in enriched.domination.edges() {
+            dj_graph.add_edge(from, dom_edge_set.iter().map(|&x| DJEdge::D(x)).collect())
+        }
 
-//     fn remove_node(&mut self, n: &<Self::Edge as GEdge>::Label) {
-//         assert!(self.0.remove(n).is_some());
-//     }
+        for (f, e) in cfg.edges() {
+            let d_edge = enriched.domination.edge(f);
+            for t in e.iter() {
+                if !d_edge.contains(t) {
+                    let j_edge = if enriched.domination.dom(t, f) {
+                        JEdge::B(*t)
+                    } else {
+                        JEdge::C(*t)
+                    };
+                    dj_graph.edge_mut(f).insert(DJEdge::J(j_edge));
+                }
+            }
+        }
 
-//     fn add_edge(&mut self, from: <Self::Edge as GEdge>::Label, edge: Self::Edge) {
-//         assert!(self.0.insert(from, edge).is_none());
-//     }
-
-//     fn remove_edge(&mut self, from: <Self::Edge as GEdge>::Label, edge: &Self::Edge) {
-//         let _prev = self.0.remove(&from).expect("node should be present");
-//         // assert_eq!(prev, edge);
-//     }
-// }
-
-// impl<T: Copy + Hash + Ord + Debug> DJGraph<T> {
-//     fn new(cfg: &Cfg<T>) -> Self {
-//         let cfg: Cfg<T> = cfg.clone();
-//         let enriched = EnrichedCfg::new(cfg.clone());
-//         let mut dj_graph = enriched.domination.map_label(|n| DJEdge::D(*n));
-//         let mut dj_graph: DJGraph<T> = Default::default();
-//         for (f, set) in enriched.domination.edges() {}
-
-//         for (f, e) in cfg.edges() {
-//             let d_edge = enriched.domination.edge(f);
-//             for t in e.iter() {
-//                 if !d_edge.contains(t) {
-//                     let j_edge = if enriched.domination.dom(t, f) {
-//                         JEdge::B(t)
-//                     } else {
-//                         JEdge::C(t)
-//                     };
-//                     dj_graph.add_edge(f, j_edge);
-//                 }
-//             }
-//         }
-//         todo!()
-//     }
-// }
+        dj_graph
+    }
+}
