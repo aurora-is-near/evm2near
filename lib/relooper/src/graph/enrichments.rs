@@ -197,6 +197,10 @@ impl<T: CfgLabel> DomTree<T> {
             .expect("node should be present in domination tree in order to acquire its level")
     }
 
+    pub fn levels(&self) -> HashMap<T, usize> {
+        self.levels.clone()
+    }
+
     //todo remove with new dominance building
     fn from_edges(entry: T, edges: HashMap<T, T>) -> Self {
         let mut dominates: HashMap<T, HashSet<T>> = HashMap::new();
@@ -311,13 +315,6 @@ impl<T> DJEdge<T> {
 #[derive(Debug)]
 pub struct DJGraph<T>(HashMap<T, HashSet<DJEdge<T>>>);
 
-impl<T> Default for DJGraph<T> {
-    fn default() -> Self {
-        let map = Default::default();
-        DJGraph(map)
-    }
-}
-
 impl<'a, T: Eq + Hash + Clone + 'a> Graph<'a, T, DJEdge<T>> for DJGraph<T> {
     type EdgeColl = HashSet<DJEdge<T>>;
 
@@ -330,6 +327,7 @@ impl<'a, T: Eq + Hash + Clone + 'a> Graph<'a, T, DJEdge<T>> for DJGraph<T> {
     }
 }
 
+// todo remove if not needed
 impl<'a, T: Eq + Hash + Clone + 'a> GraphMut<'a, T, DJEdge<T>> for DJGraph<T> {
     fn edge_mut(&mut self, label: &T) -> &mut Self::EdgeColl {
         self.0.get_mut(label).expect("node should be present")
@@ -353,29 +351,64 @@ impl<'a, T: Eq + Hash + Clone + 'a> GraphMut<'a, T, DJEdge<T>> for DJGraph<T> {
     }
 }
 
-impl<T: Copy + Hash + Ord + Debug> DJGraph<T> {
-    fn new(cfg: &Cfg<T>) -> Self {
-        let cfg: Cfg<T> = cfg.clone();
-        let enriched = EnrichedCfg::new(cfg.clone());
-        let mut dj_graph: DJGraph<T> = Default::default();
-        for (&from, dom_edge_set) in enriched.domination.edges() {
-            dj_graph.add_edge(from, dom_edge_set.iter().map(|&x| DJEdge::D(x)).collect())
-        }
+struct DJSpanningTree<T>(HashMap<T, HashSet<T>>);
 
-        for (f, e) in cfg.edges() {
-            let d_edge = enriched.domination.edge(f);
-            for t in e.iter() {
-                if !d_edge.contains(t) {
-                    let j_edge = if enriched.domination.dom(t, f) {
-                        JEdge::B(*t)
-                    } else {
-                        JEdge::C(*t)
-                    };
-                    dj_graph.edge_mut(f).insert(DJEdge::J(j_edge));
-                }
+impl<'a, T: Eq + Hash + 'a> Graph<'a, T, T> for DJSpanningTree<T> {
+    type EdgeColl = HashSet<T>;
+
+    fn lower_edge(edge: &T) -> &T {
+        edge
+    }
+
+    fn edges(&'a self) -> &HashMap<T, Self::EdgeColl> {
+        &self.0
+    }
+}
+
+impl<T> DJSpanningTree<T> {
+    fn sp_back(&self, from: &T, to: &T) -> bool {
+        false
+    }
+}
+
+fn dj_spanning<T: CfgLabel>(
+    cfg: &Cfg<T>,
+    dom_tree: &DomTree<T>,
+) -> (DJGraph<T>, DJSpanningTree<T>) {
+    let mut dj_graph: HashMap<T, HashSet<DJEdge<T>>> = Default::default();
+    for (&from, dom_edge_set) in dom_tree.edges() {
+        dj_graph.insert(from, dom_edge_set.iter().map(|&x| DJEdge::D(x)).collect());
+    }
+
+    for (f, e) in cfg.edges() {
+        let d_edge = dom_tree.edge(f);
+        for t in e.iter() {
+            if !d_edge.contains(t) {
+                let j_edge = if dom_tree.dom(t, f) {
+                    JEdge::B(*t)
+                } else {
+                    JEdge::C(*t)
+                };
+                dj_graph.entry(*f).or_default().insert(DJEdge::J(j_edge));
+                // dj_graph.edge_mut(f).insert(DJEdge::J(j_edge));
             }
         }
-
-        dj_graph
     }
+
+    let mut spanning_tree: HashMap<T, HashSet<T>> = Default::default();
+    Dfs::start_from(cfg.entry, |x| {
+        let children: Vec<T> = dj_graph
+            .get(&x)
+            .into_iter()
+            .flatten()
+            .map(|c| c.label())
+            .copied()
+            .collect();
+        for &c in children.iter() {
+            spanning_tree.entry(x).or_default().insert(c);
+        }
+        children
+    });
+
+    (DJGraph(dj_graph), DJSpanningTree(spanning_tree))
 }
