@@ -365,9 +365,21 @@ impl<'a, T: Eq + Hash + 'a> Graph<'a, T, T> for DJSpanningTree<T> {
     }
 }
 
-impl<T> DJSpanningTree<T> {
-    fn sp_back(&self, from: &T, to: &T) -> bool {
-        false
+impl<'a, T: Eq + Hash + 'a> DJSpanningTree<T> {
+    fn is_sp_back(&self, from: &T, to: &T) -> bool {
+        from == to || self.is_reachable(to, from)
+    }
+
+    fn is_sp_tree(&self, from: &T, to: &T) -> bool {
+        self.children(from).contains(to)
+    }
+
+    fn is_sp_forward(&self, from: &T, to: &T) -> bool {
+        !self.children(from).contains(to) && self.is_reachable(from, to)
+    }
+
+    fn is_sp_cross(&self, from: &T, to: &T) -> bool {
+        !self.is_reachable(from, to) && !self.is_reachable(to, from)
     }
 }
 
@@ -411,4 +423,24 @@ fn dj_spanning<T: CfgLabel>(
     });
 
     (DJGraph(dj_graph), DJSpanningTree(spanning_tree))
+}
+
+struct SccsFinder<T> {
+    current_id: usize,
+    stack: VecDeque<T>,
+    indexes: HashMap<T, usize>,
+    lowlinks: HashMap<T, usize>,
+}
+
+fn tarjan_sccs<T: Eq + Hash + Clone>(dj_graph: &DJGraph<T>) -> Vec<HashSet<T>> {
+    let mut sccs = Default::default();
+
+    let mut idx: usize = 0;
+    let mut stack: VecDeque<T> = Default::default();
+    let mut indexes: HashMap<T, usize> = Default::default();
+    let mut lowlinks: HashMap<T, usize> = Default::default();
+
+    for n in dj_graph.nodes() {}
+
+    sccs
 }

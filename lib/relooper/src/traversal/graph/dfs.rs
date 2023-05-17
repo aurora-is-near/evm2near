@@ -54,6 +54,109 @@ where
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum VisitAction<T> {
+    Enter(T),
+    Leave(T),
+}
+
+pub struct PrePostOrder<T, ChFun> {
+    visited: HashSet<T>,
+    stack: VecDeque<VisitAction<T>>,
+    get_children: ChFun,
+}
+
+impl<T, ChIt, ChFun> PrePostOrder<T, ChFun>
+where
+    ChIt: IntoIterator<Item = T>,
+    ChFun: FnMut(T) -> ChIt,
+{
+    pub fn start_iter<I: IntoIterator<Item = T>>(iter: I, get_children: ChFun) -> Self {
+        PrePostOrder {
+            visited: HashSet::new(),
+            stack: VecDeque::from_iter(iter.into_iter().map(|x| VisitAction::Enter(x))),
+            get_children,
+        }
+    }
+
+    pub fn start_from(item: T, get_children: ChFun) -> Self {
+        Self::start_iter(Some(item).into_iter(), get_children)
+    }
+
+    pub fn start_from_except(item: T, mut get_children: ChFun) -> Self {
+        Self::start_iter(get_children(item), get_children)
+    }
+}
+
+impl<T, ChIt, ChFun> Iterator for PrePostOrder<T, ChFun>
+where
+    T: Hash + Eq + Copy,
+    ChIt: IntoIterator<Item = T>,
+    ChFun: FnMut(T) -> ChIt,
+{
+    type Item = VisitAction<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.stack.pop_back().map(|current| match current {
+            VisitAction::Enter(x) => {
+                self.stack.push_back(VisitAction::Leave(x));
+                let children: Vec<_> = (self.get_children)(x)
+                    .into_iter()
+                    .filter(|c| !self.visited.contains(c))
+                    .collect();
+                for &c in &children {
+                    self.visited.insert(c);
+                }
+                self.stack
+                    .extend(children.into_iter().map(|x| VisitAction::Enter(x)));
+
+                current
+            }
+            VisitAction::Leave(_) => current,
+        })
+    }
+}
+
+#[cfg(test)]
+mod preorder_test {
+    use std::collections::HashMap;
+
+    use super::{PrePostOrder, VisitAction::*};
+
+    #[test]
+    fn preorder_simple() {
+        let map: HashMap<i32, Vec<i32>> = HashMap::from_iter(vec![
+            (0, vec![6, 1]),
+            (1, vec![4, 2]),
+            (2, vec![3]),
+            (3, vec![]),
+            (4, vec![5]),
+            (5, vec![3]),
+            (6, vec![5]),
+        ]);
+
+        let desired_order = vec![
+            Enter(0),
+            Enter(1),
+            Enter(2),
+            Enter(3),
+            Leave(3),
+            Leave(2),
+            Enter(4),
+            Enter(5),
+            Leave(5),
+            Leave(4),
+            Leave(1),
+            Enter(6),
+            Leave(6),
+            Leave(0),
+        ];
+
+        let preorder = PrePostOrder::start_from(0, |x| map.get(&x).unwrap().to_vec());
+        assert!(desired_order.into_iter().zip(preorder).all(|(a, b)| a == b))
+    }
+}
+
 pub trait Contains<T> {
     fn contains(&self, item: &T) -> bool;
     fn insert(&mut self, item: T);
