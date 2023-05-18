@@ -1,7 +1,7 @@
 use graph_samples::*;
-use relooper::graph::cfg::Graph;
 use relooper::graph::enrichments::EnrichedCfg;
 use relooper::graph::supergraph::reduce;
+use relooper::graph::Graph;
 
 #[allow(dead_code)]
 mod graph_samples {
@@ -9,7 +9,7 @@ mod graph_samples {
 
     use relooper::graph::cfg::Cfg;
     use relooper::graph::cfg::CfgEdge;
-    use relooper::graph::cfg::GraphMut;
+    use relooper::graph::GraphMut;
 
     pub fn irreducible() -> Cfg<i32> {
         let mut cfg = Cfg::new(0);

@@ -1,7 +1,11 @@
 // This is free and unencumbered software released into the public domain.
 
 use evm_rs::{Opcode, Program};
-use relooper::graph::cfg::{Cfg, CfgEdge, GraphMut};
+use relooper::graph::{
+    cfg::{Cfg, CfgEdge},
+    GraphMut,
+};
+
 use std::{
     collections::HashMap,
     fmt::{Debug, Display},

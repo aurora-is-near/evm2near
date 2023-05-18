@@ -1,4 +1,4 @@
-use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel, GEdgeColl};
+use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel};
 use crate::traversal::graph::bfs::Bfs;
 use crate::traversal::graph::dfs::{Dfs, DfsPost, DfsPostReverseInstantiator};
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -6,7 +6,7 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::vec::Vec;
 
-use super::cfg::{Graph, GraphMut};
+use super::{GEdgeColl, Graph, GraphMut};
 
 struct Lazy<T, F> {
     init: Option<F>,

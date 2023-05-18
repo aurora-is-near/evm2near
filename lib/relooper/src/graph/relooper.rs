@@ -5,7 +5,7 @@ use crate::graph::cfg::{CfgEdge::*, CfgLabel};
 use crate::graph::enrichments::EnrichedCfg;
 use crate::graph::relooper::ReBlock::*;
 
-use super::cfg::Graph;
+use super::Graph;
 
 #[derive(Debug)]
 pub struct ReSeq<TLabel: CfgLabel>(pub Vec<ReBlock<TLabel>>);

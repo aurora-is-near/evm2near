@@ -1,10 +1,9 @@
+use super::{GEdgeColl, GEdgeCollMappable, Graph, GraphMut};
 use crate::graph::cfg::{Cfg, CfgLabel};
 use crate::graph::supergraph::NodeAction::{MergeInto, SplitFor};
 use crate::traversal::graph::dfs::{DfsPost, DfsPostReverseInstantiator};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::{Debug, Display, Formatter};
-
-use super::cfg::{GEdgeColl, GEdgeCollMappable, Graph, GraphMut};
 
 type SVersion = usize;
 
