@@ -1,6 +1,7 @@
 use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel};
 use crate::traversal::graph::bfs::Bfs;
 use crate::traversal::graph::dfs::{Dfs, DfsPost, DfsPostReverseInstantiator};
+use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -337,7 +338,11 @@ impl<'a, T: Eq + Hash + Clone + 'a> GraphMut<'a, T, DJEdge<T>> for DJGraph<T> {
         unreachable!()
     }
 
-    fn remove_node(&mut self, n: &T) {
+    fn remove_node<Q: ?Sized>(&mut self, n: &Q)
+    where
+        T: Borrow<Q>,
+        Q: Hash + Eq,
+    {
         assert!(self.0.remove(n).is_some());
     }
 
@@ -425,22 +430,35 @@ fn dj_spanning<T: CfgLabel>(
     (DJGraph(dj_graph), DJSpanningTree(spanning_tree))
 }
 
-struct SccsFinder<T> {
-    current_id: usize,
-    stack: VecDeque<T>,
-    indexes: HashMap<T, usize>,
-    lowlinks: HashMap<T, usize>,
-}
+#[cfg(test)]
+mod tests {
+    use crate::graph::*;
+    use std::collections::{BTreeSet, HashMap};
 
-fn tarjan_sccs<T: Eq + Hash + Clone>(dj_graph: &DJGraph<T>) -> Vec<HashSet<T>> {
-    let mut sccs = Default::default();
+    #[test]
+    fn simple_scc() {
+        let map = HashMap::from_iter(
+            vec![
+                (0, vec![1]),
+                (1, vec![2]),
+                (2, vec![0, 3]),
+                (3, vec![4, 5]),
+                (4, vec![5]),
+                (5, vec![6]),
+                (6, vec![3]),
+            ]
+            .into_iter()
+            .map(|(f, t)| (f, HashSet::from_iter(t))),
+        );
 
-    let mut idx: usize = 0;
-    let mut stack: VecDeque<T> = Default::default();
-    let mut indexes: HashMap<T, usize> = Default::default();
-    let mut lowlinks: HashMap<T, usize> = Default::default();
+        let sccs_hs = map.kosaraju_scc(&0);
 
-    for n in dj_graph.nodes() {}
+        let sccs: BTreeSet<_> = sccs_hs.into_iter().map(BTreeSet::from_iter).collect();
 
-    sccs
+        let c1 = BTreeSet::from_iter(vec![0, 1, 2]);
+        let c2 = BTreeSet::from_iter(vec![3, 4, 5, 6]);
+        let desired_sccs: BTreeSet<_> = BTreeSet::from_iter(vec![c1, c2]);
+
+        assert_eq!(desired_sccs, sccs);
+    }
 }

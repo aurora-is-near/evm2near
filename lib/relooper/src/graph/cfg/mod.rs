@@ -1,5 +1,6 @@
 use crate::graph::cfg::CfgEdge::{Cond, Switch, Terminal, Uncond};
 use crate::traversal::graph::bfs::Bfs;
+use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
@@ -102,6 +103,37 @@ impl<T: Eq + Hash> GEdgeColl for CfgEdge<T> {
     }
 }
 
+impl<'a, T> IntoIterator for &'a CfgEdge<T> {
+    type Item = &'a T;
+
+    type IntoIter = CfgEdgeIter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            Uncond(u) => CfgEdgeIter {
+                fixed: [Some(u), None],
+                allocated: [].iter(),
+                index: 0,
+            },
+            Cond(cond, fallthrough) => CfgEdgeIter {
+                fixed: [Some(cond), Some(fallthrough)],
+                allocated: [].iter(),
+                index: 0,
+            },
+            Switch(v) => CfgEdgeIter {
+                fixed: [None, None],
+                allocated: v.iter(),
+                index: 2,
+            },
+            Terminal => CfgEdgeIter {
+                fixed: [None, None],
+                allocated: [].iter(),
+                index: 0,
+            },
+        }
+    }
+}
+
 impl<T: Eq + Hash> GEdgeCollMappable for CfgEdge<T> {
     type Output<U: Hash + Eq> = CfgEdge<U>;
     fn map<U: Hash + Eq, F: Fn(&Self::Edge) -> U>(&self, mapping: F) -> Self::Output<U> {
@@ -135,7 +167,7 @@ impl<T: Eq + Hash + Clone> Cfg<T> {
         }
     }
 
-    pub fn map_label<M: Fn(&T) -> U, U: Eq + std::hash::Hash + Clone>(&self, mapping: M) -> Cfg<U> {
+    pub fn map_label<M: Fn(&T) -> U, U: Eq + Hash + Clone>(&self, mapping: M) -> Cfg<U> {
         let out_edges = self
             .out_edges
             .iter()
@@ -209,7 +241,11 @@ impl<'a, T: Hash + Eq + Clone + 'a> GraphMut<'a, T, T> for Cfg<T> {
         Self::check_previous_edge(prev_edge);
     }
 
-    fn remove_node(&mut self, n: &T) {
+    fn remove_node<Q: ?Sized>(&mut self, n: &Q)
+    where
+        T: Borrow<Q>,
+        Q: Hash + Eq,
+    {
         self.out_edges
             .remove(n)
             .expect("cannot delete non-present node");

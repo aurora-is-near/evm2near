@@ -66,15 +66,16 @@ pub struct PrePostOrder<T, ChFun> {
     get_children: ChFun,
 }
 
-impl<T, ChIt, ChFun> PrePostOrder<T, ChFun>
+impl<T: Eq + Hash + Clone, ChIt, ChFun> PrePostOrder<T, ChFun>
 where
     ChIt: IntoIterator<Item = T>,
     ChFun: FnMut(T) -> ChIt,
 {
     pub fn start_iter<I: IntoIterator<Item = T>>(iter: I, get_children: ChFun) -> Self {
+        let v: Vec<_> = iter.into_iter().collect();
         PrePostOrder {
-            visited: HashSet::new(),
-            stack: VecDeque::from_iter(iter.into_iter().map(|x| VisitAction::Enter(x))),
+            visited: HashSet::from_iter(v.clone()),
+            stack: VecDeque::from_iter(v.into_iter().map(|x| VisitAction::Enter(x))),
             get_children,
         }
     }
@@ -124,7 +125,7 @@ mod preorder_test {
     use super::{PrePostOrder, VisitAction::*};
 
     #[test]
-    fn preorder_simple() {
+    fn prepostorder_simple() {
         let map: HashMap<i32, Vec<i32>> = HashMap::from_iter(vec![
             (0, vec![6, 1]),
             (1, vec![4, 2]),
@@ -149,6 +150,39 @@ mod preorder_test {
             Leave(1),
             Enter(6),
             Leave(6),
+            Leave(0),
+        ];
+
+        let preorder = PrePostOrder::start_from(0, |x| map.get(&x).unwrap().to_vec());
+        assert!(desired_order.into_iter().zip(preorder).all(|(a, b)| a == b))
+    }
+
+    #[test]
+    fn prepostorder_head_cycle() {
+        let map: HashMap<i32, Vec<i32>> = HashMap::from_iter(vec![
+            (0, vec![1]),
+            (1, vec![2]),
+            (2, vec![0, 3]),
+            (3, vec![4, 5]),
+            (4, vec![5]),
+            (5, vec![6]),
+            (6, vec![3]),
+        ]);
+
+        let desired_order = vec![
+            Enter(0),
+            Enter(1),
+            Enter(2),
+            Enter(3),
+            Enter(5),
+            Enter(6),
+            Leave(6),
+            Leave(5),
+            Enter(4),
+            Leave(4),
+            Leave(3),
+            Leave(2),
+            Leave(1),
             Leave(0),
         ];
 
