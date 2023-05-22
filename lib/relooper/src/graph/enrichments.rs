@@ -169,7 +169,7 @@ pub struct DomTree<T: Hash + Eq> {
 impl<'a, T: Hash + Eq + Clone + 'a> Graph<'a, T, T> for DomTree<T> {
     type EdgeColl = HashSet<T>;
 
-    fn lower_edge(edge: &T) -> &T {
+    fn lower_edge(&'a self, edge: &'a T) -> &'a T {
         edge
     }
 
@@ -319,7 +319,7 @@ pub struct DJGraph<T>(HashMap<T, HashSet<DJEdge<T>>>);
 impl<'a, T: Eq + Hash + Clone + 'a> Graph<'a, T, DJEdge<T>> for DJGraph<T> {
     type EdgeColl = HashSet<DJEdge<T>>;
 
-    fn lower_edge(edge: &DJEdge<T>) -> &T {
+    fn lower_edge(&'a self, edge: &'a DJEdge<T>) -> &'a T {
         edge.label()
     }
 
@@ -361,7 +361,7 @@ struct DJSpanningTree<T>(HashMap<T, HashSet<T>>);
 impl<'a, T: Eq + Hash + 'a> Graph<'a, T, T> for DJSpanningTree<T> {
     type EdgeColl = HashSet<T>;
 
-    fn lower_edge(edge: &T) -> &T {
+    fn lower_edge(&'a self, edge: &'a T) -> &'a T {
         edge
     }
 

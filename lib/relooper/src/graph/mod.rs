@@ -39,7 +39,7 @@ impl<T: Eq + Hash> GEdgeColl for HashSet<T> {
 pub trait Graph<'a, T: Eq + Hash + 'a, TE: 'a> {
     type EdgeColl: GEdgeColl<Edge = TE>; // todo try changing to IntoIter for a ref? cant do that right now due to 'CfgEdgeIter' reference lifetime requirement
 
-    fn lower_edge(edge: &TE) -> &T; //todo rename
+    fn lower_edge(&'a self, edge: &'a TE) -> &'a T; //todo rename
 
     fn edges(&'a self) -> &HashMap<T, Self::EdgeColl>; // change return to Cow?
     fn nodes(&'a self) -> HashSet<&'a T> {
@@ -56,7 +56,7 @@ pub trait Graph<'a, T: Eq + Hash + 'a, TE: 'a> {
         self.edges()
             .get(label)
             .into_iter()
-            .flat_map(|edge_coll| edge_coll.iter().map(|edge| Self::lower_edge(edge)))
+            .flat_map(|edge_coll| edge_coll.iter().map(|edge| self.lower_edge(edge)))
             .collect()
     }
 
@@ -65,7 +65,7 @@ pub trait Graph<'a, T: Eq + Hash + 'a, TE: 'a> {
             .iter()
             .filter_map(|(from, edge_coll)| {
                 edge_coll.iter().find_map(|x| {
-                    if Self::lower_edge(x) == label {
+                    if self.lower_edge(x) == label {
                         Some(from)
                     } else {
                         None
@@ -91,7 +91,7 @@ pub trait Graph<'a, T: Eq + Hash + 'a, TE: 'a> {
         for (from, edge_coll) in self.edges() {
             for to in edge_coll.iter() {
                 in_edges
-                    .entry(Self::lower_edge(to))
+                    .entry(self.lower_edge(to))
                     .or_default()
                     .insert(from);
             }
@@ -170,7 +170,7 @@ pub trait GraphMut<'a, T: Eq + Hash + 'a, TE: 'a>: Graph<'a, T, TE> {
 impl<'a, T: Eq + Hash + 'a> Graph<'a, T, T> for HashMap<T, HashSet<T>> {
     type EdgeColl = HashSet<T>;
 
-    fn lower_edge(edge: &T) -> &T {
+    fn lower_edge(&'a self, edge: &'a T) -> &'a T {
         edge
     }
 

@@ -197,7 +197,7 @@ impl<T: Eq + Hash + Clone> Cfg<T> {
 impl<'a, T: Hash + Eq + Clone + 'a> Graph<'a, T, T> for Cfg<T> {
     type EdgeColl = CfgEdge<T>;
 
-    fn lower_edge(edge: &T) -> &T {
+    fn lower_edge(&'a self, edge: &'a T) -> &'a T {
         edge
     }
 
