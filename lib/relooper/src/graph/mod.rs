@@ -134,6 +134,39 @@ pub trait GraphCopy<'a, T: Eq + Hash + Copy + 'a>: Graph<'a, T, T> {
 
 impl<'a, T: Eq + Hash + Copy + 'a, TG: Graph<'a, T, T>> GraphCopy<'a, T> for TG {}
 
+#[cfg(test)]
+mod scc_tests {
+    use crate::graph::*;
+    use std::collections::{BTreeSet, HashMap};
+
+    #[test]
+    fn simple_scc() {
+        let map = HashMap::from_iter(
+            vec![
+                (0, vec![1]),
+                (1, vec![2]),
+                (2, vec![0, 3]),
+                (3, vec![4, 5]),
+                (4, vec![5]),
+                (5, vec![6]),
+                (6, vec![3]),
+            ]
+            .into_iter()
+            .map(|(f, t)| (f, HashSet::from_iter(t))),
+        );
+
+        let sccs_hs = map.kosaraju_scc(&0);
+
+        let sccs: BTreeSet<_> = sccs_hs.into_iter().map(BTreeSet::from_iter).collect();
+
+        let c1 = BTreeSet::from_iter(vec![0, 1, 2]);
+        let c2 = BTreeSet::from_iter(vec![3, 4, 5, 6]);
+        let desired_sccs: BTreeSet<_> = BTreeSet::from_iter(vec![c1, c2]);
+
+        assert_eq!(desired_sccs, sccs);
+    }
+}
+
 pub trait GEdge {
     type Inside;
     fn lower(&self) -> &Self::Inside;

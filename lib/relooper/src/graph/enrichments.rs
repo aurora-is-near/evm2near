@@ -160,7 +160,7 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
 ///
 /// Thanks to reverse postorder we will find immediate dominator for all nodes.
 ///
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct DomTree<T: Hash + Eq> {
     dominates: HashMap<T, HashSet<T>>,
     levels: HashMap<T, usize>,
@@ -256,34 +256,6 @@ impl<TLabel: CfgLabel> NodeOrdering<TLabel> {
     }
 }
 
-// impl<T: CfgLabel> EnrichedCfg<T> {
-//     fn is_sp_back(&self, from: &T, to: &T) -> bool {
-//         todo!()
-//     }
-
-//     fn splt_loops(&self, top: &T, set: &HashSet<T>) -> bool {
-//         let mut cross = false;
-//         for child in self.domination.immediately_dominated_by(top) {
-//             if (set.is_empty() || set.contains(child)) && self.splt_loops(child, set) {
-//                 cross = true;
-//             }
-//         }
-//         if cross {
-//             self.handle_ir_children(top, set)
-//         }
-//         for predecessor in self.cfg.parents(top) {
-//             if self.is_sp_back(predecessor, top) && self.domination.dominates(top, predecessor) {
-//                 return true;
-//             }
-//         }
-//         false
-//     }
-
-//     fn handle_ir_children(&self, top: &T, set: &HashSet<T>) {
-//         todo!()
-//     }
-// }
-
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum JEdge<T> {
     B(T),
@@ -356,6 +328,7 @@ impl<'a, T: Eq + Hash + Clone + 'a> GraphMut<'a, T, DJEdge<T>> for DJGraph<T> {
     }
 }
 
+#[derive(Debug)]
 struct DJSpanningTree<T>(HashMap<T, HashSet<T>>);
 
 impl<'a, T: Eq + Hash + 'a> Graph<'a, T, T> for DJSpanningTree<T> {
@@ -388,10 +361,15 @@ impl<'a, T: Eq + Hash + 'a> DJSpanningTree<T> {
     }
 }
 
-fn dj_spanning<T: CfgLabel>(
-    cfg: &Cfg<T>,
-    dom_tree: &DomTree<T>,
-) -> (DJGraph<T>, DJSpanningTree<T>) {
+#[derive(Debug)]
+struct Reducer<T: CfgLabel> {
+    cfg: Cfg<T>,
+    dj_graph: DJGraph<T>,
+    spanning_tree: DJSpanningTree<T>,
+    dom_tree: DomTree<T>,
+}
+
+fn dj_spanning<T: CfgLabel>(cfg: Cfg<T>, dom_tree: DomTree<T>) -> Reducer<T> {
     let mut dj_graph: HashMap<T, HashSet<DJEdge<T>>> = Default::default();
     for (&from, dom_edge_set) in dom_tree.edges() {
         dj_graph.insert(from, dom_edge_set.iter().map(|&x| DJEdge::D(x)).collect());
@@ -427,38 +405,36 @@ fn dj_spanning<T: CfgLabel>(
         children
     });
 
-    (DJGraph(dj_graph), DJSpanningTree(spanning_tree))
+    Reducer {
+        cfg,
+        dj_graph: DJGraph(dj_graph),
+        spanning_tree: DJSpanningTree(spanning_tree),
+        dom_tree,
+    }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::graph::*;
-    use std::collections::{BTreeSet, HashMap};
+impl<T: CfgLabel> Reducer<T> {
+    fn splt_loops(&self, top: &T, set: &HashSet<T>) -> bool {
+        let mut cross = false;
+        for child in self.dom_tree.children(top) {
+            if (set.is_empty() || set.contains(child)) && self.splt_loops(child, set) {
+                cross = true;
+            }
+        }
+        if cross {
+            self.handle_ir_children(top, set)
+        }
+        for predecessor in self.cfg.parents(top) {
+            if self.spanning_tree.is_sp_back(predecessor, top)
+                && !self.dom_tree.dom(top, predecessor)
+            {
+                return true;
+            }
+        }
+        false
+    }
 
-    #[test]
-    fn simple_scc() {
-        let map = HashMap::from_iter(
-            vec![
-                (0, vec![1]),
-                (1, vec![2]),
-                (2, vec![0, 3]),
-                (3, vec![4, 5]),
-                (4, vec![5]),
-                (5, vec![6]),
-                (6, vec![3]),
-            ]
-            .into_iter()
-            .map(|(f, t)| (f, HashSet::from_iter(t))),
-        );
-
-        let sccs_hs = map.kosaraju_scc(&0);
-
-        let sccs: BTreeSet<_> = sccs_hs.into_iter().map(BTreeSet::from_iter).collect();
-
-        let c1 = BTreeSet::from_iter(vec![0, 1, 2]);
-        let c2 = BTreeSet::from_iter(vec![3, 4, 5, 6]);
-        let desired_sccs: BTreeSet<_> = BTreeSet::from_iter(vec![c1, c2]);
-
-        assert_eq!(desired_sccs, sccs);
+    fn handle_ir_children(&self, top: &T, set: &HashSet<T>) {
+        todo!()
     }
 }
