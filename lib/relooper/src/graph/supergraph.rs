@@ -36,6 +36,13 @@ impl<TLabel: CfgLabel> SLabel<TLabel> {
     fn new(origin: TLabel, version: SVersion) -> Self {
         Self { origin, version }
     }
+
+    pub fn duplicate(&self) -> Self {
+        Self {
+            origin: self.origin,
+            version: self.version + 1,
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Ord, PartialOrd, Debug)]
@@ -290,7 +297,7 @@ fn check_reduction<TLabel: CfgLabel>(
 #[cfg(test)]
 mod test {
     use crate::graph::cfg::Cfg;
-    use crate::graph::cfg::CfgEdge::{Cond, Uncond};
+    use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
     use crate::graph::supergraph::{check_reduction, reduce};
 
     #[test]
@@ -339,6 +346,40 @@ mod test {
             .collect(),
         );
         let reduced = reduce(&cfg);
+
+        assert!(check_reduction(&cfg, &reduced));
+    }
+
+    #[test]
+    fn new() {
+        let cfg = Cfg::from_edges(
+            0,
+            vec![
+                (0, Cond(1, 3)),
+                (1, Uncond(2)),
+                (2, Cond(5, 1)),
+                (3, Uncond(4)),
+                (4, Cond(5, 3)),
+                (5, Cond(6, 7)),
+                (6, Terminal),
+                (7, Cond(1, 3)),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let reduced = reduce(&cfg);
+
+        std::fs::write(
+            "irr_new_cfg.dot",
+            format!("digraph {{{}}}", cfg.cfg_to_dot("irr_new_cfg")),
+        )
+        .expect("fs error");
+
+        std::fs::write(
+            "irr_new_cfg_reduced.dot",
+            format!("digraph {{{}}}", reduced.cfg_to_dot("irr_new_cfg_reduced")),
+        )
+        .expect("fs error");
 
         assert!(check_reduction(&cfg, &reduced));
     }

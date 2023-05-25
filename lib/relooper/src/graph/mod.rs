@@ -1,6 +1,7 @@
 use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
+use std::marker::PhantomData;
 
 use crate::traversal::graph::bfs::Bfs;
 use crate::traversal::graph::dfs::{PrePostOrder, VisitAction};
@@ -133,6 +134,26 @@ pub trait GraphCopy<'a, T: Eq + Hash + Copy + 'a>: Graph<'a, T, T> {
 }
 
 impl<'a, T: Eq + Hash + Copy + 'a, TG: Graph<'a, T, T>> GraphCopy<'a, T> for TG {}
+
+struct FilteredGraph<'a, T: Eq + Hash + 'a, TE: 'a, TG: Graph<'a, T, TE>> {
+    graph: &'a TG,
+    tp: PhantomData<T>,
+    tpe: PhantomData<TE>,
+}
+
+impl<'a, T: Eq + Hash + 'a, TE: 'a, TG: Graph<'a, T, TE>> Graph<'a, T, TE>
+    for FilteredGraph<'a, T, TE, TG>
+{
+    type EdgeColl = TG::EdgeColl;
+
+    fn lower_edge(&'a self, edge: &'a TE) -> &'a T {
+        self.graph.lower_edge(edge)
+    }
+
+    fn edges(&'a self) -> &HashMap<T, Self::EdgeColl> {
+        todo!()
+    }
+}
 
 #[cfg(test)]
 mod scc_tests {
