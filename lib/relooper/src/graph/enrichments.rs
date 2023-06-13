@@ -7,6 +7,7 @@ use std::borrow::Borrow;
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::fmt::Debug;
 use std::hash::Hash;
+use std::iter::successors;
 use std::vec::Vec;
 
 use super::supergraph::SLabel;
@@ -223,14 +224,26 @@ impl<T: CfgLabel> DomTree<T> {
             dominates.entry(dominator).or_default().insert(dominated);
         }
 
-        let levels = Bfs::start_from((entry, 0), |(n, level)| {
-            let next_level = level + 1;
-            dominates
-                .get(&n)
-                .into_iter()
-                .flatten()
-                .map(move |&x| (x, next_level))
-        })
+        let levels = successors(
+            Some((HashSet::from_iter(Some(entry)), 0_usize)),
+            |(nodes, level)| {
+                let next_nodes: HashSet<T> = nodes
+                    .iter()
+                    .flat_map(|n| {
+                        let mut all_dom = dominates.children(n);
+                        all_dom.remove(n);
+                        all_dom
+                    })
+                    .copied()
+                    .collect();
+                if next_nodes.is_empty() {
+                    None
+                } else {
+                    Some((next_nodes, level + 1))
+                }
+            },
+        )
+        .flat_map(|(nodes_set, level)| nodes_set.into_iter().map(move |n| (n, level)))
         .collect();
 
         DomTree { dominates, levels }
