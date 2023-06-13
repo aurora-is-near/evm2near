@@ -1,7 +1,6 @@
 use std::borrow::Borrow;
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
-use std::marker::PhantomData;
 
 use crate::traversal::graph::bfs::Bfs;
 use crate::traversal::graph::dfs::{PrePostOrder, VisitAction};
@@ -131,13 +130,13 @@ pub trait Graph<'a, T: Eq + Hash + 'a, TE: 'a> {
 }
 
 pub trait GraphCopy<'a, T: Eq + Hash + Copy + 'a>: Graph<'a, T, T> {
-    fn kosaraju_scc(&'a self, start: &T) -> Vec<HashSet<T>> {
+    fn kosaraju_scc(&'a self, header: &T) -> Vec<HashSet<T>> {
         let mut components: Vec<HashSet<T>> = Default::default();
         let mut visited: HashSet<T> = Default::default();
 
         let mut transposed = self.in_edges();
 
-        let mut order: Vec<_> = PrePostOrder::start_from(start, |x| self.children(x))
+        let mut order: Vec<_> = PrePostOrder::start_from(header, |x| self.children(x))
             .filter_map(|visit_action| match visit_action {
                 VisitAction::Enter(_) => None,
                 VisitAction::Leave(x) => Some(x),
