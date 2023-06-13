@@ -222,6 +222,7 @@ impl<T: CfgLabel> DomTree<T> {
 
         for (dominated, dominator) in domination_map {
             dominates.entry(dominator).or_default().insert(dominated);
+            dominates.entry(dominated).or_default();
         }
 
         let levels = successors(
@@ -717,4 +718,10 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                 }
             })
     }
+}
+
+pub fn reduce<T: CfgLabel>(cfg: Cfg<T>) -> Cfg<SLabel<T>> {
+    let slabel_cfg = cfg.map_label(|&n| SLabel::new(n, 0));
+    let reducer = Reducer::new(slabel_cfg);
+    reducer.reduce().cfg
 }

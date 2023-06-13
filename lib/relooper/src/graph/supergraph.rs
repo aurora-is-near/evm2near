@@ -33,7 +33,7 @@ impl<TLabel: CfgLabel> From<TLabel> for SLabel<TLabel> {
 }
 
 impl<TLabel: CfgLabel> SLabel<TLabel> {
-    fn new(origin: TLabel, version: SVersion) -> Self {
+    pub fn new(origin: TLabel, version: SVersion) -> Self {
         Self { origin, version }
     }
 

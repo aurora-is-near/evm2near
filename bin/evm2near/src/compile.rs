@@ -517,10 +517,11 @@ subgraph cluster_wasm {{ label = \"wasm\"
         self.debug("stripped.dot", || {
             format!("digraph {{{}}}", evm_cfg.cfg_to_dot("stripped"))
         });
-        let reduced = reduce(&evm_cfg);
         self.debug("reduced.dot", || {
             format!("digraph {{{}}}", evm_cfg.cfg_to_dot("reduced"))
         });
+        // let reduced = reduce(&evm_cfg);
+        let reduced = relooper::graph::enrichments::reduce(evm_cfg);
         let enriched = flame::span_of("enriching cfg", || EnrichedCfg::new(reduced));
         self.debug("enriched.dot", || {
             format!(
