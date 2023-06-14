@@ -11,8 +11,8 @@ use std::{
 };
 
 use evm_rs::{parse_opcode, Opcode, Program};
-use relooper::graph::{enrichments::EnrichedCfg, relooper::ReBlock, supergraph::reduce};
-use relooper::graph::{relooper::ReSeq, supergraph::SLabel};
+use relooper::graph::{enrichments::EnrichedCfg, relooper::ReBlock, Graph};
+use relooper::graph::{reduction::SLabel, relooper::ReSeq};
 use wasm_encoder::{BlockType, ExportKind, Function, Instruction, Module, ValType};
 
 use crate::{
@@ -517,11 +517,17 @@ subgraph cluster_wasm {{ label = \"wasm\"
         self.debug("stripped.dot", || {
             format!("digraph {{{}}}", evm_cfg.cfg_to_dot("stripped"))
         });
+        println!("orig: {}", evm_cfg.nodes().len());
+        let old_reduced = relooper::graph::supergraph::reduce(&evm_cfg);
+        let reduced = relooper::graph::reduction::reduce(&evm_cfg);
+        println!(
+            "old: {}, new: {}",
+            old_reduced.nodes().len(),
+            reduced.nodes().len()
+        );
         self.debug("reduced.dot", || {
-            format!("digraph {{{}}}", evm_cfg.cfg_to_dot("reduced"))
+            format!("digraph {{{}}}", reduced.cfg_to_dot("reduced"))
         });
-        // let reduced = reduce(&evm_cfg);
-        let reduced = relooper::graph::enrichments::reduce(evm_cfg);
         let enriched = flame::span_of("enriching cfg", || EnrichedCfg::new(reduced));
         self.debug("enriched.dot", || {
             format!(

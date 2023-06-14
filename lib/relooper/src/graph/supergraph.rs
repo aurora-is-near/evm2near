@@ -1,49 +1,12 @@
+use super::reduction::SLabel;
 use super::{GEdgeColl, GEdgeCollMappable, Graph, GraphMut};
 use crate::graph::cfg::{Cfg, CfgLabel};
-use crate::graph::supergraph::NodeAction::{MergeInto, SplitFor};
-use crate::traversal::graph::dfs::{DfsPost, DfsPostReverseInstantiator};
+use crate::{
+    graph::supergraph::NodeAction::{MergeInto, SplitFor},
+    traversal::graph::dfs::{DfsPost, DfsPostReverseInstantiator},
+};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::fmt::{Debug, Display, Formatter};
-
-type SVersion = usize;
-
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
-pub struct SLabel<TLabel: CfgLabel> {
-    pub origin: TLabel,
-    version: SVersion,
-}
-
-impl<TLabel: CfgLabel + Display> Display for SLabel<TLabel> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}_{}", self.origin, self.version)
-    }
-}
-
-impl<TLabel: CfgLabel> Debug for SLabel<TLabel> {
-    // why debug isnt automatically derived from display?
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}_{}", self.origin, self.version)
-    }
-}
-
-impl<TLabel: CfgLabel> From<TLabel> for SLabel<TLabel> {
-    fn from(origin: TLabel) -> Self {
-        Self { origin, version: 0 }
-    }
-}
-
-impl<TLabel: CfgLabel> SLabel<TLabel> {
-    pub fn new(origin: TLabel, version: SVersion) -> Self {
-        Self { origin, version }
-    }
-
-    pub fn duplicate(&self) -> Self {
-        Self {
-            origin: self.origin,
-            version: self.version + 1,
-        }
-    }
-}
+use std::fmt::Debug;
 
 #[derive(Clone, PartialEq, Eq, Ord, PartialOrd, Debug)]
 struct SNode<TLabel: CfgLabel> {

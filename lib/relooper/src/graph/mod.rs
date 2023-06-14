@@ -6,8 +6,11 @@ use crate::traversal::graph::bfs::Bfs;
 use crate::traversal::graph::dfs::{PrePostOrder, VisitAction};
 
 pub mod cfg;
+pub mod domtree;
 pub mod dot_debug;
 pub mod enrichments;
+pub mod node_ordering;
+pub mod reduction;
 pub mod relooper;
 pub mod supergraph;
 
