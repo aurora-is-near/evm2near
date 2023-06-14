@@ -339,5 +339,112 @@ pub fn reduce<T: CfgLabel>(cfg: &Cfg<T>) -> Cfg<SLabel<T>> {
     reducer.reduce().cfg
 }
 
+pub fn check_reduction<TLabel: CfgLabel>(
+    origin_cfg: &Cfg<TLabel>,
+    reduced_cfg: &Cfg<SLabel<TLabel>>,
+) -> bool {
+    let reduced_nodes = reduced_cfg.nodes();
+    let mut origin_mapping: HashMap<TLabel, HashSet<SLabel<TLabel>>> = Default::default();
+    for &x in reduced_nodes.iter() {
+        origin_mapping.entry(x.origin).or_default().insert(*x);
+    }
+
+    origin_cfg.edges().iter().all(|(from, e)| {
+        origin_mapping
+            .get(from)
+            .unwrap()
+            .iter()
+            .all(|&r_from| &reduced_cfg.edge(&r_from).map(|x| x.origin) == e)
+    })
+}
+
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use crate::graph::cfg::Cfg;
+    use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
+    use crate::graph::reduction::{check_reduction, reduce};
+
+    #[test]
+    fn simplest() {
+        let cfg = Cfg::from_edges(
+            0,
+            vec![(0, Cond(1, 2)), (1, Uncond(2)), (2, Cond(3, 1))]
+                .into_iter()
+                .collect(),
+        );
+        let reduced = reduce(&cfg);
+
+        assert!(check_reduction(&cfg, &reduced));
+    }
+
+    #[test]
+    fn irreducible() {
+        let cfg = Cfg::from_edges(
+            0,
+            vec![
+                (0, Cond(1, 2)),
+                (1, Uncond(4)),
+                (4, Uncond(2)),
+                (2, Cond(3, 1)),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let reduced = reduce(&cfg);
+
+        assert!(check_reduction(&cfg, &reduced));
+    }
+
+    #[test]
+    fn moderate() {
+        let cfg = Cfg::from_edges(
+            0,
+            vec![
+                (0, Cond(1, 2)),
+                (1, Cond(3, 4)),
+                (2, Cond(3, 5)),
+                (3, Uncond(4)),
+                (4, Cond(2, 5)),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let reduced = reduce(&cfg);
+
+        assert!(check_reduction(&cfg, &reduced));
+    }
+
+    #[test]
+    fn new() {
+        let cfg = Cfg::from_edges(
+            0,
+            vec![
+                (0, Cond(1, 3)),
+                (1, Uncond(2)),
+                (2, Cond(5, 1)),
+                (3, Uncond(4)),
+                (4, Cond(5, 3)),
+                (5, Cond(6, 7)),
+                (6, Terminal),
+                (7, Cond(1, 3)),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let reduced = reduce(&cfg);
+
+        std::fs::write(
+            "irr_new_cfg.dot",
+            format!("digraph {{{}}}", cfg.cfg_to_dot("irr_new_cfg")),
+        )
+        .expect("fs error");
+
+        std::fs::write(
+            "irr_new_cfg_reduced.dot",
+            format!("digraph {{{}}}", reduced.cfg_to_dot("irr_new_cfg_reduced")),
+        )
+        .expect("fs error");
+
+        assert!(check_reduction(&cfg, &reduced));
+    }
+}
