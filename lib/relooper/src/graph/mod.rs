@@ -7,7 +7,9 @@ use crate::traversal::graph::dfs::PrePostOrder;
 
 pub mod cfg;
 pub mod domtree;
+pub mod dominators;
 pub mod dot_debug;
+pub mod elu;
 pub mod enrichments;
 pub mod node_ordering;
 pub mod reduction;

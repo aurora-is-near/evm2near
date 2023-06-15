@@ -1,4 +1,5 @@
 use crate::graph::cfg::{Cfg, CfgEdge, CfgLabel};
+use crate::graph::dominators;
 use crate::traversal::graph::bfs::Bfs;
 use std::collections::HashSet;
 
@@ -96,5 +97,82 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
             loop_nodes,
             if_nodes,
         }
+    }
+
+    pub fn domination_tree(
+        cfg: &Cfg<TLabel>,
+        node_ordering: &NodeOrdering<TLabel>,
+        begin: TLabel,
+    ) -> HashMap<TLabel, TLabel> /* map points from node id to id of its dominator */ {
+        dominators::domination_tree(cfg, begin)
+    }
+}
+
+#[derive(Default)]
+/// Node A dominate node B if you can't reach B without visiting A. For example, entry node dominates all nodes.
+/// Each node have set of dominators. If B_set is set of node B dominators, node A will called Immediate Dominator of B
+/// if it is in B_set AND NOT dominate any other nodes from B_set.
+/// Each node (except the origin) have exactly one immediate dominator. Each node can be immediate dominator for any amount of nodes.
+///  
+/// Domination tree is a graph with nodes of CFG, but edges only from dominator to dominated nodes.
+/// Domination tree uniquely specified by given CFG
+///
+pub struct DomTree<TLabel: CfgLabel> {
+    dominates: HashMap<TLabel, HashSet<TLabel>>,
+    pub(crate) dominated: HashMap<TLabel, TLabel>,
+}
+
+impl<TLabel: CfgLabel> From<Vec<(TLabel, TLabel)>> for DomTree<TLabel> {
+    fn from(edges: Vec<(TLabel, TLabel)>) -> Self {
+        let dominated = HashMap::from_iter(edges.iter().copied());
+        let mut dominates: HashMap<TLabel, HashSet<TLabel>> = HashMap::new();
+
+        for (dominated, dominator) in edges {
+            dominates.entry(dominator).or_default().insert(dominated);
+        }
+
+        DomTree {
+            dominates,
+            dominated,
+        }
+    }
+}
+
+impl<TLabel: CfgLabel> DomTree<TLabel> {
+    pub(crate) fn immediately_dominated_by(&self, label: TLabel) -> HashSet<TLabel> {
+        self.dominates
+            .get(&label)
+            .unwrap_or(&HashSet::new())
+            .to_owned()
+    }
+}
+
+pub struct NodeOrdering<TLabel: CfgLabel> {
+    pub(crate) idx: HashMap<TLabel, usize>,
+    vec: Vec<TLabel>,
+}
+
+impl<TLabel: CfgLabel> NodeOrdering<TLabel> {
+    pub fn new(cfg: &Cfg<TLabel>, entry: TLabel) -> Self {
+        let vec =
+            DfsPost::<_, _, HashSet<_>>::reverse(entry, |x| cfg.children(x).into_iter().copied());
+        let idx: HashMap<TLabel, usize> = vec.iter().enumerate().map(|(i, &n)| (n, i)).collect();
+        Self { vec, idx }
+    }
+
+    pub fn is_backward(&self, from: TLabel, to: TLabel) -> bool {
+        self.idx
+            .get(&from)
+            .zip(self.idx.get(&to))
+            .map(|(&f, &t)| f > t)
+            .unwrap()
+    }
+
+    pub fn is_forward(&self, from: TLabel, to: TLabel) -> bool {
+        !self.is_backward(from, to)
+    }
+
+    pub fn sequence(&self) -> &Vec<TLabel> {
+        &self.vec
     }
 }
