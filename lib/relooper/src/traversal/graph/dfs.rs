@@ -74,7 +74,7 @@ where
     pub fn start_iter<I: IntoIterator<Item = T>>(iter: I, get_children: ChFun) -> Self {
         let v: Vec<_> = iter.into_iter().collect();
         PrePostOrder {
-            visited: HashSet::from_iter(v.clone()),
+            visited: HashSet::default(),
             stack: VecDeque::from_iter(v.into_iter().map(|x| VisitAction::Enter(x))),
             get_children,
         }
@@ -98,23 +98,34 @@ where
     type Item = VisitAction<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.stack.pop_back().map(|current| match current {
-            VisitAction::Enter(x) => {
-                self.stack.push_back(VisitAction::Leave(x));
-                let children: Vec<_> = (self.get_children)(x)
-                    .into_iter()
-                    .filter(|c| !self.visited.contains(c))
-                    .collect();
-                for &c in &children {
-                    self.visited.insert(c);
-                }
-                self.stack
-                    .extend(children.into_iter().map(|x| VisitAction::Enter(x)));
+        loop {
+            let res = self.stack.pop_back().map(|current| match current {
+                VisitAction::Enter(x) => {
+                    if self.visited.contains(&x) {
+                        None
+                    } else {
+                        self.visited.insert(x);
+                        self.stack.push_back(VisitAction::Leave(x));
+                        let mut children: Vec<_> = (self.get_children)(x)
+                            .into_iter()
+                            .filter(|c| !self.visited.contains(c))
+                            .collect();
+                        children.reverse();
 
-                current
+                        self.stack
+                            .extend(children.into_iter().map(|x| VisitAction::Enter(x)));
+
+                        Some(current)
+                    }
+                }
+                VisitAction::Leave(_) => Some(current),
+            });
+            match res {
+                Some(None) => continue,
+                Some(Some(r)) => return Some(r),
+                None => return None,
             }
-            VisitAction::Leave(_) => current,
-        })
+        }
     }
 }
 
@@ -125,10 +136,35 @@ mod preorder_test {
     use super::{PrePostOrder, VisitAction::*};
 
     #[test]
+    fn prepostorder_simple_irr() {
+        let map: HashMap<i32, Vec<i32>> = HashMap::from_iter(vec![
+            (0, vec![1, 1]),
+            (1, vec![2]),
+            (2, vec![3]),
+            (3, vec![]),
+        ]);
+
+        let desired_order = vec![
+            Enter(0),
+            Enter(1),
+            Enter(2),
+            Enter(3),
+            Leave(3),
+            Leave(2),
+            Leave(1),
+            Leave(0),
+        ];
+
+        let preorder: Vec<_> =
+            PrePostOrder::start_from(0, |x| map.get(&x).unwrap().to_vec()).collect();
+        assert_eq!(desired_order, preorder)
+    }
+
+    #[test]
     fn prepostorder_simple() {
         let map: HashMap<i32, Vec<i32>> = HashMap::from_iter(vec![
-            (0, vec![6, 1]),
-            (1, vec![4, 2]),
+            (0, vec![1, 6]),
+            (1, vec![2, 4]),
             (2, vec![3]),
             (3, vec![]),
             (4, vec![5]),
@@ -162,8 +198,8 @@ mod preorder_test {
         let map: HashMap<i32, Vec<i32>> = HashMap::from_iter(vec![
             (0, vec![1]),
             (1, vec![2]),
-            (2, vec![0, 3]),
-            (3, vec![4, 5]),
+            (2, vec![3, 0]),
+            (3, vec![5, 4]),
             (4, vec![5]),
             (5, vec![6]),
             (6, vec![3]),

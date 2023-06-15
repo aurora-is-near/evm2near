@@ -73,6 +73,7 @@ impl<T: CfgLabel> Reducer<T> {
     fn new(cfg: Cfg<T>) -> Reducer<T> {
         let dom_tree: DomTree<T> = DomTree::new(&cfg);
 
+        //todo to .map_label
         let mut dj_graph: HashMap<T, HashSet<DJEdge<T>>> = Default::default();
         for (&from, dom_edge_set) in dom_tree.edges() {
             dj_graph.insert(from, dom_edge_set.iter().map(|&x| DJEdge::D(x)).collect());
@@ -161,6 +162,7 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
             .copied()
             .map(|copied| (copied, copied.duplicate()))
             .collect();
+
         let reduced_edges: HashMap<_, _> = self
             .cfg
             .edges()
@@ -186,7 +188,7 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                         Some(copy) => *copy,
                         None => *to,
                     });
-                    new_edges.push((*from, ne));
+                    new_edges.push((*copied_region.get(from).unwrap(), ne));
                 }
 
                 new_edges
@@ -214,10 +216,10 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
             .into_iter()
             .rev()
             .fold(self, |reducer, (level, slabels)| {
-                println!("level: {}, node count: {}", level, slabels.len());
                 let mut irreduceible_loop = false; // todo move irr actions directly into match?
 
                 let sp_back = reducer.spanning_tree.sp_back(&reducer.cfg.entry);
+
                 let transposed: HashMap<SLabelRef<T>, HashSet<SLabelRef<T>>> =
                     reducer.dj_graph.in_edges();
 
@@ -227,12 +229,10 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                             match dj_to {
                                 // m !dom n
                                 DJEdge::J(JEdge::C(to)) if to == n && sp_back.contains(&(m, n)) => {
-                                    println!("irr");
                                     irreduceible_loop = true;
                                 }
                                 // m dom n
                                 DJEdge::J(JEdge::B(to)) if to == n => {
-                                    println!("red");
 
                                     // reach under & collapse
                                     // todo is it really needed there?
@@ -240,9 +240,7 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                                     // it should not be possible (if reducible loop is somehow connected to reducible one, it will be single irr liio),
                                     // so it is safe to skip `collapse` altogether?
                                 }
-                                _ => {
-                                    println!("neither");
-                                }
+                                _ => {}
                             }
                         }
                     }
@@ -253,7 +251,7 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                         .clone()
                         .into_iter()
                         .flat_map(|(l, level_snodes)| {
-                            if l > level {
+                            if l >= level {
                                 level_snodes
                             } else {
                                 HashSet::new()
@@ -283,7 +281,8 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                         .into_iter()
                         .map(|c_nodes| c_nodes.into_iter().copied().collect())
                         .collect();
-                    let upper_level_nodes = by_level.get(&(level + 1)).unwrap();
+
+                    let upper_level_nodes = by_level.get(&level).unwrap();
                     let component_graphs: Vec<(SLabelRef<T>, SLabelRefGraph<T>)> = components_below
                         .into_iter()
                         .map(|component| {
@@ -309,7 +308,7 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                         .filter_map(|scc| {
                             let headers: Vec<_> = scc // get all headers of given scc/loop (nodes on `level + 1`)
                                 .iter()
-                                .filter(|n| *levels.get(n).unwrap() == level + 1)
+                                .filter(|n| *levels.get(n).unwrap() == level)
                                 .collect();
                             if headers.len() > 1 {
                                 // ensure that that given loop is irreducible (have at least two header nodes)
@@ -336,7 +335,8 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
 pub fn reduce<T: CfgLabel>(cfg: &Cfg<T>) -> Cfg<SLabel<T>> {
     let slabel_cfg = cfg.map_label(|&n| SLabel::new(n, 0));
     let reducer = Reducer::new(slabel_cfg);
-    reducer.reduce().cfg
+    let cfg = reducer.reduce().cfg;
+    cfg
 }
 
 pub fn check_reduction<TLabel: CfgLabel>(

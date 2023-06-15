@@ -19,7 +19,7 @@ impl<'a, T: Eq + Hash + 'a> Graph<'a, T, T> for DJSpanningTree<T> {
     }
 }
 
-impl<'a, T: Eq + Hash + Copy + 'a> DJSpanningTree<T> {
+impl<'a, T: Eq + Hash + Copy + std::fmt::Debug + 'a> DJSpanningTree<T> {
     fn is_sp_back(&self, from: &T, to: &T) -> bool {
         from == to || self.is_reachable(to, from)
     }
@@ -39,26 +39,27 @@ impl<'a, T: Eq + Hash + Copy + 'a> DJSpanningTree<T> {
     pub fn sp_back(&'a self, entry: &'a T) -> HashSet<(&'a T, &'a T)> {
         let mut set: HashSet<(&T, &T)> = Default::default();
 
-        let pre_post_order = PrePostOrder::start_from(entry, |x| self.children(x));
+        let pre_post_order =
+            PrePostOrder::start_from(entry, |x| self.children(x)).collect::<Vec<_>>();
 
         let mut path: HashSet<&T> = Default::default();
 
         for traverse_action in pre_post_order {
             match traverse_action {
-                VisitAction::Enter(x) => {
-                    path.insert(x);
+                VisitAction::Enter(e) => {
+                    path.insert(e);
 
                     let sp_iter = self
-                        .children(x)
+                        .children(e)
                         .into_iter()
                         .filter(|c| path.contains(c))
-                        .map(|c| (x, c));
+                        .map(|c| (e, c));
                     for sp_back in sp_iter {
                         set.insert(sp_back);
                     }
                 }
-                VisitAction::Leave(x) => {
-                    path.remove(&x);
+                VisitAction::Leave(l) => {
+                    path.remove(&l);
                 }
             }
         }

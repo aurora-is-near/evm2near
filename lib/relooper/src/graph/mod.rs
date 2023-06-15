@@ -108,8 +108,9 @@ pub trait Graph<'a, T: Eq + Hash + 'a, TE: 'a> {
 
         let find_comp = |graph: &'a Self, start_node| {
             let down_reachable: HashSet<&T> = graph.reachable(start_node);
-            let up_reachable: HashSet<&T> = transposed_graph
-                .reachable(&start_node)
+            let up_reachable: HashSet<&T> = down_reachable
+                .iter()
+                .flat_map(|n| transposed_graph.reachable(n))
                 .into_iter()
                 .copied()
                 .collect();
@@ -256,7 +257,7 @@ impl<'a, T: Eq + Hash + 'a> GraphMut<'a, T, T> for HashMap<T, HashSet<T>> {
         T: Borrow<Q>,
         Q: Hash + Eq,
     {
-        self.remove(n).expect("node should be present in graph");
+        self.remove(n);
         for to_edges in self.values_mut() {
             to_edges.remove(n);
         }
