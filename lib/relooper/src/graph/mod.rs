@@ -104,6 +104,7 @@ pub trait Graph<'a, T: Eq + Hash + 'a, TE: 'a> {
     }
 
     fn components(&'a self) -> Vec<HashSet<&'a T>> {
+        //todo optimize + add root node for each component to output
         let transposed_graph = self.in_edges();
 
         let find_comp = |graph: &'a Self, start_node| {
@@ -146,18 +147,17 @@ pub trait GraphCopy<'a, T: Eq + Hash + Copy + 'a>: Graph<'a, T, T> {
                 VisitAction::Leave(x) => Some(x),
             })
             .collect();
-        order.reverse();
 
-        for x in order {
-            if visited.contains(x) {
-                continue;
+        while let Some(x) = order.pop() {
+            if !visited.contains(x) {
+                let reachable: HashSet<T> =
+                    transposed.reachable(&x).into_iter().map(|&&x| x).collect();
+                for r in reachable.clone() {
+                    visited.insert(r);
+                    transposed.remove_node(&r);
+                }
+                components.push(reachable);
             }
-            let reachable: HashSet<T> = transposed.reachable(&x).into_iter().map(|&&x| x).collect();
-            for r in reachable.clone() {
-                visited.insert(r);
-                transposed.remove_node(&r);
-            }
-            components.push(reachable);
         }
 
         components
@@ -194,6 +194,63 @@ mod scc_tests {
         let c1 = BTreeSet::from_iter(vec![0, 1, 2]);
         let c2 = BTreeSet::from_iter(vec![3, 4, 5, 6]);
         let desired_sccs: BTreeSet<_> = BTreeSet::from_iter(vec![c1, c2]);
+
+        assert_eq!(desired_sccs, sccs);
+    }
+
+    #[test]
+    fn disjoint_graph() {
+        let map = HashMap::from_iter(
+            vec![
+                (0, vec![1]),
+                (1, vec![2]),
+                (2, vec![0]),
+                (3, vec![4]),
+                (4, vec![0]),
+            ]
+            .into_iter()
+            .map(|(f, t)| (f, HashSet::from_iter(t))),
+        );
+
+        let sccs_hs = map.kosaraju_scc(&0);
+
+        let sccs: BTreeSet<_> = sccs_hs.into_iter().map(BTreeSet::from_iter).collect();
+
+        let c1 = BTreeSet::from_iter(vec![0, 1, 2]);
+        let c2 = BTreeSet::from_iter(vec![3]);
+        let c3 = BTreeSet::from_iter(vec![4]);
+        let desired_sccs: BTreeSet<_> = BTreeSet::from_iter(vec![c1, c2, c3]);
+
+        assert_eq!(desired_sccs, sccs);
+    }
+
+    #[test]
+    fn complex() {
+        let map = HashMap::from_iter(
+            vec![
+                (0, vec![0, 1, 2]),
+                (1, vec![2, 4]),
+                (2, vec![3]),
+                (3, vec![1, 4, 5]),
+                (4, vec![6]),
+                (5, vec![6, 8]),
+                (6, vec![4]),
+                (7, vec![6, 8]),
+                (8, vec![5, 7]),
+            ]
+            .into_iter()
+            .map(|(f, t)| (f, HashSet::from_iter(t))),
+        );
+
+        let sccs_hs = map.kosaraju_scc(&0);
+
+        let sccs: BTreeSet<_> = sccs_hs.into_iter().map(BTreeSet::from_iter).collect();
+
+        let desired_sccs: BTreeSet<_> = BTreeSet::from_iter(
+            vec![vec![0], vec![1, 2, 3], vec![4, 6], vec![5, 7, 8]]
+                .into_iter()
+                .map(BTreeSet::from_iter),
+        );
 
         assert_eq!(desired_sccs, sccs);
     }

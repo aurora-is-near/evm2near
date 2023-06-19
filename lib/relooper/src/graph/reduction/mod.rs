@@ -1,6 +1,7 @@
 pub mod dj_graph;
 pub mod dj_spanning_tree;
 
+use core::panic;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fmt::{Debug, Display, Formatter},
@@ -163,6 +164,10 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
             .map(|copied| (copied, copied.duplicate()))
             .collect();
 
+        println!("header: {:#?}\nscc: {:#?}", header, scc);
+        println!("domain: {:#?}", header_domain);
+        println!("copied region: {:#?}", copied_region);
+
         let reduced_edges: HashMap<_, _> = self
             .cfg
             .edges()
@@ -173,21 +178,18 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
 
                 let mut new_edges: Vec<(SLabel<T>, CfgEdge<SLabel<T>>)> = vec![];
 
+                let ne = edge.map(|to| match copied_region.get(to) {
+                    Some(copy) => *copy,
+                    None => *to,
+                });
+
                 if from_domain {
-                    let ne = edge.map(|to| match copied_region.get(to) {
-                        Some(copy) => *copy,
-                        None => *to,
-                    });
-                    new_edges.push((*from, ne));
+                    new_edges.push((*from, ne.clone()));
                 } else {
                     new_edges.push((*from, edge.clone()));
                 }
 
                 if from_copied {
-                    let ne = edge.map(|to| match copied_region.get(to) {
-                        Some(copy) => *copy,
-                        None => *to,
-                    });
                     new_edges.push((*copied_region.get(from).unwrap(), ne));
                 }
 
@@ -196,6 +198,35 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
             .collect();
 
         let new_cfg = Cfg::from_edges(self.cfg.entry, reduced_edges);
+
+        println!("old cfg: {:#?}", self.cfg.edges());
+        println!("new cfg: {:#?}", new_cfg.edges());
+
+        let transposed = new_cfg.in_edges();
+        for n in new_cfg.nodes() {
+            if !new_cfg.is_reachable(&new_cfg.entry, n) {
+                let &orig = copied_region
+                    .iter()
+                    .find(|(_o, c)| c == &n)
+                    .map(|(o, _c)| o)
+                    .unwrap();
+                let old_transposed = self.cfg.in_edges();
+                let from_nodes = old_transposed.get(orig);
+                println!("from nodes: {:?}", from_nodes);
+                let first_from = from_nodes.unwrap().iter().next().unwrap();
+                println!("old from edge: {:?}", self.cfg.edge(first_from));
+                println!(
+                    "new from edge: {:?}",
+                    new_cfg.edge(&copied_region[first_from])
+                );
+                println!("unreachable node found: {:?}\norig: {:?}", n, orig);
+                println!("orig edges: {:?}", self.cfg.edge(orig));
+                println!("out edges: {:?}", new_cfg.edge(n));
+                println!("new orig edges: {:?}", new_cfg.edge(orig));
+                println!("in edges: {:?}", transposed.edge(&n));
+                panic!()
+            }
+        }
 
         Reducer::new(new_cfg)
     }
@@ -286,9 +317,14 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                     let component_graphs: Vec<(SLabelRef<T>, SLabelRefGraph<T>)> = components_below
                         .into_iter()
                         .map(|component| {
-                            let header: SLabelRef<T> = component
+                            let component_root: SLabelRef<T> = component
                                 .iter()
-                                .find(|&&n| upper_level_nodes.contains(n))
+                                .find(|&possible_root| {
+                                    upper_level_nodes.contains(possible_root)
+                                        && component.iter().all(|n| {
+                                            graph_below_level.is_reachable(possible_root, n)
+                                        })
+                                })
                                 .unwrap();
                             let mut component_graph: HashMap<SLabelRef<T>, HashSet<SLabelRef<T>>> =
                                 Default::default();
@@ -297,13 +333,13 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                                     .insert(c_node, graph_below_level.remove(c_node).unwrap());
                             }
 
-                            (header, component_graph)
+                            (component_root, component_graph)
                         })
                         .collect();
 
                     let irr_sccs: Vec<(SLabel<T>, HashSet<SLabelRef<T>>)> = component_graphs
                         .into_iter()
-                        .flat_map(|(header, c_graph)| c_graph.kosaraju_scc(&header))
+                        .flat_map(|(component_root, c_graph)| c_graph.kosaraju_scc(&component_root))
                         .filter(|scc| scc.len() > 1)
                         .filter_map(|scc| {
                             let headers: Vec<_> = scc // get all headers of given scc/loop (nodes on `level + 1`)
@@ -318,7 +354,7 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                                 None
                             }
                         })
-                        .collect::<Vec<_>>();
+                        .collect();
 
                     irr_sccs
                         .into_iter()
