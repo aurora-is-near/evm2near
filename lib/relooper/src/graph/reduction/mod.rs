@@ -152,7 +152,6 @@ impl<T: CfgLabel> Reducer<T> {
 }
 
 type SLabelRef<'a, T> = &'a SLabel<T>;
-type SLabelRefGraph<'a, T> = HashMap<SLabelRef<'a, T>, HashSet<SLabelRef<'a, T>>>;
 
 impl<T: CfgLabel> Reducer<SLabel<T>> {
     pub fn split_scc(&self, header: SLabelRef<T>, scc: HashSet<SLabelRef<T>>) -> Self {
@@ -290,7 +289,7 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                         })
                         .collect::<HashSet<_>>();
                     let edges = reducer.cfg.edges().clone();
-                    let mut graph_below_level: HashMap<SLabelRef<T>, HashSet<SLabelRef<T>>> = edges
+                    let graph_below_level: HashMap<SLabelRef<T>, HashSet<SLabelRef<T>>> = edges
                         .iter()
                         .filter_map(|(from, edges)| {
                             if below_nodes.contains(from) {
@@ -307,42 +306,12 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                         })
                         .collect::<HashMap<_, _>>();
 
-                    let components_below: Vec<HashSet<SLabelRef<T>>> = graph_below_level
-                        .components()
+                    let irr_sccs: Vec<(SLabel<T>, HashSet<SLabelRef<T>>)> = graph_below_level
+                        .kosaraju_scc()
                         .into_iter()
-                        .map(|c_nodes| c_nodes.into_iter().copied().collect())
-                        .collect();
-
-                    let upper_level_nodes = by_level.get(&level).unwrap();
-                    let component_graphs: Vec<(SLabelRef<T>, SLabelRefGraph<T>)> = components_below
-                        .into_iter()
-                        .map(|component| {
-                            let component_root: SLabelRef<T> = component
-                                .iter()
-                                .find(|&possible_root| {
-                                    upper_level_nodes.contains(possible_root)
-                                        && component.iter().all(|n| {
-                                            graph_below_level.is_reachable(possible_root, n)
-                                        })
-                                })
-                                .unwrap();
-                            let mut component_graph: HashMap<SLabelRef<T>, HashSet<SLabelRef<T>>> =
-                                Default::default();
-                            for c_node in component.into_iter() {
-                                component_graph
-                                    .insert(c_node, graph_below_level.remove(c_node).unwrap());
-                            }
-
-                            (component_root, component_graph)
-                        })
-                        .collect();
-
-                    let irr_sccs: Vec<(SLabel<T>, HashSet<SLabelRef<T>>)> = component_graphs
-                        .into_iter()
-                        .flat_map(|(component_root, c_graph)| c_graph.kosaraju_scc(&component_root))
                         .filter(|scc| scc.len() > 1)
                         .filter_map(|scc| {
-                            let headers: Vec<_> = scc // get all headers of given scc/loop (nodes on `level + 1`)
+                            let headers: Vec<&&SLabel<T>> = scc // get all headers of given scc/loop (nodes on `level + 1`)
                                 .iter()
                                 .filter(|n| *levels.get(n).unwrap() == level)
                                 .collect();

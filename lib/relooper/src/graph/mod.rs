@@ -102,46 +102,17 @@ pub trait Graph<'a, T: Eq + Hash + 'a, TE: 'a> {
 
         in_edges
     }
-
-    fn components(&'a self) -> Vec<HashSet<&'a T>> {
-        //todo optimize + add root node for each component to output
-        let transposed_graph = self.in_edges();
-
-        let find_comp = |graph: &'a Self, start_node| {
-            let down_reachable: HashSet<&T> = graph.reachable(start_node);
-            let up_reachable: HashSet<&T> = down_reachable
-                .iter()
-                .flat_map(|n| transposed_graph.reachable(n))
-                .into_iter()
-                .copied()
-                .collect();
-            let total_reachable: HashSet<&T> =
-                down_reachable.union(&up_reachable).copied().collect();
-            total_reachable
-        };
-
-        let mut components = vec![];
-        let mut remaining_nodes = self.nodes();
-
-        while !remaining_nodes.is_empty() {
-            let n = *remaining_nodes.iter().next().unwrap();
-            let comp = find_comp(self, n);
-            remaining_nodes = remaining_nodes.difference(&comp).copied().collect();
-            components.push(comp);
-        }
-
-        components
-    }
 }
 
 pub trait GraphCopy<'a, T: Eq + Hash + Copy + 'a>: Graph<'a, T, T> {
-    fn kosaraju_scc(&'a self, header: &T) -> Vec<HashSet<T>> {
+    fn kosaraju_scc(&'a self) -> Vec<HashSet<T>> {
         let mut components: Vec<HashSet<T>> = Default::default();
         let mut visited: HashSet<T> = Default::default();
 
         let mut transposed = self.in_edges();
 
-        let mut order: Vec<_> = PrePostOrder::start_from(header, |x| self.children(x))
+        // let mut order: Vec<_> = PrePostOrder::start_from(header, |x| self.children(x))
+        let mut order: Vec<_> = PrePostOrder::start_iter(self.nodes(), |x| self.children(x))
             .filter_map(|visit_action| match visit_action {
                 VisitAction::Enter(_) => None,
                 VisitAction::Leave(x) => Some(x),
@@ -187,7 +158,7 @@ mod scc_tests {
             .map(|(f, t)| (f, HashSet::from_iter(t))),
         );
 
-        let sccs_hs = map.kosaraju_scc(&0);
+        let sccs_hs = map.kosaraju_scc();
 
         let sccs: BTreeSet<_> = sccs_hs.into_iter().map(BTreeSet::from_iter).collect();
 
@@ -212,7 +183,7 @@ mod scc_tests {
             .map(|(f, t)| (f, HashSet::from_iter(t))),
         );
 
-        let sccs_hs = map.kosaraju_scc(&0);
+        let sccs_hs = map.kosaraju_scc();
 
         let sccs: BTreeSet<_> = sccs_hs.into_iter().map(BTreeSet::from_iter).collect();
 
@@ -242,7 +213,7 @@ mod scc_tests {
             .map(|(f, t)| (f, HashSet::from_iter(t))),
         );
 
-        let sccs_hs = map.kosaraju_scc(&0);
+        let sccs_hs = map.kosaraju_scc();
 
         let sccs: BTreeSet<_> = sccs_hs.into_iter().map(BTreeSet::from_iter).collect();
 
@@ -326,45 +297,5 @@ impl<'a, T: Eq + Hash + 'a> GraphMut<'a, T, T> for HashMap<T, HashSet<T>> {
 
     fn remove_edge(&mut self, from: T, edge: &Self::EdgeColl) {
         assert!(&self.remove(&from).expect("node should be present in graph") == edge)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::{BTreeSet, HashMap, HashSet};
-
-    use super::Graph;
-
-    #[test]
-    fn components() {
-        let graph: HashMap<usize, HashSet<usize>> = HashMap::from_iter(
-            vec![
-                (0, vec![1]),
-                (1, vec![]),
-                (2, vec![3]),
-                (3, vec![]),
-                (4, vec![3]),
-                (5, vec![3]),
-                (6, vec![7]),
-                (7, vec![9]),
-                (8, vec![7]),
-                (9, vec![8]),
-            ]
-            .into_iter()
-            .map(|(f, edge)| (f, HashSet::from_iter(edge))),
-        );
-
-        let components: BTreeSet<BTreeSet<usize>> = graph
-            .components()
-            .into_iter()
-            .map(|hs| hs.into_iter().copied().collect())
-            .collect::<BTreeSet<_>>();
-
-        let desired_result: BTreeSet<BTreeSet<usize>> = BTreeSet::from_iter(
-            vec![vec![0, 1], vec![2, 3, 4, 5], vec![6, 7, 8, 9]]
-                .into_iter()
-                .map(BTreeSet::from_iter),
-        );
-        assert_eq!(components, desired_result);
     }
 }
