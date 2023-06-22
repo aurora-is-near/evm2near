@@ -118,29 +118,6 @@ impl<T: CfgLabel> Reducer<T> {
         }
     }
 
-    fn sed_set(&self, loop_set: HashSet<T>) -> (T, HashSet<T>) {
-        let mut shared_idom: HashMap<&T, HashSet<&T>> = Default::default();
-        loop_set
-            .iter()
-            .filter_map(|n| {
-                self.dom_tree.imm_dominated(n).and_then(|idom| {
-                    if !loop_set.contains(idom) {
-                        Some((idom, n))
-                    } else {
-                        None
-                    }
-                })
-            })
-            .for_each(|(idom, n)| {
-                shared_idom.entry(idom).or_default().insert(n);
-            });
-        let (&ext_dom, sed_set) = shared_idom
-            .into_iter()
-            .max_by_key(|(_idom, set)| set.len())
-            .unwrap();
-        (ext_dom, sed_set.into_iter().copied().collect())
-    }
-
     fn domain<'a>(&'a self, h: &T, loop_set: &HashSet<&'a T>) -> HashSet<&T> {
         let dominated = self.dom_tree.dom(h);
         loop_set
@@ -162,10 +139,6 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
             .copied()
             .map(|copied| (copied, copied.duplicate()))
             .collect();
-
-        println!("header: {:#?}\nscc: {:#?}", header, scc);
-        println!("domain: {:#?}", header_domain);
-        println!("copied region: {:#?}", copied_region);
 
         let reduced_edges: HashMap<_, _> = self
             .cfg
@@ -198,32 +171,9 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
 
         let new_cfg = Cfg::from_edges(self.cfg.entry, reduced_edges);
 
-        println!("old cfg: {:#?}", self.cfg.edges());
-        println!("new cfg: {:#?}", new_cfg.edges());
-
-        let transposed = new_cfg.in_edges();
         for n in new_cfg.nodes() {
             if !new_cfg.is_reachable(&new_cfg.entry, n) {
-                let &orig = copied_region
-                    .iter()
-                    .find(|(_o, c)| c == &n)
-                    .map(|(o, _c)| o)
-                    .unwrap();
-                let old_transposed = self.cfg.in_edges();
-                let from_nodes = old_transposed.get(orig);
-                println!("from nodes: {:?}", from_nodes);
-                let first_from = from_nodes.unwrap().iter().next().unwrap();
-                println!("old from edge: {:?}", self.cfg.edge(first_from));
-                println!(
-                    "new from edge: {:?}",
-                    new_cfg.edge(&copied_region[first_from])
-                );
-                println!("unreachable node found: {:?}\norig: {:?}", n, orig);
-                println!("orig edges: {:?}", self.cfg.edge(orig));
-                println!("out edges: {:?}", new_cfg.edge(n));
-                println!("new orig edges: {:?}", new_cfg.edge(orig));
-                println!("in edges: {:?}", transposed.edge(&n));
-                panic!()
+                panic!("node {:?} is not reachable from cfg root", n);
             }
         }
 
