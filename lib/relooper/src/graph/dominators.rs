@@ -1,27 +1,9 @@
 use super::cfg::CfgLabel;
 use crate::graph::cfg::Cfg;
-use crate::graph::elu::{ELUForest, TwoArgLambdaTrait};
 use std::cmp::min;
 use std::collections::{HashMap, HashSet};
 
-pub struct SdomMin<'bebra, TLabel> {
-    semi: &'bebra HashMap<TLabel, usize>,
-}
 
-impl<TLabel: CfgLabel> TwoArgLambdaTrait<TLabel> for SdomMin<'_, TLabel> {
-    fn apply(&self, arg1: TLabel, arg2: TLabel) -> TLabel {
-        if *self.semi.get(&arg1).unwrap() < *self.semi.get(&arg2).unwrap() {
-            return arg1;
-        }
-        arg2
-    }
-}
-
-impl<TLabel: CfgLabel> SdomMin<'_, TLabel> {
-    pub fn new(semi: &HashMap<TLabel, usize>) -> SdomMin<TLabel> {
-        SdomMin { semi }
-    }
-}
 
 pub fn domination_tree<TLabel: CfgLabel>(
     cfg: &Cfg<TLabel>,
@@ -39,10 +21,84 @@ struct DominationBuilder<TLabel: CfgLabel> {
     label2dfs: HashMap<TLabel, usize>,
     semi: HashMap<TLabel, usize>, // map from node to number of its sdom in dfs
 
+}
+
+struct LinkEval <TLabel: CfgLabel> {
     // below a LINK-EVAL structures
     le_parent: HashMap<TLabel, TLabel>,
     roots: HashSet<TLabel>,
+    le_label: HashMap<TLabel, TLabel>,
+    le_size: HashMap<TLabel, usize>,
+    le_child: HashMap<TLabel, TLabel>,
 }
+
+
+impl<TLabel: CfgLabel> LinkEval<TLabel> {
+    fn compress(&mut self, v: TLabel, semi: &HashMap<TLabel, usize>, entry: TLabel) {
+        println!("compress, v:{:?}", v);
+
+        if self.le_parent.get(&self.le_parent[&v]).is_some() {
+            if self.le_parent[&self.le_parent[&v]] == entry {
+                return;
+            }
+            self.compress(self.le_parent[&v], semi, entry);
+            if semi[&self.le_label[&self.le_parent[&v]]] < semi[&self.le_label[&v]] {
+                self.le_label.insert(v, self.le_label[&self.le_parent[&v]]);
+            }
+            self.le_label.insert(v, self.le_parent[&self.le_parent[&v]]);
+        }
+    }
+    
+    fn eval(&mut self, v: TLabel, semi: &HashMap<TLabel, usize>, entry: TLabel) -> TLabel {
+        println!("eval, v:{:?}", v);
+        if self.le_parent.get(&v).is_none() {
+            self.le_label[&v]
+        } else {
+            self.compress(v, semi, entry);
+            if semi[&self.le_label[&self.le_parent[&v]]] >= semi[&self.le_label[&v]] {
+                return self.le_label[&v];
+            } else {
+                return self.le_label[&self.le_parent[&v]];
+            }
+        }
+    }
+
+    fn link(&mut self, v: TLabel, w: TLabel, semi: &HashMap<TLabel, usize>, entry: TLabel) {
+        println!("link, v:{:?}, w{:?}", v, w);
+        let mut s = w;
+        while semi[&self.le_label[&w]] < semi[&self.le_label[&self.le_child[&s]]] {
+            if self.le_size[&s] + self.le_size[&self.le_child[&self.le_child[&s]]] >= 2 * self.le_size[&self.le_child[&s]] {
+                self.le_parent.insert(self.le_child[&s], s);
+                self.le_child.insert(s, self.le_child[&self.le_child[&s]]);
+            } else {
+                self.le_size.insert(self.le_child[&s], self.le_size[&s]);
+                self.le_parent.insert(s, self.le_child[&s]);
+                s = self.le_child[&s];
+            }
+        }
+        self.le_label.insert(s, self.le_label[&w]);
+        self.le_size.insert(v, self.le_size[&v] + self.le_size[&w]);
+        if self.le_size[&v] < 2 * self.le_size[&w] {
+            let temp = s;
+            s = self.le_child[&v];
+            self.le_child.insert(v, temp);
+        }
+        loop {
+            println!("link loop, s = {:?}", s);
+            self.le_parent.insert(s, v);
+            match self.le_child.get(&s) {
+                Some(ss) => {
+                    if *ss == entry {
+                        break;
+                    }
+                    s = *ss;
+                },
+                None => {break;}
+            }
+        }
+    }
+}
+
 
 impl<TLabel: CfgLabel> DominationBuilder<TLabel> {
     pub fn new(cfg: &Cfg<TLabel>) -> DominationBuilder<TLabel> {
@@ -70,12 +126,6 @@ impl<TLabel: CfgLabel> DominationBuilder<TLabel> {
         }
 
         let semi: HashMap<TLabel, usize> = Default::default();
-        let le_parent: HashMap<TLabel, TLabel> = Default::default();
-        let mut roots: HashSet<TLabel> = Default::default();
-
-        for node in cfg.nodes() {
-            roots.insert(*node);
-        }
 
         DominationBuilder {
             cfg: cfg.clone(),
@@ -85,8 +135,6 @@ impl<TLabel: CfgLabel> DominationBuilder<TLabel> {
             dfs2label,
             label2dfs,
             semi,
-            le_parent,
-            roots,
         }
     }
 
@@ -119,26 +167,30 @@ impl<TLabel: CfgLabel> DominationBuilder<TLabel> {
         *self.parent.get(&node).unwrap()
     }
 
-    // TODO: maybe it will make sence to move this eval link to other file and struct. but borrow checker leaded me here  (=
-    pub fn eval(&self, node: TLabel) -> TLabel {
-        let mut cur_node = node;
-        let mut res = *self.semi.get(&node).unwrap();
-        while !self.roots.contains(&cur_node) {
-            res = min(res, *self.semi.get(&cur_node).unwrap());
-            cur_node = *self.le_parent.get(&cur_node).unwrap();
-        }
-        *self.dfs2label.get(&res).unwrap()
-    }
-
-    pub fn link(&mut self, v: TLabel, w: TLabel) -> () {
-        if !self.roots.contains(&v) || !self.roots.contains(&w) {
-            panic!("Both nodes must be roots for link");
-        }
-        self.roots.remove(&w);
-        self.le_parent.insert(w, v);
-    }
-
     pub fn build(&mut self) -> HashMap<TLabel, TLabel> {
+
+        let mut le_parent: HashMap<TLabel, TLabel> = Default::default();
+        let mut roots: HashSet<TLabel> = Default::default();
+
+        let mut le_label: HashMap<TLabel, TLabel> = Default::default();
+        let mut le_size: HashMap<TLabel, usize> = Default::default();
+        let mut le_child: HashMap<TLabel, TLabel> = Default::default();
+
+        for node in self.cfg.nodes() {
+            roots.insert(*node);
+            le_child.insert(*node, self.cfg.entry);
+            if *node == self.cfg.entry {
+                le_size.insert(*node, 0);
+            } else {
+                le_size.insert(*node, 1);
+            }
+            le_label.insert(*node, *node);
+        }
+
+        let mut le_forest = LinkEval{le_parent, roots, le_label, le_size, le_child};
+
+
+
         let mut bucket: HashMap<TLabel, Vec<TLabel>> = Default::default(); // bucket(w) is set of vertixes which sdom is w
         let mut dom: HashMap<TLabel, TLabel> = Default::default(); // map from node to its immediate dominator
 
@@ -162,7 +214,7 @@ impl<TLabel: CfgLabel> DominationBuilder<TLabel> {
             let sdom = self
                 .pred(*node)
                 .iter()
-                .map(|x| *self.label2dfs.get(&self.eval(*x)).unwrap())
+                .map(|x| *self.label2dfs.get(&le_forest.eval(*x, &self.semi, self.cfg.entry)).unwrap())
                 .min()
                 .unwrap();
             self.semi.insert(*node, sdom);
@@ -174,7 +226,7 @@ impl<TLabel: CfgLabel> DominationBuilder<TLabel> {
             bucket.entry(*key).or_default().push(*node);
 
             // LINK(parent(node), node)
-            self.link(self.parent(*node), *node);
+            le_forest.link(self.parent(*node), *node, &self.semi, self.cfg.entry);
 
             // TODO: try to rename v and u to smth more verbose
 
@@ -184,7 +236,7 @@ impl<TLabel: CfgLabel> DominationBuilder<TLabel> {
             println!("node: {:#?}\nentry: {:#?}", *node, self.cfg.entry);
             while !bucket.get(&self.parent(*node)).unwrap().is_empty() {
                 let v = bucket.get_mut(&self.parent(*node)).unwrap().pop().unwrap();
-                let u = self.eval(v);
+                let u = le_forest.eval(v, &self.semi, self.cfg.entry);
                 if self.semi.get(&u) < self.semi.get(&v) {
                     dom.insert(v, u);
                 } else {
