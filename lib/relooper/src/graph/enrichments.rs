@@ -85,9 +85,27 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
                 });
             }
         });
-        let domination = flame::span_of("building domination", || {
+        /*let domination = flame::span_of("building domination", || {
             DomTree::new_ordering(&cfg, &node_ordering)
-        });
+        });*/
+
+        println!("dominators started");
+        let domination_map = Self::domination_tree_john(&cfg, &node_ordering, cfg.entry);
+        println!("Dominators finished");
+        let domination_map_new = domination_map.clone();
+        let domination_map_old = Self::domination_tree(&cfg, &node_ordering, cfg.entry);
+        let domination_vec = Vec::from_iter(domination_map);
+        let domination = DomTree::from(domination_vec);
+
+
+        for node in cfg.nodes() {
+            let correct = domination_map_old[&node];
+            let new = domination_map_new[&node];
+            if correct != new {
+                println!("\n=============================================\nnode = {:?};\ncorrect dom = {:?};\nnew dom = {:?}\n=============================================\n", node, correct, new);
+            }
+        }
+        //aaaaaaaaaaaaaaaaaa
 
         Self {
             cfg,
@@ -99,12 +117,69 @@ impl<TLabel: CfgLabel> EnrichedCfg<TLabel> {
         }
     }
 
-    pub fn domination_tree(
+    pub fn domination_tree_john(
         cfg: &Cfg<TLabel>,
         node_ordering: &NodeOrdering<TLabel>,
         begin: TLabel,
     ) -> HashMap<TLabel, TLabel> /* map points from node id to id of its dominator */ {
         dominators::domination_tree(cfg, begin)
+    }
+
+
+    pub fn domination_tree(
+        cfg: &Cfg<TLabel>,
+        node_ordering: &NodeOrdering<TLabel>,
+        begin: TLabel,
+    ) -> HashMap<TLabel, TLabel> /* map points from node id to id of its dominator */ {
+        let mut result = HashMap::<TLabel, TLabel>::new();
+        let mut bfs = VecDeque::<TLabel>::new();
+        let mut visited = HashSet::<TLabel>::new();
+        for &n in node_ordering.sequence() {
+            result.insert(n, begin);
+        }
+        bfs.push_back(begin); // should be next. upd: i dont think so
+        visited.insert(begin);
+        loop {
+            if bfs.is_empty() {
+                break;
+            }
+            let &cur_id = bfs.front().unwrap();
+            visited.insert(cur_id);
+            bfs.pop_front().unwrap();
+            Self::update_dominators(cfg, node_ordering, cur_id, begin, &mut result);
+            for &id in cfg.children(&cur_id) {
+                if !visited.contains(&id) {
+                    bfs.push_back(id);
+                }
+            }
+        }
+        result
+    }
+
+    fn update_dominators(
+        cfg: &Cfg<TLabel>,
+        node_ordering: &NodeOrdering<TLabel>,
+        cur_id: TLabel,
+        origin: TLabel,
+        result: &mut HashMap<TLabel, TLabel>,
+    ) {
+        let mut reachable_set = HashSet::<TLabel>::default();
+        for &node in node_ordering.sequence() {
+            reachable_set.insert(node);
+        }
+
+        let reached = Dfs::start_from(origin, |&n| {
+            let mut ch = cfg.children(&n);
+            ch.remove(&cur_id);
+            ch.into_iter().copied()
+        });
+        for id in reached {
+            reachable_set.remove(&id);
+        }
+        reachable_set.remove(&cur_id);
+        for id in reachable_set {
+            result.insert(id, cur_id);
+        }
     }
 }
 

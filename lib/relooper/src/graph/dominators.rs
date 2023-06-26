@@ -35,7 +35,7 @@ struct LinkEval <TLabel: CfgLabel> {
 
 impl<TLabel: CfgLabel> LinkEval<TLabel> {
     fn compress(&mut self, v: TLabel, semi: &HashMap<TLabel, usize>, entry: TLabel) {
-        println!("compress, v:{:?}", v);
+        // println!("compress, v:{:?}", v);
 
         if self.le_parent.get(&self.le_parent[&v]).is_some() {
             if self.le_parent[&self.le_parent[&v]] == entry {
@@ -50,7 +50,7 @@ impl<TLabel: CfgLabel> LinkEval<TLabel> {
     }
     
     fn eval(&mut self, v: TLabel, semi: &HashMap<TLabel, usize>, entry: TLabel) -> TLabel {
-        println!("eval, v:{:?}", v);
+        // println!("eval, v:{:?}", v);
         if self.le_parent.get(&v).is_none() {
             self.le_label[&v]
         } else {
@@ -64,7 +64,7 @@ impl<TLabel: CfgLabel> LinkEval<TLabel> {
     }
 
     fn link(&mut self, v: TLabel, w: TLabel, semi: &HashMap<TLabel, usize>, entry: TLabel) {
-        println!("link, v:{:?}, w{:?}", v, w);
+        // println!("link, v:{:?}, w{:?}", v, w);
         let mut s = w;
         while semi[&self.le_label[&w]] < semi[&self.le_label[&self.le_child[&s]]] {
             if self.le_size[&s] + self.le_size[&self.le_child[&self.le_child[&s]]] >= 2 * self.le_size[&self.le_child[&s]] {
@@ -84,7 +84,7 @@ impl<TLabel: CfgLabel> LinkEval<TLabel> {
             self.le_child.insert(v, temp);
         }
         loop {
-            println!("link loop, s = {:?}", s);
+            // println!("link loop, s = {:?}", s);
             self.le_parent.insert(s, v);
             match self.le_child.get(&s) {
                 Some(ss) => {
@@ -233,7 +233,7 @@ impl<TLabel: CfgLabel> DominationBuilder<TLabel> {
             // for each v in bucket(parent(node)):
             //    1) delete v from bucket(parent(w));
             //    2) dom(v) = EVAL(v) if semi(EVAL(v)) < semi(v), else parent(node)
-            println!("node: {:#?}\nentry: {:#?}", *node, self.cfg.entry);
+            // println!("node: {:#?}\nentry: {:#?}", *node, self.cfg.entry);
             while !bucket.get(&self.parent(*node)).unwrap().is_empty() {
                 let v = bucket.get_mut(&self.parent(*node)).unwrap().pop().unwrap();
                 let u = le_forest.eval(v, &self.semi, self.cfg.entry);
