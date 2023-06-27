@@ -27,7 +27,7 @@ pub type SVersion = usize;
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
 pub struct SLabel<TLabel: CfgLabel> {
     pub origin: TLabel,
-    version: SVersion,
+    pub version: SVersion,
 }
 
 impl<TLabel: CfgLabel + Display> Display for SLabel<TLabel> {
@@ -185,9 +185,7 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
         let levels = self.dom_tree.levels().clone();
 
         let mut by_level: BTreeMap<usize, HashSet<SLabelRef<T>>> = Default::default();
-        let mut max_level = 0;
         for (sl, &level) in &levels {
-            max_level = usize::max(max_level, level);
             by_level.entry(level).or_default().insert(sl);
         }
 
@@ -267,7 +265,11 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                                 .collect();
                             if headers.len() > 1 {
                                 // ensure that that given loop is irreducible (have at least two header nodes)
-                                let header = **headers[0]; // todo select header by weight of its entire domain
+                                let (&&&header, _) = headers
+                                    .iter()
+                                    .map(|h| (h, reducer.domain(h, &scc)))
+                                    .max_by_key(|(_, domain)| domain.len())
+                                    .unwrap();
                                 Some((header, scc))
                             } else {
                                 None
@@ -287,14 +289,7 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
     }
 }
 
-pub fn reduce<T: CfgLabel>(cfg: &Cfg<T>) -> Cfg<SLabel<T>> {
-    let slabel_cfg = cfg.map_label(|&n| SLabel::new(n, 0));
-    let reducer = Reducer::new(slabel_cfg);
-    let cfg = reducer.reduce().cfg;
-    cfg
-}
-
-pub fn check_reduction<TLabel: CfgLabel>(
+fn check_reduced_edges<TLabel: CfgLabel>(
     origin_cfg: &Cfg<TLabel>,
     reduced_cfg: &Cfg<SLabel<TLabel>>,
 ) -> bool {
@@ -313,11 +308,42 @@ pub fn check_reduction<TLabel: CfgLabel>(
     })
 }
 
+// fn check_reduced_loop_headers<TLabel: CfgLabel>(reduced_cfg: &Cfg<SLabel<TLabel>>) -> bool {
+//     let enriched = EnrichedCfg::new(reduced_cfg.clone());
+//     let loops: Vec<_> = enriched
+//         .loop_nodes
+//         .iter()
+//         .map(|loop_header| {
+//             let header_reachable = reduced_cfg.reachable(loop_header);
+//             let loop_body: Vec<_> = header_reachable
+//                 .into_iter()
+//                 .filter(|n| reduced_cfg.is_reachable(n, loop_header))
+//                 .copied()
+//                 .collect();
+//             (loop_header, loop_body)
+//         })
+//         .collect();
+//     println!("loops: {:#?}", loops);
+//     loops.into_iter().all(|(header, body)| {
+//         body.iter()
+//             .all(|body_n| enriched.domination.is_dom(header, body_n))
+//     })
+// }
+
+pub fn reduce<T: CfgLabel>(cfg: &Cfg<T>) -> Cfg<SLabel<T>> {
+    let slabel_cfg = cfg.map_label(|&n| SLabel::new(n, 0));
+    let reducer = Reducer::new(slabel_cfg);
+    let reduced_cfg = reducer.reduce().cfg;
+    assert!(check_reduced_edges(cfg, &reduced_cfg));
+    // assert!(check_reduced_loop_headers(&reduced_cfg));
+    reduced_cfg
+}
+
 #[cfg(test)]
 mod tests {
     use crate::graph::cfg::Cfg;
     use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
-    use crate::graph::reduction::{check_reduction, reduce};
+    use crate::graph::reduction::{check_reduced_edges, reduce};
 
     #[test]
     fn simplest() {
@@ -329,7 +355,7 @@ mod tests {
         );
         let reduced = reduce(&cfg);
 
-        assert!(check_reduction(&cfg, &reduced));
+        assert!(check_reduced_edges(&cfg, &reduced));
     }
 
     #[test]
@@ -347,7 +373,7 @@ mod tests {
         );
         let reduced = reduce(&cfg);
 
-        assert!(check_reduction(&cfg, &reduced));
+        assert!(check_reduced_edges(&cfg, &reduced));
     }
 
     #[test]
@@ -366,7 +392,7 @@ mod tests {
         );
         let reduced = reduce(&cfg);
 
-        assert!(check_reduction(&cfg, &reduced));
+        assert!(check_reduced_edges(&cfg, &reduced));
     }
 
     #[test]
@@ -400,6 +426,6 @@ mod tests {
         )
         .expect("fs error");
 
-        assert!(check_reduction(&cfg, &reduced));
+        assert!(check_reduced_edges(&cfg, &reduced));
     }
 }

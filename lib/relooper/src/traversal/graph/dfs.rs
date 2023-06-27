@@ -72,10 +72,9 @@ where
     ChFun: FnMut(T) -> ChIt,
 {
     pub fn start_iter<I: IntoIterator<Item = T>>(iter: I, get_children: ChFun) -> Self {
-        let v: Vec<_> = iter.into_iter().collect();
         PrePostOrder {
             visited: HashSet::default(),
-            stack: VecDeque::from_iter(v.into_iter().map(|x| VisitAction::Enter(x))),
+            stack: VecDeque::from_iter(iter.into_iter().map(|x| VisitAction::Enter(x))),
             get_children,
         }
     }

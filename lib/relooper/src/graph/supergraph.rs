@@ -1,7 +1,6 @@
 use super::reduction::SLabel;
 use super::{GEdgeColl, GEdgeCollMappable, Graph, GraphMut};
 use crate::graph::cfg::{Cfg, CfgLabel};
-use crate::graph::reduction::check_reduction;
 use crate::{
     graph::supergraph::NodeAction::{MergeInto, SplitFor},
     traversal::graph::dfs::{DfsPost, DfsPostReverseInstantiator},
@@ -232,6 +231,26 @@ impl<TLabel: CfgLabel> SuperGraph<TLabel> {
     }
 }
 
+fn check_reduction<TLabel: CfgLabel>(
+    origin_cfg: &Cfg<TLabel>,
+    reduced_cfg: &Cfg<SLabel<TLabel>>,
+) -> bool {
+    let reduced_nodes = reduced_cfg.nodes();
+    let mut origin_mapping: HashMap<TLabel, HashSet<SLabel<TLabel>>> = Default::default();
+    for &x in reduced_nodes.iter() {
+        origin_mapping.entry(x.origin).or_default().insert(*x);
+    }
+
+    origin_cfg.edges().iter().all(|(from, e)| {
+        origin_mapping
+            .get(from)
+            .unwrap()
+            .iter()
+            .all(|&r_from| &reduced_cfg.edge(&r_from).map(|x| x.origin) == e)
+    })
+}
+
+#[deprecated]
 pub fn reduce<TLabel: CfgLabel>(cfg: &Cfg<TLabel>) -> Cfg<SLabel<TLabel>> {
     let mut super_graph = SuperGraph::new(cfg);
     super_graph.reduce();
