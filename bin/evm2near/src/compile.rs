@@ -520,11 +520,11 @@ subgraph cluster_wasm {{ label = \"wasm\"
         // println!("orig: {}", evm_cfg.nodes().len());
         // let old_reduced = relooper::graph::supergraph::reduce(&evm_cfg);
         let reduced = relooper::graph::reduction::reduce(&evm_cfg);
-        let reduced = relooper::graph::reduction::reduce(&reduced).map_label(|x| {
-            let mut s = x.origin;
-            s.version = s.version * 1000 + x.version;
-            s
-        });
+        // let reduced = relooper::graph::reduction::reduce(&reduced).map_label(|x| {
+        //     let mut s = x.origin;
+        //     s.version = s.version * 1000 + x.version;
+        //     s
+        // });
         println!("node count: {}", reduced.nodes().len());
         // let reduced_nodes_count = relooper::graph::Graph::nodes(&reduced).len();
         // let reduced = relooper::graph::supergraph::reduce(&reduced).map_label(|x| {

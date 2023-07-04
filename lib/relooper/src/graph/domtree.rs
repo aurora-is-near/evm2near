@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{BTreeMap, HashMap, HashSet, VecDeque},
     hash::Hash,
     iter::successors,
 };
@@ -81,6 +81,20 @@ impl<T: CfgLabel> DomTree<T> {
 
     pub fn levels(&self) -> &HashMap<T, usize> {
         &self.levels
+    }
+
+    pub fn by_level(&self) -> BTreeMap<usize, HashSet<T>> {
+        let mut res: BTreeMap<usize, HashSet<T>> = Default::default();
+
+        for (x, &level) in &self.levels {
+            res.entry(level).or_default().insert(*x);
+        }
+
+        res
+    }
+
+    pub fn max_level(&self) -> usize {
+        *self.levels.iter().map(|(_, level)| level).max().unwrap()
     }
 
     fn update_dominators(

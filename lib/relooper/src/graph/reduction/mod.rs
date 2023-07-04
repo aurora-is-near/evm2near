@@ -1,9 +1,8 @@
 pub mod dj_graph;
 pub mod dj_spanning_tree;
 
-use core::panic;
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{HashMap, HashSet},
     fmt::{Debug, Display, Formatter},
 };
 
@@ -173,6 +172,8 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
 
         for n in new_cfg.nodes() {
             if !new_cfg.is_reachable(&new_cfg.entry, n) {
+                println!("old cfg:\n{:#?}", self.cfg);
+                println!("new cfg:\n{:#?}", new_cfg);
                 panic!("node {:?} is not reachable from cfg root", n);
             }
         }
@@ -180,20 +181,15 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
         Reducer::new(new_cfg)
     }
 
-    #[allow(dead_code)]
     fn reduce(self) -> Self {
-        let levels = self.dom_tree.levels().clone();
+        let max_level = self.dom_tree.max_level();
+        println!("max level: {}", max_level);
+        (0..(max_level + 1)).rev().fold(self, |reducer, level| {
+            let mut reducer = reducer;
+            loop {
+                let by_level = reducer.dom_tree.by_level();
+                let level_nodes = by_level.get(&level).unwrap();
 
-        let mut by_level: BTreeMap<usize, HashSet<SLabelRef<T>>> = Default::default();
-        for (sl, &level) in &levels {
-            by_level.entry(level).or_default().insert(sl);
-        }
-
-        by_level
-            .clone()
-            .into_iter()
-            .rev()
-            .fold(self, |reducer, (level, slabels)| {
                 let mut irreduceible_loop = false; // todo move irr actions directly into match?
 
                 let sp_back = reducer.spanning_tree.sp_back(&reducer.cfg.entry);
@@ -201,7 +197,7 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                 let transposed: HashMap<SLabelRef<T>, HashSet<SLabelRef<T>>> =
                     reducer.dj_graph.in_edges();
 
-                for n in slabels {
+                for n in level_nodes {
                     for &m in transposed.get(&n).into_iter().flatten() {
                         for dj_to in reducer.dj_graph.edge(m) {
                             match dj_to {
@@ -225,8 +221,9 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                 }
                 if irreduceible_loop {
                     // subgraph by level & every scc simplification
-                    let below_nodes = by_level
-                        .clone()
+                    let below_nodes = reducer
+                        .dom_tree
+                        .by_level()
                         .into_iter()
                         .flat_map(|(l, level_snodes)| {
                             if l >= level {
@@ -257,35 +254,43 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                     let irr_sccs: Vec<(SLabel<T>, HashSet<SLabelRef<T>>)> = graph_below_level
                         .kosaraju_scc()
                         .into_iter()
+                        // filter out all `trivial` scc (only loops of len > 1 will stay)
                         .filter(|scc| scc.len() > 1)
                         .filter_map(|scc| {
-                            let headers: Vec<&&SLabel<T>> = scc // get all headers of given scc/loop (nodes on `level + 1`)
+                            let headers: Vec<&&SLabel<T>> = scc // get all headers of given scc/loop (nodes on `level`)
                                 .iter()
-                                .filter(|n| *levels.get(n).unwrap() == level)
+                                .filter(|n| *reducer.dom_tree.levels().get(n).unwrap() == level)
                                 .collect();
+                            // ensure that that given loop is irreducible (have at least two header nodes)
                             if headers.len() > 1 {
-                                // ensure that that given loop is irreducible (have at least two header nodes)
-                                let (&&&header, _) = headers
-                                    .iter()
-                                    .map(|h| (h, reducer.domain(h, &scc)))
-                                    .max_by_key(|(_, domain)| domain.len())
-                                    .unwrap();
+                                // let (&&&header, domain) = headers
+                                //     .iter()
+                                //     .map(|h| (h, reducer.domain(h, &scc)))
+                                //     .max_by_key(|(_, domain)| domain.len())
+                                //     .unwrap();
+                                // println!("h: {:?}\n\td: {:#?}", header, domain);
+                                let header = **headers[0];
                                 Some((header, scc))
                             } else {
                                 None
                             }
                         })
                         .collect();
+                    // println!("-----");
 
-                    irr_sccs
+                    println!("irr sccs count: {}", irr_sccs.len());
+                    reducer = irr_sccs
                         .into_iter()
                         .fold(reducer, |reducer: Reducer<_>, (header, scc)| {
                             reducer.split_scc(&header, scc)
                         })
                 } else {
-                    reducer
+                    println!("---- level {} finished", level);
+                    break;
                 }
-            })
+            }
+            reducer
+        })
     }
 }
 
@@ -308,28 +313,6 @@ fn check_reduced_edges<TLabel: CfgLabel>(
     })
 }
 
-// fn check_reduced_loop_headers<TLabel: CfgLabel>(reduced_cfg: &Cfg<SLabel<TLabel>>) -> bool {
-//     let enriched = EnrichedCfg::new(reduced_cfg.clone());
-//     let loops: Vec<_> = enriched
-//         .loop_nodes
-//         .iter()
-//         .map(|loop_header| {
-//             let header_reachable = reduced_cfg.reachable(loop_header);
-//             let loop_body: Vec<_> = header_reachable
-//                 .into_iter()
-//                 .filter(|n| reduced_cfg.is_reachable(n, loop_header))
-//                 .copied()
-//                 .collect();
-//             (loop_header, loop_body)
-//         })
-//         .collect();
-//     println!("loops: {:#?}", loops);
-//     loops.into_iter().all(|(header, body)| {
-//         body.iter()
-//             .all(|body_n| enriched.domination.is_dom(header, body_n))
-//     })
-// }
-
 pub fn reduce<T: CfgLabel>(cfg: &Cfg<T>) -> Cfg<SLabel<T>> {
     let slabel_cfg = cfg.map_label(|&n| SLabel::new(n, 0));
     let reducer = Reducer::new(slabel_cfg);
@@ -343,6 +326,7 @@ pub fn reduce<T: CfgLabel>(cfg: &Cfg<T>) -> Cfg<SLabel<T>> {
 mod tests {
     use crate::graph::cfg::Cfg;
     use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
+    use crate::graph::enrichments::EnrichedCfg;
     use crate::graph::reduction::{check_reduced_edges, reduce};
 
     #[test]
@@ -427,5 +411,39 @@ mod tests {
         .expect("fs error");
 
         assert!(check_reduced_edges(&cfg, &reduced));
+    }
+
+    #[test]
+    fn nested_irr() {
+        let cfg = Cfg::from_edges(
+            0,
+            vec![
+                (0, Cond(1, 4)),
+                (1, Cond(2, 3)),
+                (2, Uncond(3)),
+                (3, Cond(4, 2)),
+                (4, Cond(5, 1)),
+                (5, Terminal),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let reduced = reduce(&cfg);
+
+        std::fs::write(
+            "irr_new_cfg.dot",
+            format!("digraph {{{}}}", cfg.cfg_to_dot("irr_new_cfg")),
+        )
+        .expect("fs error");
+
+        std::fs::write(
+            "irr_new_cfg_reduced.dot",
+            format!("digraph {{{}}}", reduced.cfg_to_dot("irr_new_cfg_reduced")),
+        )
+        .expect("fs error");
+        assert!(check_reduced_edges(&cfg, &reduced));
+
+        let enriched = EnrichedCfg::new(reduced);
+        enriched.reloop();
     }
 }

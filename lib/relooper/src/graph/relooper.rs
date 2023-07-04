@@ -63,6 +63,7 @@ impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
 
     /// either generates branch node or "fallthrough" next node
     fn do_branch(&self, from: TLabel, to: TLabel, context: &Vec<Context<TLabel>>) -> ReSeq<TLabel> {
+        //println!("do_branch \t{:?}\n\t\t{:?}", from, to);
         if self.node_ordering.is_backward(&from, &to) || self.merge_nodes.contains(&to) {
             let idx_coll = context
                 .iter()
@@ -80,6 +81,24 @@ impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
                     })
                 })
                 .collect::<Vec<_>>();
+
+            if idx_coll.len() != 1 {
+                //println!("\treachable? {}", self.cfg.is_reachable(&to, &from));
+                //println!(
+                //     "\tis dominated? {}",
+                //     self.domination.is_reachable(&to, &from)
+                // );
+                //println!(
+                //     "\tis dominated backwards? {}",
+                //     self.domination.is_reachable(&from, &to)
+                // );
+                //println!("\tlen: {}, node: {:?}", idx_coll.len(), to);
+                //println!("\tis back: {}", self.node_ordering.is_backward(&from, &to));
+                //println!("\tis merge: {}", self.merge_nodes.contains(&to));
+                //println!("\tis loop: {}", self.loop_nodes.contains(&to));
+                //println!("\tis if: {}", self.if_nodes.contains(&to));
+                // //println!("context: {:#?}", context);
+            }
 
             assert_eq!(idx_coll.len(), 1);
             let &jump_idx = idx_coll
@@ -99,8 +118,10 @@ impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
         outer_nodes: &[TLabel],
         context: &Vec<Context<TLabel>>,
     ) -> ReSeq<TLabel> {
+        //println!("node_within {:?}\n\touter: {:?}", node, outer_nodes);
         if outer_nodes.is_empty() {
             let actions = Actions(node);
+            //println!("\tout_edge: {:?}", self.cfg.edge(&node));
             let other = match self.cfg.edge(&node) {
                 Uncond(u) => self.do_branch(node, *u, context),
                 Cond(true_label, false_label) => {
@@ -153,6 +174,7 @@ impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
 
     /// helper function for finding all the merge nodes depending on current node
     fn gen_node(&self, node: TLabel, context: &Vec<Context<TLabel>>) -> ReSeq<TLabel> {
+        //println!("gen_node {:?}", node);
         let merge_children: HashSet<TLabel> = self
             .children(node)
             .into_iter()
@@ -183,13 +205,19 @@ impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
         if self.loop_nodes.contains(&node) {
             let mut ctx = context.clone();
             ctx.push(Context::LoopHeadedBy(node));
+            //println!("do_tree loop pushed {:?}", node);
             ReSeq::single(Loop(self.gen_node(node, &ctx)))
         } else {
+            //println!("do_tree no loop {:?}", node);
             self.gen_node(node, context)
         }
     }
 
     pub fn reloop(&self) -> ReSeq<TLabel> {
+        //println!(
+        //     "loops: {:?}\nmerges: {:?}",
+        //     self.loop_nodes, self.merge_nodes
+        // );
         self.do_tree(self.cfg.entry, &Vec::new())
     }
 }
