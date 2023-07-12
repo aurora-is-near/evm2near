@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use std::hash::Hash;
 
 use crate::traversal::graph::bfs::Bfs;
-use crate::traversal::graph::dfs::{PrePostOrder, VisitAction};
+use crate::traversal::graph::dfs::PrePostOrder;
 
 pub mod cfg;
 pub mod domtree;
@@ -113,10 +113,7 @@ pub trait GraphCopy<'a, T: Eq + Hash + Copy + 'a>: Graph<'a, T, T> {
 
         // let mut order: Vec<_> = PrePostOrder::start_from(header, |x| self.children(x))
         let mut order: Vec<_> = PrePostOrder::start_iter(self.nodes(), |x| self.children(x))
-            .filter_map(|visit_action| match visit_action {
-                VisitAction::Enter(_) => None,
-                VisitAction::Leave(x) => Some(x),
-            })
+            .postorder()
             .collect();
 
         while let Some(x) = order.pop() {

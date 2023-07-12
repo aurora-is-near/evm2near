@@ -1,6 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-use crate::traversal::graph::dfs::{DfsPost, DfsPostReverseInstantiator};
+use crate::traversal::graph::dfs::PrePostOrder;
 
 use super::{
     cfg::{Cfg, CfgLabel},
@@ -14,10 +14,11 @@ pub struct NodeOrdering<TLabel: CfgLabel> {
 
 impl<TLabel: CfgLabel> NodeOrdering<TLabel> {
     pub fn new(cfg: &Cfg<TLabel>, entry: TLabel) -> Self {
-        let vec: Vec<TLabel> = DfsPost::<_, _, HashSet<_>>::reverse(&entry, |x| cfg.children(x))
-            .into_iter()
+        let mut vec: Vec<TLabel> = PrePostOrder::start_from(&entry, |x| cfg.children(x))
+            .postorder()
             .copied()
             .collect();
+        vec.reverse();
         let idx: HashMap<TLabel, usize> = vec.iter().enumerate().map(|(i, &n)| (n, i)).collect();
         Self { vec, idx }
     }

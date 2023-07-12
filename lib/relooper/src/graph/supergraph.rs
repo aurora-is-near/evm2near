@@ -1,10 +1,8 @@
 use super::reduction::SLabel;
 use super::{GEdgeColl, GEdgeCollMappable, Graph, GraphMut};
 use crate::graph::cfg::{Cfg, CfgLabel};
-use crate::{
-    graph::supergraph::NodeAction::{MergeInto, SplitFor},
-    traversal::graph::dfs::{DfsPost, DfsPostReverseInstantiator},
-};
+use crate::graph::supergraph::NodeAction::{MergeInto, SplitFor};
+use crate::traversal::graph::dfs::PrePostOrder;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Debug;
 
@@ -70,7 +68,7 @@ impl<TLabel: CfgLabel> SuperGraph<TLabel> {
     /// We are using that order for traversing supernodes graph for choosing between merge/split actions
     fn snode_order(&self) -> Vec<&SLabel<TLabel>> {
         let start = self.nodes.get(&self.cfg.entry).unwrap();
-        DfsPost::<_, _, HashSet<_>>::reverse(&start.head, |slabel| {
+        let mut postorder: Vec<_> = PrePostOrder::start_from(&start.head, |slabel| {
             let snode = self.nodes.get(slabel).unwrap();
             snode.contained.iter().flat_map(|l| {
                 self.cfg
@@ -79,6 +77,10 @@ impl<TLabel: CfgLabel> SuperGraph<TLabel> {
                     .map(|to| self.label_location.get(to).unwrap())
             })
         })
+        .postorder()
+        .collect();
+        postorder.reverse();
+        postorder
     }
 
     /// finding out applicable action for given supernode
