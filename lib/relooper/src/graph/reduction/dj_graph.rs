@@ -4,7 +4,11 @@ use std::{
     hash::Hash,
 };
 
-use crate::graph::{Graph, GraphMut};
+use crate::graph::{
+    cfg::{Cfg, CfgLabel},
+    domtree::DomTree,
+    GEdgeColl, Graph, GraphMut,
+};
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum JEdge<T> {
@@ -75,5 +79,31 @@ impl<'a, T: Eq + Hash + Clone + 'a> GraphMut<'a, T, DJEdge<T>> for DJGraph<T> {
     fn remove_edge(&mut self, from: T, _edge: &Self::EdgeColl) {
         let _prev = self.0.remove(&from).expect("node should be present");
         // assert_eq!(prev, edge); // todo
+    }
+}
+
+impl<T: CfgLabel> DJGraph<T> {
+    pub fn new(cfg: &Cfg<T>, dom_tree: &DomTree<T>) -> Self {
+        //todo to .map_label
+        let mut dj_graph: HashMap<T, HashSet<DJEdge<T>>> = Default::default();
+        for (&from, dom_edge_set) in dom_tree.edges() {
+            dj_graph.insert(from, dom_edge_set.iter().map(|&x| DJEdge::D(x)).collect());
+        }
+
+        for (f, e) in cfg.edges() {
+            let d_edge = dom_tree.edge(f);
+            for t in e.iter() {
+                if !d_edge.contains(t) {
+                    let j_edge = if dom_tree.is_dom(t, f) {
+                        JEdge::B(*t)
+                    } else {
+                        JEdge::C(*t)
+                    };
+                    dj_graph.entry(*f).or_default().insert(DJEdge::J(j_edge));
+                }
+            }
+        }
+
+        DJGraph(dj_graph)
     }
 }
