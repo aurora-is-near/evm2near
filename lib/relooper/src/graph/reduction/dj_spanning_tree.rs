@@ -61,6 +61,8 @@ impl<'a, T: Eq + Hash + Copy + std::fmt::Debug + 'a> DJSpanningTree<T> {
         let pre_post_order =
             PrePostOrder::start_from(entry, |x| self.children(x)).collect::<Vec<_>>();
 
+        println!("prepost -----------\n{:?}", pre_post_order);
+
         let mut path: HashSet<&T> = Default::default();
 
         for traverse_action in pre_post_order {
@@ -68,11 +70,10 @@ impl<'a, T: Eq + Hash + Copy + std::fmt::Debug + 'a> DJSpanningTree<T> {
                 VisitAction::Enter(e) => {
                     path.insert(e);
 
-                    let sp_iter = self
-                        .children(e)
-                        .into_iter()
-                        .filter(|c| path.contains(c))
-                        .map(|c| (e, c));
+                    let ch = self.children(e);
+                    println!("{:?} ch: {:?}", e, ch);
+
+                    let sp_iter = ch.into_iter().filter(|c| path.contains(c)).map(|c| (e, c));
                     for sp_back in sp_iter {
                         set.insert(sp_back);
                     }
@@ -86,41 +87,5 @@ impl<'a, T: Eq + Hash + Copy + std::fmt::Debug + 'a> DJSpanningTree<T> {
         assert!(set.iter().all(|(f, t)| self.is_sp_back(f, t)));
 
         set
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::HashMap;
-
-    use crate::graph::{
-        cfg::{Cfg, CfgEdge, CfgEdge::*},
-        domtree::DomTree,
-        reduction::dj_graph::DJGraph,
-    };
-
-    use super::DJSpanningTree;
-
-    #[test]
-    fn paper_example() {
-        let cfg_edges: HashMap<usize, CfgEdge<usize>> = HashMap::from_iter(vec![
-            (0, Switch(vec![(0, 1), (1, 2), (2, 5)])),
-            (1, Uncond(2)),
-            (2, Cond(1, 3)),
-            (3, Uncond(4)),
-            (4, Cond(5, 6)),
-            (5, Uncond(2)),
-            (6, Terminal),
-        ]);
-
-        let cfg = Cfg::from_edges(0, cfg_edges);
-
-        let dom_tree = DomTree::new(&cfg);
-        let dj_graph = DJGraph::new(&cfg, &dom_tree);
-        let dj_spanning = DJSpanningTree::new(0, &dj_graph);
-
-        let sp_edges = dj_spanning.sp_back(&0);
-        println!("{:#?}", sp_edges);
-        panic!()
     }
 }

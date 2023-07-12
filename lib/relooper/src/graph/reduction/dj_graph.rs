@@ -11,30 +11,18 @@ use crate::graph::{
 };
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
-pub enum JEdge<T> {
-    B(T),
-    C(T),
-}
-impl<T> JEdge<T> {
-    fn label(&self) -> &T {
-        match self {
-            Self::B(x) => x,
-            Self::C(x) => x,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum DJEdge<T> {
     D(T),
-    J(JEdge<T>),
+    JC(T),
+    JB(T),
 }
 
 impl<T> DJEdge<T> {
     pub fn label(&self) -> &T {
         match self {
             Self::D(x) => x,
-            Self::J(jedge) => jedge.label(),
+            Self::JC(x) => x,
+            Self::JB(x) => x,
         }
     }
 }
@@ -95,11 +83,11 @@ impl<T: CfgLabel> DJGraph<T> {
             for t in e.iter() {
                 if !d_edge.contains(t) {
                     let j_edge = if dom_tree.is_dom(t, f) {
-                        JEdge::B(*t)
+                        DJEdge::JB(*t)
                     } else {
-                        JEdge::C(*t)
+                        DJEdge::JC(*t)
                     };
-                    dj_graph.entry(*f).or_default().insert(DJEdge::J(j_edge));
+                    dj_graph.entry(*f).or_default().insert(j_edge);
                 }
             }
         }

@@ -6,10 +6,7 @@ use std::{
     fmt::{Debug, Display, Formatter},
 };
 
-use crate::graph::{
-    reduction::dj_graph::{DJEdge, JEdge},
-    Graph, GraphCopy,
-};
+use crate::graph::{reduction::dj_graph::DJEdge, Graph, GraphCopy};
 
 use self::{dj_graph::DJGraph, dj_spanning_tree::DJSpanningTree};
 
@@ -177,7 +174,7 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                         if sp_back.contains(&(m, n)) {
                             print!("sp-back, ");
                             let m_dj_edges = reducer.dj_graph.edge(m);
-                            if m_dj_edges.contains(&DJEdge::J(JEdge::C(*n))) {
+                            if m_dj_edges.contains(&DJEdge::JC(*n)) {
                                 println!("CJ IRRRRRRRRRRRRRRR");
                                 irreduceible_loop = true;
                             } else {
