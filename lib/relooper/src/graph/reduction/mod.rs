@@ -139,7 +139,6 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
         let new_cfg = Cfg::from_edges(self.cfg.entry, reduced_edges);
 
         let red = Reducer::new(new_cfg, self.last_version + copies_counter);
-        println!("reducer: {:?}", red);
 
         for n in red.cfg.nodes() {
             if !red.cfg.is_reachable(&red.cfg.entry, n) {
@@ -151,137 +150,107 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
     }
 
     fn reduce(self) -> Self {
-        let max_level = self.dom_tree.max_level();
-        println!("max level: {}", max_level);
+        let mut level_opt = Some(self.dom_tree.max_level());
+        let mut reducer = self;
 
-        (0..(max_level + 1)).rev().fold(self, |reducer, level| {
-            let mut reducer = reducer;
-            loop {
-                let by_level = reducer.dom_tree.by_level();
-                let level_nodes = by_level.get(&level).unwrap();
+        while let Some(level) = level_opt {
+            let by_level = reducer.dom_tree.by_level();
+            let level_nodes = by_level.get(&level).unwrap();
 
-                let mut irreduceible_loop = false; // todo move irr actions directly into match?
+            let mut irreduceible_loop = false; // todo move irr actions directly into match?
 
-                let sp_back = reducer.dj_spanning_tree.sp_back(&reducer.cfg.entry);
+            let sp_back = reducer.dj_spanning_tree.sp_back(&reducer.cfg.entry);
 
-                println!("|||| level {}, sp_back: {:?}", level, sp_back);
+            let transposed: HashMap<SLabelRef<T>, HashSet<SLabelRef<T>>> =
+                reducer.dj_graph.in_edges();
 
-                let transposed: HashMap<SLabelRef<T>, HashSet<SLabelRef<T>>> =
-                    reducer.dj_graph.in_edges();
-
-                for n in level_nodes {
-                    for &m in transposed.get(&n).into_iter().flatten() {
-                        println!("dj_to {:?} -> {:?}", m, n);
-                        if sp_back.contains(&(m, n)) {
-                            print!("sp-back, ");
-                            let m_dj_edges = reducer.dj_graph.edge(m);
-                            if m_dj_edges.contains(&DJEdge::JC(*n)) {
-                                println!("CJ IRRRRRRRRRRRRRRR");
-                                irreduceible_loop = true;
-                            } else {
-                                println!("BJ");
-                            }
-                        } else {
-                            println!("no sp-back");
+            for n in level_nodes {
+                for &m in transposed.get(&n).into_iter().flatten() {
+                    if sp_back.contains(&(m, n)) {
+                        let m_dj_edges = reducer.dj_graph.edge(m);
+                        if m_dj_edges.contains(&DJEdge::JC(*n)) {
+                            irreduceible_loop = true;
+                            break;
                         }
-                        // for dj_to in reducer.dj_graph.edge(m) {
-                        //     println!("dj_to {:?} -> {:?}", m, n);
-                        //     match dj_to {
-                        //         // m !dom n
-                        //         DJEdge::J(JEdge::C(to)) if to == n && sp_back.contains(&(m, n)) => {
-                        //             println!("irr found!");
-                        //             irreduceible_loop = true;
-                        //         }
-                        //         // m dom n
-                        //         DJEdge::J(JEdge::B(to)) if to == n => {
-
-                        //             // reach under & collapse
-                        //             // todo is it really needed there?
-                        //             // now we are filtering only irreducible loops below, but it may be so that reducible loop will somehow blend with irreducible?
-                        //             // it should not be possible (if reducible loop is somehow connected to reducible one, it will be single irr liio),
-                        //             // so it is safe to skip `collapse` altogether?
-                        //         }
-                        //         _ => {}
-                        //     }
-                        // }
                     }
                 }
                 if irreduceible_loop {
-                    // subgraph by level & every scc simplification
-                    let below_nodes = reducer
-                        .dom_tree
-                        .by_level()
-                        .into_iter()
-                        .flat_map(|(l, level_snodes)| {
-                            if l >= level {
-                                level_snodes
-                            } else {
-                                HashSet::new()
-                            }
-                        })
-                        .collect::<HashSet<_>>();
-                    let edges = reducer.cfg.edges().clone();
-                    let graph_below_level: HashMap<SLabelRef<T>, HashSet<SLabelRef<T>>> = edges
-                        .iter()
-                        .filter_map(|(from, edges)| {
-                            if below_nodes.contains(from) {
-                                Some((
-                                    from,
-                                    edges
-                                        .iter()
-                                        .filter(|&a| below_nodes.contains(a))
-                                        .collect::<HashSet<_>>(),
-                                ))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect::<HashMap<_, _>>();
-
-                    let irr_sccs: Vec<(SLabel<T>, HashSet<SLabelRef<T>>)> = graph_below_level
-                        .kosaraju_scc()
-                        .into_iter()
-                        // filter out all `trivial` scc (only loops of len > 1 will stay)
-                        .filter(|scc| scc.len() > 1)
-                        .filter_map(|scc| {
-                            let headers: Vec<&&SLabel<T>> = scc // get all headers of given scc/loop (nodes on `level`)
-                                .iter()
-                                .filter(|n| *reducer.dom_tree.levels().get(n).unwrap() == level)
-                                .collect();
-                            // ensure that that given loop is irreducible (have at least two header nodes)
-                            if headers.len() > 1 {
-                                // you can choose more stable, clever header selection (produces smaller cfg)
-                                // let (&&&header, domain) = headers
-                                //     .iter()
-                                //     .map(|h| (h, reducer.domain(h, &scc)))
-                                //     .max_by_key(|(_, domain)| domain.len())
-                                //     .unwrap();
-                                // println!("h: {:?}\n\td: {:#?}", header, domain);
-
-                                // or more unstable header selection (better for finding bugs, etc)
-                                let header = **headers[0];
-
-                                Some((header, scc))
-                            } else {
-                                None
-                            }
-                        })
-                        .collect();
-                    // println!("-----");
-
-                    println!("irr sccs count: {}", irr_sccs.len());
-                    reducer = irr_sccs
-                        .into_iter()
-                        .fold(reducer, |reducer: Reducer<_>, (header, scc)| {
-                            reducer.split_scc(&header, scc)
-                        })
-                } else {
-                    println!("---- level {} finished", level);
                     break;
                 }
             }
-            reducer
-        })
+            if irreduceible_loop {
+                // subgraph by level & every scc simplification
+                let below_nodes = reducer
+                    .dom_tree
+                    .by_level()
+                    .into_iter()
+                    .flat_map(|(l, level_snodes)| {
+                        if l >= level {
+                            level_snodes
+                        } else {
+                            HashSet::new()
+                        }
+                    })
+                    .collect::<HashSet<_>>();
+                let edges = reducer.cfg.edges().clone();
+                let graph_below_level: HashMap<SLabelRef<T>, HashSet<SLabelRef<T>>> = edges
+                    .iter()
+                    .filter_map(|(from, edges)| {
+                        if below_nodes.contains(from) {
+                            Some((
+                                from,
+                                edges
+                                    .iter()
+                                    .filter(|&a| below_nodes.contains(a))
+                                    .collect::<HashSet<_>>(),
+                            ))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<HashMap<_, _>>();
+
+                let irr_sccs: Vec<(SLabel<T>, HashSet<SLabelRef<T>>)> = graph_below_level
+                    .kosaraju_scc()
+                    .into_iter()
+                    // filter out all `trivial` scc (only loops of len > 1 will stay)
+                    .filter(|scc| scc.len() > 1)
+                    .filter_map(|scc| {
+                        let headers: Vec<&&SLabel<T>> = scc // get all headers of given scc/loop (nodes on `level`)
+                            .iter()
+                            .filter(|n| *reducer.dom_tree.levels().get(n).unwrap() == level)
+                            .collect();
+                        // ensure that that given loop is irreducible (have at least two header nodes)
+                        if headers.len() > 1 {
+                            // you can choose more stable, clever header selection (produces smaller cfg)
+                            let (&&&header, _domain) = headers
+                                .iter()
+                                .map(|h| (h, reducer.domain(h, &scc)))
+                                .max_by_key(|(_, domain)| domain.len())
+                                .unwrap();
+
+                            // or more unstable header selection (better for finding bugs, etc)
+                            // let header = **headers[0];
+
+                            Some((header, scc))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                reducer = irr_sccs
+                    .into_iter()
+                    .fold(reducer, |reducer: Reducer<_>, (header, scc)| {
+                        reducer.split_scc(&header, scc)
+                    });
+                level_opt = Some(level + 1);
+            } else {
+                level_opt = level.checked_sub(1);
+            }
+        }
+
+        reducer
     }
 }
 
@@ -307,7 +276,6 @@ fn check_reduced_edges<TLabel: CfgLabel>(
 pub fn reduce<T: CfgLabel>(cfg: &Cfg<T>) -> Cfg<SLabel<T>> {
     let slabel_cfg = cfg.map_label(|&n| SLabel::new(n, 0));
     let reducer = Reducer::new(slabel_cfg, 0);
-    println!("{:?}", reducer);
     let reduced_cfg = reducer.reduce().cfg;
     assert!(check_reduced_edges(cfg, &reduced_cfg));
     // assert!(check_reduced_loop_headers(&reduced_cfg));

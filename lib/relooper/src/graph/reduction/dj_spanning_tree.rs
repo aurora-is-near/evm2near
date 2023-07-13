@@ -61,8 +61,6 @@ impl<'a, T: Eq + Hash + Copy + std::fmt::Debug + 'a> DJSpanningTree<T> {
         let pre_post_order =
             PrePostOrder::start_from(entry, |x| self.children(x)).collect::<Vec<_>>();
 
-        println!("prepost -----------\n{:?}", pre_post_order);
-
         let mut path: HashSet<&T> = Default::default();
 
         for traverse_action in pre_post_order {
@@ -70,10 +68,11 @@ impl<'a, T: Eq + Hash + Copy + std::fmt::Debug + 'a> DJSpanningTree<T> {
                 VisitAction::Enter(e) => {
                     path.insert(e);
 
-                    let ch = self.children(e);
-                    println!("{:?} ch: {:?}", e, ch);
-
-                    let sp_iter = ch.into_iter().filter(|c| path.contains(c)).map(|c| (e, c));
+                    let sp_iter = self
+                        .children(e)
+                        .into_iter()
+                        .filter(|c| path.contains(c))
+                        .map(|c| (e, c));
                     for sp_back in sp_iter {
                         set.insert(sp_back);
                     }

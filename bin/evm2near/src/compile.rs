@@ -11,7 +11,7 @@ use std::{
 };
 
 use evm_rs::{parse_opcode, Opcode, Program};
-use relooper::graph::{enrichments::EnrichedCfg, relooper::ReBlock, Graph};
+use relooper::graph::{enrichments::EnrichedCfg, relooper::ReBlock};
 use relooper::graph::{reduction::SLabel, relooper::ReSeq};
 use wasm_encoder::{BlockType, ExportKind, Function, Instruction, Module, ValType};
 
@@ -517,26 +517,8 @@ subgraph cluster_wasm {{ label = \"wasm\"
         self.debug("stripped.dot", || {
             format!("digraph {{{}}}", evm_cfg.cfg_to_dot("stripped"))
         });
-        // println!("orig: {}", evm_cfg.nodes().len());
-        // let old_reduced = relooper::graph::supergraph::reduce(&evm_cfg);
         let reduced = relooper::graph::reduction::reduce(&evm_cfg);
-        // let reduced = relooper::graph::reduction::reduce(&reduced).map_label(|x| {
-        //     let mut s = x.origin;
-        //     s.version = s.version * 1000 + x.version;
-        //     s
-        // });
-        println!("node count: {}", reduced.nodes().len());
-        // let reduced_nodes_count = relooper::graph::Graph::nodes(&reduced).len();
-        // let reduced = relooper::graph::supergraph::reduce(&reduced).map_label(|x| {
-        //     let mut s = x.origin;
-        //     s.version = s.version * 1000 + x.version;
-        //     s
-        // });
-        // let reduced_conservative_nodes_count = relooper::graph::Graph::nodes(&reduced).len();
-        // println!(
-        //     "QWE {} -> {}",
-        //     reduced_nodes_count, reduced_conservative_nodes_count
-        // );
+        // println!("node count: {}", reduced.nodes().len());
 
         self.debug("reduced.dot", || {
             format!("digraph {{{}}}", reduced.cfg_to_dot("reduced"))

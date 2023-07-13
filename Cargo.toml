@@ -4,7 +4,6 @@ members = [
   "lib/evmlib",
   "lib/abi-types",
   "lib/relooper",
-  "tools/testbed"
 ]
 
 # Enable basic optimizations only, to aid debugging:
