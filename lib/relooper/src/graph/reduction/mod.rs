@@ -153,6 +153,7 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
     fn reduce(self) -> Self {
         let max_level = self.dom_tree.max_level();
         println!("max level: {}", max_level);
+
         (0..(max_level + 1)).rev().fold(self, |reducer, level| {
             let mut reducer = reducer;
             loop {
@@ -249,13 +250,17 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                                 .collect();
                             // ensure that that given loop is irreducible (have at least two header nodes)
                             if headers.len() > 1 {
+                                // you can choose more stable, clever header selection (produces smaller cfg)
                                 // let (&&&header, domain) = headers
                                 //     .iter()
                                 //     .map(|h| (h, reducer.domain(h, &scc)))
                                 //     .max_by_key(|(_, domain)| domain.len())
                                 //     .unwrap();
                                 // println!("h: {:?}\n\td: {:#?}", header, domain);
+
+                                // or more unstable header selection (better for finding bugs, etc)
                                 let header = **headers[0];
+
                                 Some((header, scc))
                             } else {
                                 None
@@ -302,6 +307,7 @@ fn check_reduced_edges<TLabel: CfgLabel>(
 pub fn reduce<T: CfgLabel>(cfg: &Cfg<T>) -> Cfg<SLabel<T>> {
     let slabel_cfg = cfg.map_label(|&n| SLabel::new(n, 0));
     let reducer = Reducer::new(slabel_cfg, 0);
+    println!("{:?}", reducer);
     let reduced_cfg = reducer.reduce().cfg;
     assert!(check_reduced_edges(cfg, &reduced_cfg));
     // assert!(check_reduced_loop_headers(&reduced_cfg));
