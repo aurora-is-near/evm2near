@@ -94,7 +94,11 @@ impl<T: CfgLabel> Reducer<T> {
 type SLabelRef<'a, T> = &'a SLabel<T>;
 
 impl<T: CfgLabel> Reducer<SLabel<T>> {
-    pub fn split_scc(&self, header: SLabelRef<T>, scc: HashSet<SLabelRef<T>>) -> Self {
+    pub fn split_scc(
+        &self,
+        header: SLabelRef<T>,
+        scc: HashSet<SLabelRef<T>>,
+    ) -> (Self, HashSet<SLabel<T>>) {
         let mut copies_counter: SVersion = 0;
         let scc_refs: HashSet<SLabelRef<T>> = scc.iter().copied().collect();
         let header_domain: HashSet<SLabelRef<T>> = self.domain(header, &scc_refs);
@@ -146,9 +150,11 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
             }
         }
 
-        red
+        let new_nodes = copied_region.values().into_iter().copied().collect();
+        (red, new_nodes)
     }
 
+    #[allow(clippy::needless_collect)]
     fn reduce(self) -> Self {
         let mut level_opt = Some(self.dom_tree.max_level());
         let mut reducer = self;
@@ -157,28 +163,19 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
             let by_level = reducer.dom_tree.by_level();
             let level_nodes = by_level.get(&level).unwrap();
 
-            let mut irreduceible_loop = false; // todo move irr actions directly into match?
-
             let sp_back = reducer.dj_spanning_tree.sp_back(&reducer.cfg.entry);
+            let transposed = reducer.dj_graph.in_edges();
 
-            let transposed: HashMap<SLabelRef<T>, HashSet<SLabelRef<T>>> =
-                reducer.dj_graph.in_edges();
+            let irreduceible_loop_found = level_nodes.iter().any(|n| {
+                transposed
+                    .get(&n)
+                    .into_iter()
+                    .flatten()
+                    .filter(|m| sp_back.contains(&(m, n)))
+                    .any(|m| reducer.dj_graph.edge(m).contains(&DJEdge::JC(*n)))
+            });
 
-            for n in level_nodes {
-                for &m in transposed.get(&n).into_iter().flatten() {
-                    if sp_back.contains(&(m, n)) {
-                        let m_dj_edges = reducer.dj_graph.edge(m);
-                        if m_dj_edges.contains(&DJEdge::JC(*n)) {
-                            irreduceible_loop = true;
-                            break;
-                        }
-                    }
-                }
-                if irreduceible_loop {
-                    break;
-                }
-            }
-            if irreduceible_loop {
+            if irreduceible_loop_found {
                 // subgraph by level & every scc simplification
                 let below_nodes = reducer
                     .dom_tree
@@ -239,12 +236,23 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                     })
                     .collect();
 
-                reducer = irr_sccs
-                    .into_iter()
-                    .fold(reducer, |reducer: Reducer<_>, (header, scc)| {
-                        reducer.split_scc(&header, scc)
-                    });
-                level_opt = Some(level + 1);
+                let (new_reducer, copied_nodes) = irr_sccs.into_iter().fold(
+                    (reducer, HashSet::default()),
+                    |(reducer, new_nodes), (header, scc)| {
+                        let (new_reducer, copied_nodes) = reducer.split_scc(&header, scc);
+                        let total_copied_nodes = new_nodes.union(&copied_nodes).copied().collect();
+                        (new_reducer, total_copied_nodes)
+                    },
+                );
+                reducer = new_reducer;
+
+                let next_level = copied_nodes
+                    .iter()
+                    .map(|cn| reducer.dom_tree.level(cn))
+                    .max()
+                    .unwrap();
+
+                level_opt = Some(next_level);
             } else {
                 level_opt = level.checked_sub(1);
             }
@@ -277,6 +285,7 @@ pub fn reduce<T: CfgLabel>(cfg: &Cfg<T>) -> Cfg<SLabel<T>> {
     let slabel_cfg = cfg.map_label(|&n| SLabel::new(n, 0));
     let reducer = Reducer::new(slabel_cfg, 0);
     let reduced_cfg = reducer.reduce().cfg;
+
     assert!(check_reduced_edges(cfg, &reduced_cfg));
     // assert!(check_reduced_loop_headers(&reduced_cfg));
     reduced_cfg
@@ -359,8 +368,6 @@ mod tests {
             .collect(),
         );
         let reduced = reduce(&cfg);
-
-        println!("reduced node count: {}", reduced.nodes().len());
 
         assert!(check_reduced_edges(&cfg, &reduced));
 
