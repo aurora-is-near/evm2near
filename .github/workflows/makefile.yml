@@ -30,7 +30,7 @@ jobs:
       run: |
         sudo add-apt-repository ppa:ethereum/ethereum
         sudo apt-get update
-        sudo apt-get install -y wabt solc=0.8.19
+        sudo apt-get install -y wabt solc
 
       # Cache Rustup toolchain and targets
     - name: Cache rustup toolchain and targets
