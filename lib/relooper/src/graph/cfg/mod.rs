@@ -180,20 +180,6 @@ impl<T: Eq + Hash + Clone> Cfg<T> {
     }
 }
 
-// impl<T: Hash + Eq + Clone + GEdge<Inside = T>> Graph<T, T> for Cfg<T> {
-//     type EdgeColl = CfgEdge<T>;
-
-//     fn edges(&self) -> &HashMap<<Self::EdgeColl as GEdgeColl>::Label, Self::EdgeColl> {
-//         &self.out_edges
-//     }
-
-//     fn edge(&self, label: &<Self::EdgeColl as GEdgeColl>::Label) -> &Self::EdgeColl {
-//         self.out_edges
-//             .get(label)
-//             .expect("any node should have outgoing edges")
-//     }
-// }
-
 impl<'a, T: Hash + Eq + Clone + 'a> Graph<'a, T, T> for Cfg<T> {
     type EdgeColl = CfgEdge<T>;
 
@@ -205,29 +191,6 @@ impl<'a, T: Hash + Eq + Clone + 'a> Graph<'a, T, T> for Cfg<T> {
         &self.out_edges
     }
 }
-
-// impl<T: Hash + Eq + Clone + GEdge<Inside = T>> GraphMappable<T, T> for Cfg<T> {
-//     type Output<U: Hash + Eq + Clone, UE: GEdge<Inside = U>> = Cfg<U>;
-
-//     fn map_label<M, U: Eq + Hash + Clone, UE: GEdge<Inside = U>>(
-//         &self,
-//         mapping: M,
-//     ) -> Self::Output<U, UE>
-//     where
-//         M: Fn(&<Self::EdgeColl as GEdgeColl>::Label) -> U,
-//         Self: Sized,
-//     {
-//         let out_edges = self
-//             .edges()
-//             .iter()
-//             .map(|(l, edge)| (mapping(l), edge.map(&mapping)))
-//             .collect();
-//         Cfg {
-//             entry: mapping(&self.entry),
-//             out_edges,
-//         }
-//     }
-// }
 
 impl<'a, T: Hash + Eq + Clone + 'a> GraphMut<'a, T, T> for Cfg<T> {
     fn edge_mut(&mut self, label: &T) -> &mut Self::EdgeColl {

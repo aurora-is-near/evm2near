@@ -1,3 +1,6 @@
+/// simple but working algorithm for graph reduction
+/// produces too much copied nodes for fairly simple examples, which complicates every later stage
+/// was replaced by more efficient algorithm (`relooper::graph::reduction`) for that reasons
 use super::reduction::SLabel;
 use super::{GEdgeColl, GEdgeCollMappable, Graph, GraphMut};
 use crate::graph::cfg::{Cfg, CfgLabel};
@@ -261,6 +264,7 @@ pub fn reduce<TLabel: CfgLabel>(cfg: &Cfg<TLabel>) -> Cfg<SLabel<TLabel>> {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod test {
     use crate::graph::cfg::Cfg;
     use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};

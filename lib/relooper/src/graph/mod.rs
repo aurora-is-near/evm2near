@@ -244,19 +244,6 @@ pub trait GraphMut<'a, T: Eq + Hash + 'a, TE: 'a>: Graph<'a, T, TE> {
     fn remove_edge(&mut self, from: T, edge: &Self::EdgeColl);
 }
 
-//todo cant do that until we redo GEdgeColl to IntoIterator
-// impl<'a, T: Hash + Eq + 'a, TI: IntoIterator<Item = T>> Graph<'a, T, T> for HashMap<T, TI> {
-//     type EdgeColl = TI;
-
-//     fn lower_edge(edge: &T) -> &T {
-//         edge
-//     }
-
-//     fn edges(&'a self) -> &HashMap<T, Self::EdgeColl> {
-//         &self
-//     }
-// }
-
 impl<'a, T: Eq + Hash + 'a> Graph<'a, T, T> for HashMap<T, HashSet<T>> {
     type EdgeColl = HashSet<T>;
 

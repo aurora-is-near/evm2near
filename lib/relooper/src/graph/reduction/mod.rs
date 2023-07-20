@@ -1,3 +1,10 @@
+/// implementation of graph reduction algorithm from paper (1)
+/// "Handling Irreducible Loops: Optimized Node Splitting vs. DJ-Graphs" by Sebastian Unger and Frank Mueller
+/// https://dl.acm.org/doi/10.1145/567097.567098
+///
+/// additional information (primarly about DJ graphs) could be found in paper (2)
+/// "Identifying Loops Using DJ Graphs" by VUGRANAM C. SREEDHAR, GUANG R. GAO, YONG-FONG LEE
+/// https://dl.acm.org/doi/10.1145/236114.236115
 pub mod dj_graph;
 pub mod dj_spanning_tree;
 
@@ -94,6 +101,8 @@ impl<T: CfgLabel> Reducer<T> {
 type SLabelRef<'a, T> = &'a SLabel<T>;
 
 impl<T: CfgLabel> Reducer<SLabel<T>> {
+    /// dublicates all nodes except header & header domain in given strongly-connected component
+    /// and rewires the graph according to transformation T_r from the paper (1)
     pub fn split_scc(
         &self,
         header: SLabelRef<T>,
@@ -154,6 +163,17 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
         (red, new_nodes)
     }
 
+    /// iterating over nodes by domination tree levels (starting from lowest level)
+    /// on each iteration trying to detect presence of irreducible strongly-connected components on graph starting from that level (excluding all nodes on upper levels)
+    /// that detection is based on assumption from paper (2), that irreducible graph should contain such sp-back edge,
+    /// that its destination does not dominate its source node (section 3)
+    /// if such edge is found, that means there is irreducible loop below current `level`
+    /// by searching for all strongly-connected components on graph that contains only current `level` nodes and nodes below that level, we are able to find all cycles
+    /// after that we can search for such cycles, that have multiple headers on current `level`
+    /// by doing that we ensure that only irreducible scc's are left, so we can split all such scc's
+    /// (if there is many of them, we are sure that they dont have any common nodes, because otherwise they will be a single scc)
+    /// after splitting, we set current level to be maximum level across all newely-added nodes, because they can introduce new irreducible cycles in graph below current level
+    /// and continue looping unless our level greater or equal top-most level (zero)
     #[allow(clippy::needless_collect)]
     fn reduce(self) -> Self {
         let mut level_opt = Some(self.dom_tree.max_level());
@@ -246,6 +266,7 @@ impl<T: CfgLabel> Reducer<SLabel<T>> {
                 );
                 reducer = new_reducer;
 
+                // any new nodes can form irreducible cycles on the levels below current, so we setting current level to deepest level of any copied node
                 let next_level = copied_nodes
                     .iter()
                     .map(|cn| reducer.dom_tree.level(cn))
@@ -287,7 +308,6 @@ pub fn reduce<T: CfgLabel>(cfg: &Cfg<T>) -> Cfg<SLabel<T>> {
     let reduced_cfg = reducer.reduce().cfg;
 
     assert!(check_reduced_edges(cfg, &reduced_cfg));
-    // assert!(check_reduced_loop_headers(&reduced_cfg));
     reduced_cfg
 }
 
@@ -297,7 +317,6 @@ mod tests {
     use crate::graph::cfg::CfgEdge::{Cond, Terminal, Uncond};
     use crate::graph::enrichments::EnrichedCfg;
     use crate::graph::reduction::{check_reduced_edges, reduce};
-    use crate::graph::Graph;
 
     #[test]
     fn simplest() {

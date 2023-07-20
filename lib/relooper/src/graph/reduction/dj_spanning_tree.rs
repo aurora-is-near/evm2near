@@ -43,18 +43,6 @@ impl<'a, T: Eq + Hash + Copy + std::fmt::Debug + 'a> DJSpanningTree<T> {
         from == to || self.is_reachable(to, from)
     }
 
-    // fn is_sp_tree(&self, from: &T, to: &T) -> bool {
-    //     self.children(from).contains(to)
-    // }
-
-    // fn is_sp_forward(&self, from: &T, to: &T) -> bool {
-    //     !self.children(from).contains(to) && self.is_reachable(from, to)
-    // }
-
-    // fn is_sp_cross(&self, from: &T, to: &T) -> bool {
-    //     !self.is_reachable(from, to) && !self.is_reachable(to, from)
-    // }
-
     pub fn sp_back(&'a self, entry: &'a T) -> HashSet<(&'a T, &'a T)> {
         let mut set: HashSet<(&T, &T)> = Default::default();
 
