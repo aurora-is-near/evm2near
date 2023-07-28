@@ -3,7 +3,7 @@ members = [
   "bin/evm2near",
   "lib/evmlib",
   "lib/abi-types",
-  "lib/relooper"
+  "lib/relooper",
 ]
 
 # Enable basic optimizations only, to aid debugging:

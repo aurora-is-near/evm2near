@@ -3,6 +3,8 @@ use crate::graph::enrichments::EnrichedCfg;
 use crate::graph::relooper::{ReBlock, ReSeq};
 use std::fmt::Display;
 
+use super::Graph;
+
 impl<TLabel: CfgLabel + Display> Cfg<TLabel> {
     pub fn cfg_to_dot(&self, name: &str) -> String {
         let mut lines: Vec<String> = Vec::new();
@@ -103,8 +105,10 @@ impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
         for n in self.cfg.nodes() {
             lines.push(format!("d{n}[label=\"{n}\"];"));
         }
-        for (&n, &d) in &self.domination.dominated {
-            lines.push(format!("d{d} -> d{n};"));
+        for (&n, d) in self.domination.edges() {
+            for d in d {
+                lines.push(format!("d{d} -> d{n};"));
+            }
         }
         lines.push("}".to_string());
 

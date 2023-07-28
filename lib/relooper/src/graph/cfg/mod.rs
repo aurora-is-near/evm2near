@@ -1,8 +1,11 @@
 use crate::graph::cfg::CfgEdge::{Cond, Switch, Terminal, Uncond};
 use crate::traversal::graph::bfs::Bfs;
+use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::hash::Hash;
+
+use super::{GEdgeColl, GEdgeCollMappable, Graph, GraphMut};
 
 mod cfg_parsing;
 
@@ -19,31 +22,6 @@ pub enum CfgEdge<TLabel> {
 }
 
 impl<TLabel> CfgEdge<TLabel> {
-    pub fn iter(&self) -> CfgEdgeIter<TLabel> {
-        match self {
-            Uncond(u) => CfgEdgeIter {
-                fixed: [Some(u), None],
-                allocated: [].iter(),
-                index: 0,
-            },
-            Cond(cond, fallthrough) => CfgEdgeIter {
-                fixed: [Some(cond), Some(fallthrough)],
-                allocated: [].iter(),
-                index: 0,
-            },
-            Switch(v) => CfgEdgeIter {
-                fixed: [None, None],
-                allocated: v.iter(),
-                index: 2,
-            },
-            Terminal => CfgEdgeIter {
-                fixed: [None, None],
-                allocated: [].iter(),
-                index: 0,
-            },
-        }
-    }
-
     pub(crate) fn apply<F: Fn(&TLabel) -> TLabel>(&mut self, mapping: F) {
         match self {
             Self::Uncond(t) => {
@@ -58,15 +36,6 @@ impl<TLabel> CfgEdge<TLabel> {
                 }
             }
             Self::Terminal => {}
-        }
-    }
-
-    pub(crate) fn map<'a, U, F: Fn(&'a TLabel) -> U>(&'a self, mapping: F) -> CfgEdge<U> {
-        match self {
-            Self::Uncond(t) => Uncond(mapping(t)),
-            Self::Cond(t, f) => Cond(mapping(t), mapping(f)),
-            Self::Switch(v) => Switch(v.iter().map(|(u, x)| (*u, mapping(x))).collect()),
-            Self::Terminal => Terminal,
         }
     }
 }
@@ -96,16 +65,91 @@ impl<'a, T> Iterator for CfgEdgeIter<'a, T> {
     }
 }
 
+impl<T: Eq + Hash> GEdgeCollMappable for HashSet<T> {
+    type Output<U: Hash + Eq> = HashSet<U>;
+    fn map<U: Hash + Eq, F: Fn(&Self::Edge) -> U>(&self, mapping: F) -> Self::Output<U> {
+        self.iter().map(mapping).collect()
+    }
+}
+
+impl<T: Eq + Hash> GEdgeColl for CfgEdge<T> {
+    type Edge = T;
+    type Iter<'a> = CfgEdgeIter<'a, Self::Edge> where Self::Edge: 'a;
+
+    #[allow(clippy::needless_lifetimes)]
+    fn iter<'a>(&'a self) -> Self::Iter<'a> {
+        match self {
+            Uncond(u) => CfgEdgeIter {
+                fixed: [Some(u), None],
+                allocated: [].iter(),
+                index: 0,
+            },
+            Cond(cond, fallthrough) => CfgEdgeIter {
+                fixed: [Some(cond), Some(fallthrough)],
+                allocated: [].iter(),
+                index: 0,
+            },
+            Switch(v) => CfgEdgeIter {
+                fixed: [None, None],
+                allocated: v.iter(),
+                index: 2,
+            },
+            Terminal => CfgEdgeIter {
+                fixed: [None, None],
+                allocated: [].iter(),
+                index: 0,
+            },
+        }
+    }
+}
+
+impl<'a, T> IntoIterator for &'a CfgEdge<T> {
+    type Item = &'a T;
+
+    type IntoIter = CfgEdgeIter<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            Uncond(u) => CfgEdgeIter {
+                fixed: [Some(u), None],
+                allocated: [].iter(),
+                index: 0,
+            },
+            Cond(cond, fallthrough) => CfgEdgeIter {
+                fixed: [Some(cond), Some(fallthrough)],
+                allocated: [].iter(),
+                index: 0,
+            },
+            Switch(v) => CfgEdgeIter {
+                fixed: [None, None],
+                allocated: v.iter(),
+                index: 2,
+            },
+            Terminal => CfgEdgeIter {
+                fixed: [None, None],
+                allocated: [].iter(),
+                index: 0,
+            },
+        }
+    }
+}
+
+impl<T: Eq + Hash> GEdgeCollMappable for CfgEdge<T> {
+    type Output<U: Hash + Eq> = CfgEdge<U>;
+    fn map<U: Hash + Eq, F: Fn(&Self::Edge) -> U>(&self, mapping: F) -> Self::Output<U> {
+        match self {
+            Self::Uncond(t) => Uncond(mapping(t)),
+            Self::Cond(t, f) => Cond(mapping(t), mapping(f)),
+            Self::Switch(v) => Switch(v.iter().map(|(u, x)| (*u, mapping(x))).collect()),
+            Self::Terminal => Terminal,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct Cfg<TLabel> {
     pub(crate) entry: TLabel,
     out_edges: HashMap<TLabel, CfgEdge<TLabel>>,
-}
-
-impl<T> Cfg<T> {
-    pub fn edges(&self) -> &HashMap<T, CfgEdge<T>> {
-        &self.out_edges
-    }
 }
 
 impl<T: Eq + Hash + Clone> Cfg<T> {
@@ -116,38 +160,6 @@ impl<T: Eq + Hash + Clone> Cfg<T> {
         }
     }
 
-    pub fn map_label<'a, M, U: Eq + Hash>(&'a self, mapping: M) -> Cfg<U>
-    where
-        M: Fn(&'a T) -> U,
-    {
-        let out_edges: HashMap<U, CfgEdge<U>> = self
-            .out_edges
-            .iter()
-            .map(|(from, e)| (mapping(from), e.map(&mapping)))
-            .collect();
-
-        Cfg {
-            entry: mapping(&self.entry),
-            out_edges,
-        }
-    }
-
-    pub fn to_borrowed(&self) -> Cfg<&T> {
-        self.map_label(|l| l)
-    }
-
-    pub fn nodes(&self) -> HashSet<&T> {
-        self.out_edges.keys().collect()
-    }
-
-    pub fn children(&self, label: &T) -> HashSet<&T> {
-        self.out_edges
-            .get(label)
-            .into_iter()
-            .flat_map(|edge| edge.iter())
-            .collect()
-    }
-
     fn check_previous_edge(edge: Option<CfgEdge<T>>) {
         match edge {
             None | Some(Terminal) => {}
@@ -155,7 +167,54 @@ impl<T: Eq + Hash + Clone> Cfg<T> {
         }
     }
 
-    pub fn add_edge(&mut self, from: T, edge: CfgEdge<T>) {
+    pub fn map_label<M: Fn(&T) -> U, U: Eq + Hash + Clone>(&self, mapping: M) -> Cfg<U> {
+        let out_edges = self
+            .out_edges
+            .iter()
+            .map(|(f, edges)| (mapping(f), edges.map(&mapping)))
+            .collect();
+        Cfg {
+            entry: mapping(&self.entry),
+            out_edges,
+        }
+    }
+}
+
+impl<'a, T: Hash + Eq + Clone + 'a> Graph<'a, T, T> for Cfg<T> {
+    type EdgeColl = CfgEdge<T>;
+
+    fn lower_edge(&'a self, edge: &'a T) -> &'a T {
+        edge
+    }
+
+    fn edges(&'a self) -> &HashMap<T, Self::EdgeColl> {
+        &self.out_edges
+    }
+}
+
+impl<'a, T: Hash + Eq + Clone + 'a> GraphMut<'a, T, T> for Cfg<T> {
+    fn edge_mut(&mut self, label: &T) -> &mut Self::EdgeColl {
+        self.out_edges
+            .get_mut(label)
+            .expect("any node should have outgoing edges")
+    }
+
+    fn add_node(&mut self, n: T) {
+        let prev_edge = self.out_edges.insert(n, Terminal);
+        Self::check_previous_edge(prev_edge);
+    }
+
+    fn remove_node<Q: ?Sized>(&mut self, n: &Q)
+    where
+        T: Borrow<Q>,
+        Q: Hash + Eq,
+    {
+        self.out_edges
+            .remove(n)
+            .expect("cannot delete non-present node");
+    }
+
+    fn add_edge(&mut self, from: T, edge: Self::EdgeColl) {
         let out_edges = &mut self.out_edges;
         for n in edge.iter() {
             if !out_edges.contains_key(n) {
@@ -168,34 +227,9 @@ impl<T: Eq + Hash + Clone> Cfg<T> {
         Self::check_previous_edge(prev_edge);
     }
 
-    pub fn add_node(&mut self, n: T) {
-        let prev_edge = self.out_edges.insert(n, Terminal);
-        Self::check_previous_edge(prev_edge);
-    }
-
-    pub fn remove_edge(&mut self, from: T, edge: &CfgEdge<T>) {
+    fn remove_edge(&mut self, from: T, edge: &Self::EdgeColl) {
         let removed_edge = self.out_edges.remove(&from);
         assert!(removed_edge.as_ref() == Some(edge));
-    }
-
-    pub fn add_edge_or_promote(&mut self, from: T, to: T) {
-        match self.out_edges.remove(&from) {
-            None | Some(Terminal) => self.out_edges.insert(from, Uncond(to)),
-            Some(Uncond(uncond)) => self.out_edges.insert(from, Cond(to, uncond)),
-            _ => panic!("edge (should be absent) or (shouldn't be `Cond`)"),
-        };
-    }
-
-    pub fn edge(&self, label: &T) -> &CfgEdge<T> {
-        self.out_edges
-            .get(label)
-            .expect("any node should have outgoing edges")
-    }
-
-    pub fn edge_mut(&mut self, label: &T) -> &mut CfgEdge<T> {
-        self.out_edges
-            .get_mut(label)
-            .expect("any node should have outgoing edges")
     }
 }
 
@@ -211,31 +245,17 @@ impl<TLabel: Eq + Hash + Copy> Cfg<TLabel> {
 }
 
 impl<TLabel: CfgLabel> Cfg<TLabel> {
-    pub fn in_edges(&self) -> HashMap<TLabel, HashSet<TLabel>> {
-        let mut in_edges: HashMap<TLabel, HashSet<TLabel>> = HashMap::default();
-
-        for (&from, to_edge) in &self.out_edges {
-            for &to in to_edge.iter() {
-                in_edges.entry(to).or_default().insert(from);
-            }
-        }
-
-        in_edges
-    }
-
-    fn reachable_nodes(&self) -> HashSet<&TLabel> {
-        Bfs::start_from(&self.entry, |label| self.children(label)).collect()
-    }
-
     pub fn strip_unreachable(&mut self) {
+        let reachable_from_start: HashSet<&TLabel> =
+            Bfs::start_from(&self.entry, |label| self.children(label)).collect();
         let unreachable_nodes: HashSet<TLabel> = self
             .nodes()
-            .difference(&self.reachable_nodes())
+            .difference(&reachable_from_start)
             .into_iter()
             .map(|n| **n)
             .collect();
         for unreachable in unreachable_nodes {
-            self.out_edges.remove(&unreachable);
+            self.remove_node(&unreachable);
         }
     }
 }

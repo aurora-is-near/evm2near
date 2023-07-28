@@ -5,6 +5,8 @@ use crate::graph::cfg::{CfgEdge::*, CfgLabel};
 use crate::graph::enrichments::EnrichedCfg;
 use crate::graph::relooper::ReBlock::*;
 
+use super::Graph;
+
 #[derive(Debug)]
 pub struct ReSeq<TLabel: CfgLabel>(pub Vec<ReBlock<TLabel>>);
 
@@ -55,13 +57,13 @@ impl<TLabel: CfgLabel> Context<TLabel> {
 
 impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
     /// returns set of immediately dominated nodes needed to be generated around the target node
-    fn children(&self, label: TLabel) -> HashSet<TLabel> {
-        self.domination.immediately_dominated_by(label)
+    fn children(&self, label: TLabel) -> HashSet<&TLabel> {
+        self.domination.children(&label)
     }
 
     /// either generates branch node or "fallthrough" next node
     fn do_branch(&self, from: TLabel, to: TLabel, context: &Vec<Context<TLabel>>) -> ReSeq<TLabel> {
-        if self.node_ordering.is_backward(from, to) || self.merge_nodes.contains(&to) {
+        if self.node_ordering.is_backward(&from, &to) || self.merge_nodes.contains(&to) {
             let idx_coll = context
                 .iter()
                 .enumerate()
@@ -155,6 +157,7 @@ impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
             .children(node)
             .into_iter()
             .filter(|n| self.merge_nodes.contains(n))
+            .copied()
             .collect();
 
         let context_labels: HashSet<_> = context.iter().filter_map(|ctx| ctx.label()).collect();
