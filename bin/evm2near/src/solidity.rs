@@ -56,7 +56,14 @@ where
 pub fn compile(input_path: &Path) -> Result<Program, CompileError> {
     let output = execute(
         input_path,
-        ["--bin-runtime", "--optimize", "--metadata-hash", "none"],
+        [
+            "--evm-version",
+            "paris",
+            "--bin-runtime",
+            "--optimize",
+            "--metadata-hash",
+            "none",
+        ],
     )?;
     match output.status.code() {
         Some(0) => {

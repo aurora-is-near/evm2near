@@ -3,6 +3,8 @@ use crate::graph::enrichments::EnrichedCfg;
 use crate::graph::relooper::{ReBlock, ReSeq};
 use std::fmt::Display;
 
+use super::Graph;
+
 impl<TLabel: CfgLabel + Display> Cfg<TLabel> {
     pub fn cfg_to_dot(&self, name: &str) -> String {
         let mut lines: Vec<String> = Vec::new();
@@ -23,6 +25,13 @@ impl<TLabel: CfgLabel + Display> Cfg<TLabel> {
                 CfgEdge::Cond(t, f) => {
                     edges.push(format!("{name}_n{n} -> {name}_n{t}[style=\"dashed\"];"));
                     edges.push(format!("{name}_n{n} -> {name}_n{f};"));
+                }
+                CfgEdge::Switch(v) => {
+                    for (u, t) in v {
+                        edges.push(format!(
+                            "{name}_n{n} -> {name}_n{t}[style=\"dashed\",text=\"{u}\"]"
+                        ));
+                    }
                 }
                 CfgEdge::Terminal => {
                     edges.push(format!("{name}_n{n} -> {name}_nend;"));
@@ -70,6 +79,13 @@ impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
                     edges.push(format!("{name}_n{n} -> {name}_n{t}[style=\"dashed\"];"));
                     edges.push(format!("{name}_n{n} -> {name}_n{f};"));
                 }
+                CfgEdge::Switch(v) => {
+                    for (u, t) in v {
+                        edges.push(format!(
+                            "{name}_n{n} -> {name}_n{t}[style=\"dashed\",text=\"{u}\"]"
+                        ));
+                    }
+                }
                 CfgEdge::Terminal => {
                     edges.push(format!("{name}_n{n} -> {name}_nend;"));
                 }
@@ -89,8 +105,10 @@ impl<TLabel: CfgLabel + Display> EnrichedCfg<TLabel> {
         for n in self.cfg.nodes() {
             lines.push(format!("d{n}[label=\"{n}\"];"));
         }
-        for (&n, &d) in &self.domination.dominated {
-            lines.push(format!("d{d} -> d{n};"));
+        for (&n, d) in self.domination.edges() {
+            for d in d {
+                lines.push(format!("d{d} -> d{n};"));
+            }
         }
         lines.push("}".to_string());
 
@@ -159,7 +177,7 @@ impl<TLabel: CfgLabel + Display> ReSeq<TLabel> {
                         res.push(format!("r{current_id}[label=\"Br {current_id}\"];"));
 
                         let branch_to = back_branches
-                            .get(back_branches.len() - 1 - jmp)
+                            .get(back_branches.len() - 1 - (*jmp as usize))
                             .expect("unexpected branch");
                         res.push(format!(
                             "r{current_id} -> r{branch_to}[constraint=false,color=\"blue\"]"
@@ -169,6 +187,20 @@ impl<TLabel: CfgLabel + Display> ReSeq<TLabel> {
                     }
                     ReBlock::Return => {
                         res.push(format!("r{current_id}[label=\"Return {current_id}\"];"));
+
+                        (current_id + 1, None)
+                    }
+                    ReBlock::TableJump(table) => {
+                        res.push(format!("r{current_id}[label=\"BrTable {current_id}\"];"));
+
+                        for &jmp in table.values() {
+                            let branch_to = back_branches
+                                .get(back_branches.len() - 1 - (jmp as usize))
+                                .expect("unexpected branch");
+                            res.push(format!(
+                                "r{current_id} -> r{branch_to}[constraint=false,color=\"blue\"]"
+                            ));
+                        }
 
                         (current_id + 1, None)
                     }
