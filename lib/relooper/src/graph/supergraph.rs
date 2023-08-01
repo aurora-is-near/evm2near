@@ -1,6 +1,26 @@
 /// simple but working algorithm for graph reduction
 /// produces too much copied nodes for fairly simple examples, which complicates every later stage
 /// was replaced by more efficient algorithm (`relooper::graph::reduction`) for that reasons
+///
+/// The algorithm: firstly, let's define a supernode.
+/// A supernode is a group of nodes of the initial CFG.
+/// Initially, we put each CFG node in a separate supernode.
+/// Then, we perform two operations -- merge and split.
+/// Merge: If all in-edges of all CFG nodes of some supernode A have the origin in supernode A and/or in exactly one other supernode B,
+/// we can merge these supernodes -- just assign that now all CFG nodes of supernode A are in supernode B.
+/// Split: Now, let's say we have a supernode A and a set of supernodes {B0, B1, ... Bn}
+/// such that all in-edges of CFG nodes in supernode A have the origin in supernode A or in one of supernodes Bi.
+/// Then, we can perform a split -- duplicate node A n times, now we have supernodes {A0, A1, ... An} with the same code inside.
+/// And for each of these supernodes, we will cut all in-edges that are not from Ai or from Bi.
+/// For example, for node A3, we will cut all in-edges that are not from A3 or B3. Then we will perform n merges (Ai with Bi).
+/// We perform these operations until there will be exactly one supernode.
+/// After it, we just return the graph contained in this supernode.
+/// In each step, there is a variety of operations we can do -- we can do some splits and some merges, but we need to choose one.
+/// These choices affect the execution time and, what is more important, the size of the resulting CFG.
+/// But, we didn't find the best way to make these decisions, and currently, we use a greedy strategy.
+/// Some words about correctness: it is easy to see that if we have more than one supernode and CFG is connected, we can perform merge or split.
+/// Also, both merge and split reduce the number of supernodes by one, so after `size(CFG)` iterations, the algorithm will be finished.
+/// The proof that each irreducible loop will be broken by a split is quite big, and we left it for the reader.
 use super::reduction::SLabel;
 use super::{GEdgeColl, GEdgeCollMappable, Graph, GraphMut};
 use crate::graph::cfg::{Cfg, CfgLabel};
